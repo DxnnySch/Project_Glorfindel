@@ -141,3 +141,7 @@ def test_fcpxml_is_wellformed_and_has_structure():
     v1 = root.findall("sequence/media/video/track")[0].findall("clipitem")
     assert len(v1) == 5
     assert root.find(".//file/pathurl").text.startswith("file://localhost/")
+
+
+def test_credit_underscore_title_split():
+    assert credit_from_filename("Ted Nasmith_Armenelos.png") == "ted nasmith"

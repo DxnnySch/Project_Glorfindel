@@ -100,6 +100,9 @@ def add_asset(body: NewAsset, ep: Episode = Depends(ep_of), state: AppState = De
         raise HTTPException(400, "path oder url angeben")
     from .paths import to_rel
     rel = to_rel(root, file)
+    dup = next((a for a in pipeline.load_assets(ep).values() if a.get("path") == rel), None)
+    if dup:
+        return dup
     meta = _index(state).search_exact(rel) or images.read_xmp(file)
     artists = pipeline.store.read_json(state.templates_dir() / "kuenstler.json", {})
     data = {"path": rel, "source_url": source_url, "credit": images.default_credit(rel, meta, artists),

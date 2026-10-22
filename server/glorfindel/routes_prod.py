@@ -41,7 +41,10 @@ def _save_upload(f: UploadFile) -> Path:
 @router.post("/ep/{season}/{episode}/script/import-preview")
 async def import_preview(file: UploadFile = File(...), ep: Episode = Depends(ep_of)):
     tmp = _save_upload(file)
-    res = script_docx.import_docx(tmp)
+    try:
+        res = script_docx.import_docx(tmp)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(400, "Die Datei ist kein gültiges Word-Dokument (.docx).")
     scenes = ep.scenes()
     probe = [Scene.model_validate(s.model_dump(by_alias=True)) for s in scenes]
     changed = script_docx.apply_import(probe, res)
@@ -52,7 +55,10 @@ async def import_preview(file: UploadFile = File(...), ep: Episode = Depends(ep_
 @router.post("/ep/{season}/{episode}/script/import")
 async def import_apply(file: UploadFile = File(...), ep: Episode = Depends(ep_of)):
     tmp = _save_upload(file)
-    res = script_docx.import_docx(tmp)
+    try:
+        res = script_docx.import_docx(tmp)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(400, "Die Datei ist kein gültiges Word-Dokument (.docx).")
     scenes = ep.scenes()
     changed = script_docx.apply_import(scenes, res)
     for sc in scenes:
@@ -162,6 +168,9 @@ def recording(ep: Episode = Depends(ep_of)):
 def add_recording(body: AddRecording, ep: Episode = Depends(ep_of)):
     if body.speaker not in ("philipp", "danny", "alle"):
         raise HTTPException(400, "Sprecher: philipp, danny oder alle")
+    p = Path(body.path)
+    if not (p if p.is_absolute() else Path(ep.p.root) / p).is_file():
+        raise HTTPException(404, f"Aufnahme nicht gefunden: {body.path}")
     return pipeline.add_recording(ep, body.path, body.speaker)
 
 

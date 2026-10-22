@@ -36,7 +36,11 @@ class Episode:
     # ---- Projekt ----
     @classmethod
     def create(cls, settings: Settings, season: int, episode: int, title: str = "", fps: float = 23.976) -> "Episode":
+        if not (1 <= season <= 99 and 1 <= episode <= 999):
+            raise ValueError("Staffel 1–99 und Folge 1–999 angeben.")
         ep = cls(settings, season, episode)
+        if ep.exists():
+            raise FileExistsError(f"S{season} E{episode} gibt es schon.")
         ep.p.ensure()
         if not (ep.p.gl / "projekt.json").exists():
             store.write_json(ep.p.gl / "projekt.json", Project(season=season, episode=episode, title=title, fps=fps).model_dump())
@@ -76,6 +80,8 @@ class Episode:
         path = Path(path)
         if not path.is_absolute():
             path = to_abs(self.p.root, str(path))
+        if not path.is_file():
+            raise FileNotFoundError(f"Datei nicht gefunden: {path}")
         if wait:
             media.wait_until_stable(path)
         if media.is_online_only(path):
@@ -85,7 +91,7 @@ class Episode:
         rel = to_rel(self.p.root, path)
         existing = next((s for s in srcs if s.path == rel), None)
         sid = existing.id if existing else f"q{len(srcs) + 1}"
-        src = Source(id=sid, path=rel, role=("referenz" if not srcs else role),  # type: ignore[arg-type]
+        src = Source(id=sid, path=rel, role=(existing.role if existing else "referenz" if not srcs else role),  # type: ignore[arg-type]
                      duration=info["duration"], fps=info["fps"], width=info["width"], height=info["height"],
                      fingerprint=media.fingerprint(path), anchors=existing.anchors if existing else [])
         srcs = [s for s in srcs if s.id != sid] + [src]

@@ -119,12 +119,14 @@ export async function runJob(label, startFn, host) {
 export const fmtTC = (s, fps = 24) => {
   if (s == null || isNaN(s)) return '–';
   const sign = s < 0 ? '-' : ''; s = Math.abs(s);
-  const m = Math.floor(s / 60), sec = Math.floor(s % 60), f = Math.floor((s % 1) * fps + 1e-6);
-  return `${sign}${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(f).padStart(2, '0')}`;
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60), cs = Math.min(99, Math.floor((s % 1) * 100 + 1e-6));
+  return `${sign}${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 };
 export const parseTC = (str, fps = 24) => {
   str = String(str).trim().replace(',', '.');
-  const m = str.match(/^(?:(\d+):)?(\d+):(\d+)(?:[.:](\d+))?$/);
+  let m = str.match(/^(?:(\d+):)?(\d+):(\d+)\.(\d+)$/);   // mm:ss.zz = Dezimalsekunden
+  if (m) return (Number(m[1] || 0) * 3600) + Number(m[2]) * 60 + Number(`${m[3]}.${m[4]}`);
+  m = str.match(/^(?:(\d+):)?(\d+):(\d+)(?::(\d+))?$/);   // mm:ss oder mm:ss:bb (Bilder)
   if (m) return (Number(m[1] || 0) * 3600) + Number(m[2]) * 60 + Number(m[3]) + (m[4] ? Number(m[4]) / fps : 0);
   const n = Number(str); return isNaN(n) ? null : n;
 };

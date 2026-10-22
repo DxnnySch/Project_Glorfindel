@@ -146,3 +146,12 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .thumb { cursor: default; }
 .page-head select { width: auto; max-width: 300px; flex: none; }
 .page-head .grow { min-width: 260px; }
+
+/* Schmale Fenster: Editor einspaltig, Liste darüber */
+@media (max-width: 1100px) {
+  .editor { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+  .scene-list { max-height: 220px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .editor-cols { grid-template-columns: 1fr; }
+  .seg-row input { min-width: 0; }
+  .ep-switch { display: block !important; width: 100%; }
+}

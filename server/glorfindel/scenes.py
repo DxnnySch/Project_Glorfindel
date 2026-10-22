@@ -61,7 +61,7 @@ def block_duration(block: CommentBlock, th: Thresholds) -> float:
 def scene_report(scene: Scene, th: Thresholds) -> dict:
     segs = [{"duration": s.duration, "light": segment_light(s.duration, th)} for s in scene.segmente]
     order = {"gruen": 0, "gelb": 1, "rot": 2}
-    worst: Light = max((s["light"] for s in segs), key=order.get, default="gruen")
+    worst: Light = max((s["light"] for s in segs), key=order.get, default="grau")  # type: ignore[arg-type]
     return {
         "id": scene.id,
         "segments": segs,
@@ -88,12 +88,14 @@ def episode_report(scenes: list[Scene], th: Thresholds) -> dict:
     }
 
 
-def validate_segments(scene: Scene) -> list[str]:
+def validate_segments(scene: Scene, max_t: float = 0.0) -> list[str]:
     """Plausibilitätsprüfung; leere Liste = in Ordnung."""
     problems = []
     for i, s in enumerate(scene.segmente):
         if s.out <= s.in_:
             problems.append(f"Segment {i + 1}: Out liegt nicht nach In")
+        if max_t and s.out > max_t + 0.5:
+            problems.append(f"Segment {i + 1}: liegt hinter dem Ende der Episode ({max_t:.0f} s)")
         if s.in_ < 0:
             problems.append(f"Segment {i + 1}: negative Zeit")
     return problems

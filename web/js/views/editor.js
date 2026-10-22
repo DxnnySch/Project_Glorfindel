@@ -23,8 +23,8 @@ export async function render(main, ctx) {
     if (!sel || saving) return;
     saving = true; setState('Speichert …');
     try {
-      const { scene, report, locked_by_other } = await api.put(epUrl(ep, `/scenes/${sel.id}`), clean(sel));
-      Object.assign(sel, scene, { report }); dirty = false; setState(locked_by_other ? `Gespeichert (Achtung: ${locked_by_other} bearbeitet ebenfalls)` : 'Gespeichert');
+      const { scene, report, locked_by_other, problems } = await api.put(epUrl(ep, `/scenes/${sel.id}`), clean(sel));
+      Object.assign(sel, { report, problems: problems || [], geaendert_von: scene.geaendert_von, geaendert_am: scene.geaendert_am }); dirty = false; setState(locked_by_other ? `Gespeichert (Achtung: ${locked_by_other} bearbeitet ebenfalls)` : 'Gespeichert');
       drawList();
     } catch (e) { setState('Fehler beim Speichern'); toast(e.message, 'err'); } finally { saving = false; if (dirty) save(); }
   }, 700);
@@ -50,7 +50,7 @@ export async function render(main, ctx) {
     if (!scenes.length) listEl.append(empty('edit', 'Keine Szenen', 'Lege eine Szene an oder importiere ein Word-Skript.'));
   }
   async function move(from, to) {
-    const ids = scenes.map((s) => s.id); ids.splice(ids.indexOf(from), 1); ids.splice(ids.indexOf(to), 0, from);
+    const ids = scenes.map((s) => s.id), fi = ids.indexOf(from), ti = ids.indexOf(to); ids.splice(fi, 1); ids.splice(fi < ti ? ti : ti, 0, from);
     await api.post(epUrl(ep, '/scenes-reorder'), { order: ids }); scenes = await api.get(epUrl(ep, '/scenes')); sel = scenes.find((s) => s.id === sel?.id) || sel; drawList();
   }
   async function addScene() {

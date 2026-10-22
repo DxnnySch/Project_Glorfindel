@@ -98,7 +98,13 @@ def transcribe_recording(ep: Episode, rec: dict, llm=None, progress=lambda p: No
     tr = store.read_json(cache)
     if tr is None:
         path = ep.p.root / rec["path"]
-        if stt.choose_backend(ep.settings.transcription) == "scads":
+        backend = stt.choose_backend(ep.settings.transcription)
+        if backend == "keins":
+            raise RuntimeError("Für die Transkription fehlt Whisper. Entweder lokal installieren (install-Skript, Option Whisper) "
+                               "oder in den Einstellungen „ScaDS.AI Whisper“ wählen (sendet die Aufnahme an ScaDS.AI).")
+        if not path.exists():
+            raise FileNotFoundError(f"Aufnahme nicht gefunden: {rec['path']}")
+        if backend == "scads":
             if llm is None or llm.client is None:
                 raise RuntimeError("ScaDS-Transkription gewählt, aber kein API-Schlüssel (.env) gefunden")
             tr = stt.transcribe_remote(path, llm.client, progress_cb=progress)
@@ -229,6 +235,14 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     out_dir = ep.p.gl / "schnitt"
     version = rough_cut.next_version(out_dir)
     pr = ep.project()
+    ref_src = ep.source(pr.reference_source) if pr.reference_source else None
+    if ref_src is None:
+        raise ValueError("Keine Referenz-Episode importiert (Quellen).")
+    for sc in scenes:
+        for i, g in enumerate(sc.segmente):
+            if ref_src.duration and g.out > ref_src.duration + 0.5:
+                raise ValueError(f"Szene „{sc.titel or sc.id}“, Segment {i + 1}: liegt hinter dem Ende der Episode "
+                                 f"({g.out:.1f} s > {ref_src.duration:.1f} s). Bitte im Szenen-Editor korrigieren.")
     pkg = rough_cut.build_package(
         scenes, slug=ep.p.slug, template=template, th=ep.settings.thresholds,
         alignment=load_alignment(ep), assets=load_assets(ep), maps=load_maps(ep), free_blocks=ep.free_blocks(),

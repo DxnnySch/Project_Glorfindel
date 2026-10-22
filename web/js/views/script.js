@@ -18,7 +18,7 @@ export async function render(main, ctx) {
     h('div', { class: 'grid g2' },
       h('div', { class: 'card col' }, h('h2', {}, 'Exportieren'),
         h('div', { class: 'row wrap' }, btn('Gesamtes Skript', { kind: 'primary', icon: 'download', onClick: () => dl('') }), btn('Nur Philipp', { icon: 'download', onClick: () => dl('speaker=philipp') }), btn('Nur Danny', { icon: 'download', onClick: () => dl('speaker=danny') })),
-        h('p', { class: 'help' }, 'Die Szenenmarken im Dokument (z. B. [sz_01]) bitte nicht löschen – darüber werden Änderungen zugeordnet.')),
+        h('p', { class: 'help' }, 'Die Szenenmarken im Dokument (⟦sz:sz_01⟧) und Bildmarken (⟦+bild:…⟧) bitte nicht löschen – darüber werden Änderungen zugeordnet. Eigene Rahmenteile (Werbung, Outro) als „Überschrift 1“ anlegen.')),
       h('div', { class: 'card col' }, h('h2', {}, 'Aus Word zurückübernehmen'), h('p', { class: 'help' }, 'Das bearbeitete Word-Dokument wählen. Du siehst vorab, welche Szenen sich ändern.'), btn('Word-Datei wählen …', { icon: 'upload', onClick: () => pick(importWord) })),
       h('div', { class: 'card col', style: { gridColumn: '1 / -1' } }, h('h2', {}, 'Bestehendes Skript einlesen (Altformat)'), h('p', { class: 'help' }, 'Skripte mit [Szenen] und P:/D:-Zeilen werden als Szenen übernommen. Zeiten/Segmente setzt du danach im Szenen-Editor.'),
         h('div', { class: 'row' }, btn('Zu bestehenden Szenen hinzufügen', { icon: 'upload', onClick: () => pick((f) => legacy(f, false)) }), btn('Alle Szenen ersetzen', { icon: 'refresh', kind: 'danger', onClick: () => { if (confirm('Alle vorhandenen Szenen werden gelöscht und ersetzt. Fortfahren?')) pick((f) => legacy(f, true)); } }))))));

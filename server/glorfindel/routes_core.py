@@ -178,6 +178,9 @@ class ImportSource(BaseModel):
 
 @router.post("/ep/{season}/{episode}/sources")
 def import_source(body: ImportSource, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    p = Path(body.path)
+    if not (p if p.is_absolute() else Path(ep.p.root) / p).is_file():
+        raise HTTPException(404, f"Datei nicht gefunden: {body.path}")
     def work(progress):
         s = ep.import_source(body.path, body.role, wait=True)
         return s.model_dump()
@@ -245,17 +248,27 @@ def detect_crop(sid: str, ep: Episode = Depends(ep_of)):
 
 
 # ---------- Szenen ----------
+def _ref_duration(ep: Episode) -> float:
+    try:
+        return ep.source(ep.project().reference_source).duration
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
 @router.get("/ep/{season}/{episode}/scenes")
 def scenes(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     th = state.settings.thresholds
     return [{**s.model_dump(by_alias=True), "report": scene_report(s, th),
-             "lock": store.lock_status(ep.p.locks, s.id), "problems": validate_segments(s)} for s in ep.scenes()]
+             "lock": store.lock_status(ep.p.locks, s.id), "problems": validate_segments(s, _ref_duration(ep))} for s in ep.scenes()]
 
 
 @router.post("/ep/{season}/{episode}/scenes")
 def create_scene(body: dict, ep: Episode = Depends(ep_of)):
     body = {k: v for k, v in body.items() if k in {"titel", "strang", "segmente", "kommentar", "standbild"}}
-    sc = ep.create_scene(**body)
+    try:
+        sc = ep.create_scene(**body)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"Ungültige Szene: {e}")
     for b in sc.kommentar:
         normalize_block(b)
     return ep.save_scene(sc).model_dump(by_alias=True)
@@ -270,6 +283,7 @@ def put_scene(sid: str, sc: Scene, ep: Episode = Depends(ep_of), state: AppState
         normalize_block(b)
     ep.save_scene(sc)
     return {"scene": sc.model_dump(by_alias=True), "report": scene_report(sc, state.settings.thresholds),
+            "problems": validate_segments(sc, _ref_duration(ep)),
             "locked_by_other": lock["user"] if lock and lock["user"] != state.settings.user else None}
 
 

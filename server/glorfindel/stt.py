@@ -62,14 +62,11 @@ def transcribe_remote(path: Path, client, model: str = REMOTE_MODEL, language: s
 
 
 def choose_backend(setting: str) -> str:
-    """'lokal' | 'scads'. 'auto': lokal bei CUDA-GPU und installiertem faster-whisper, sonst ScaDS."""
+    """'lokal' | 'scads' | 'keins'. 'auto' wählt nie ScaDS (Audio verlässt den Rechner nur auf ausdrückliche Anweisung)."""
     if setting in ("lokal", "scads"):
         return setting
     try:
-        import ctranslate2
         import faster_whisper  # noqa: F401
-        if ctranslate2.get_cuda_device_count() > 0:
-            return "lokal"
+        return "lokal"
     except Exception:  # noqa: BLE001
-        pass
-    return "scads"
+        return "keins"

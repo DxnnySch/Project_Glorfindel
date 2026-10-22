@@ -24,7 +24,7 @@ export function go(view, ep = S.ep) {
 }
 
 function parse() {
-  const p = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  const p = location.hash.replace(/^#\/?/, '').split('?')[0].split('/').filter(Boolean);
   if (/^\d+$/.test(p[0] || '') && /^\d+$/.test(p[1] || '')) return { ep: { season: +p[0], episode: +p[1] }, view: p[2] || 'home' };
   return { ep: null, view: p[0] || 'home' };
 }

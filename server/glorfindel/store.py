@@ -40,6 +40,16 @@ def read_json(path: Path, default: Any = None) -> Any:
 
 def log_change(gl_dir: Path, user: str, what: str) -> None:
     gl_dir.mkdir(parents=True, exist_ok=True)
+    f = gl_dir / "log.jsonl"
+    if f.exists() and what.endswith(" gespeichert"):  # Autosave zusammenfassen: gleiche Zeile nicht mehrfach in 10 Minuten
+        try:
+            last = json.loads(f.read_text(encoding="utf-8").splitlines()[-1])
+            from datetime import datetime
+            if last.get("was") == what and last.get("wer") == user and \
+                    (datetime.fromisoformat(now_iso()) - datetime.fromisoformat(last["wann"])).total_seconds() < 600:
+                return
+        except Exception:  # noqa: BLE001
+            pass
     line = json.dumps({"wer": user, "was": what, "wann": now_iso()}, ensure_ascii=False)
     with open(gl_dir / "log.jsonl", "a", encoding="utf-8") as f:
         f.write(line + "\n")

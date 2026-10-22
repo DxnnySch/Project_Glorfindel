@@ -31,7 +31,9 @@ def credit_from_filename(path: str) -> str:
     stem = Path(path).stem
     stem = re.sub(r"[\s_-]*\(?\d+\)?$", "", stem)       # Zählsuffix
     stem = re.split(r"\s+[-–]\s+", stem)[0]            # Titel nach Bindestrich abschneiden
-    return re.sub(r"[_]+", " ", stem).strip().lower()
+    if " " in stem and "_" in stem:                      # „Ted Nasmith_Armenelos“: Unterstrich trennt Werktitel
+        stem = stem.split("_")[0]
+    return re.sub(r"_+", " ", stem).strip().lower()
 
 
 class Timeline:
@@ -120,6 +122,8 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         still_name = (still_names or {}).get(sc.id, f"{n}.png")
         # ---- Serienmaterial ----
         s_start = t
+        if not sc.segmente:
+            tl.warnings.append(f"{sc.titel or sc.id}: noch kein Serienmaterial (Segment) gesetzt")
         tl.mark(t, f"Szene {n:02d}: {sc.titel or sc.id}" + (f" [{sc.strang}]" if sc.strang else ""))
         for i, seg in enumerate(sc.segmente):
             if segment_light(seg.duration, th) == "rot":
@@ -141,6 +145,8 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
             if speaker_filter and block.sprecher not in speaker_filter:
                 continue
             al = next((a for a in sc_align if a.get("block") == bi), None)
+            if al and (al.get("missing") or al.get("in") is None or al.get("out") is None):
+                al = None  # nicht gefunden -> Schätzung
             dur, starts = block_timing(block, al, th)
             timings.append((bi, block, offset, dur, starts, al))
             offset += dur + tm["block_gap"]

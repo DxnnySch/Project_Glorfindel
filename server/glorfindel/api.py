@@ -36,6 +36,23 @@ def create_app(state: AppState | None = None) -> FastAPI:
                     return JSONResponse({"detail": "Fremde Herkunft abgelehnt"}, status_code=403)
         return await call_next(request)
 
+    from pydantic import ValidationError
+
+    @app.exception_handler(FileNotFoundError)
+    async def _nf(request: Request, exc: FileNotFoundError):
+        return JSONResponse({"detail": str(exc) or "Datei nicht gefunden"}, status_code=404)
+
+    @app.exception_handler(FileExistsError)
+    async def _ex(request: Request, exc: FileExistsError):
+        return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(ValueError)
+    async def _val(request: Request, exc: ValueError):
+        if isinstance(exc, ValidationError):
+            msg = "; ".join(f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}" for e in exc.errors()[:3])
+            return JSONResponse({"detail": f"Ungültige Eingabe – {msg}"}, status_code=400)
+        return JSONResponse({"detail": str(exc)}, status_code=400)
+
     from . import routes_core, routes_prod, routes_lib
     app.include_router(routes_core.router, prefix="/api")
     app.include_router(routes_prod.router, prefix="/api")
