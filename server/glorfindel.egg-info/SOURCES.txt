@@ -1,0 +1,7 @@
+pyproject.toml
+server/glorfindel/__init__.py
+server/glorfindel.egg-info/PKG-INFO
+server/glorfindel.egg-info/SOURCES.txt
+server/glorfindel.egg-info/dependency_links.txt
+server/glorfindel.egg-info/requires.txt
+server/glorfindel.egg-info/top_level.txt

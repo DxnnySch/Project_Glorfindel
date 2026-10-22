@@ -1,0 +1,23 @@
+[project]
+name = "glorfindel"
+version = "0.1.0"
+description = "Projekt Glorfindel – Rohschnitt-Werkzeug für Folgenbesprechungen"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6", "python-docx>=1.1",
+  "numpy>=1.26", "scipy>=1.12", "pillow>=10", "openai>=1.30", "python-dotenv>=1.0",
+  "watchfiles>=0.21", "python-multipart>=0.0.9", "httpx>=0.27", "scenedetect[opencv-headless]>=0.6.4",
+  "rapidfuzz>=3.6",
+]
+[project.optional-dependencies]
+whisper = ["faster-whisper>=1.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["server"]
+[tool.setuptools]
+package-dir = {"" = "server"}
+packages = ["glorfindel"]
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
