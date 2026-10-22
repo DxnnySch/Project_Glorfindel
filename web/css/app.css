@@ -140,3 +140,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .hero { padding: 54px 40px; text-align: center; background: radial-gradient(1000px 300px at 50% -10%, var(--accent-soft), transparent); border-radius: 16px; border: 1px solid var(--line); }
 .hero h1 { font-size: 30px; margin-bottom: 8px; } .steps { counter-reset: s; display: grid; gap: 14px; text-align: left; max-width: 560px; margin: 26px auto 0; }
 @media (max-width: 1100px) { .editor-cols, .g3, .g4, .phases { grid-template-columns: 1fr 1fr; } #app { grid-template-columns: 76px 1fr; } .nav span, .brand b, .brand small, .nav-sec, .side-foot, .ep-switch { display: none; } }
+
+/* Symbolgrößen in Hinweisen, Chips und Blockfüßen */
+.banner svg, .lockbar svg, .block-foot svg, .chip svg, .card-head svg, .scene-item small svg, .row > svg { width: 16px; height: 16px; flex: none; }
+.thumb { cursor: default; }
