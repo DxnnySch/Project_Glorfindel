@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 from . import media, store
@@ -170,8 +171,23 @@ class Episode:
         return self.save_scene(sc, f"Szene {sc.id} angelegt")
 
     def delete_scene(self, sid: str) -> None:
-        (self.p.scenes / f"{sid}.json").unlink(missing_ok=True)
+        f = self.p.scenes / f"{sid}.json"
+        if f.exists():
+            trash = self.p.gl / "papierkorb"
+            trash.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(f), str(trash / f"{sid}.json"))
         store.log_change(self.p.gl, self.settings.user, f"Szene {sid} gelöscht")
+
+    def restore_scene(self, sid: str) -> Scene:
+        src = self.p.gl / "papierkorb" / f"{sid}.json"
+        if not src.exists():
+            raise FileNotFoundError("Nicht im Papierkorb")
+        dst = self.p.scenes / f"{sid}.json"
+        if dst.exists():
+            raise FileExistsError("Szene existiert bereits")
+        shutil.move(str(src), str(dst))
+        store.log_change(self.p.gl, self.settings.user, f"Szene {sid} wiederhergestellt")
+        return Scene.model_validate(store.read_json(dst))
 
     def renumber(self, ordered_ids: list[str]) -> None:
         for i, sid in enumerate(ordered_ids):

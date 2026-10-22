@@ -2,6 +2,7 @@
 import { h, $, clear, icon, toast, btn, modal, field } from './ui.js';
 import { api, epUrl } from './api.js';
 import { S, loadGlobal, loadEpisode, slug } from './state.js';
+import { mountTasks } from './tasks.js';
 
 const VIEWS = {
   home:     { label: 'Übersicht',   icon: 'home',     mod: './views/home.js' },
@@ -34,7 +35,7 @@ function renderSide(view) {
   side.append(h('div', { class: 'brand' }, h('div', { class: 'brand-logo' }, 'G'), h('div', {}, h('b', {}, 'Glorfindel'), h('small', {}, 'Folgenbesprechung'))));
   const sel = h('select', { class: 'ep-switch', onChange: (e) => {
     const v = e.target.value;
-    if (v === '+') return newEpisode();
+    if (v === '+') { e.target.selectedIndex = 0; return newEpisode(); }
     if (v === '') { location.hash = '#/home'; return; }
     const [s, ep] = v.split('-'); location.hash = `#/${s}/${ep}/${view === 'settings' ? 'home' : view}`;
   } },
@@ -49,16 +50,20 @@ function renderSide(view) {
       onClick: (e) => { e.preventDefault(); go(k); } }, icon(v.icon), h('span', {}, v.label),
     k === 'editor' && S.data ? h('span', { class: 'badge' }, S.data.scenes.length) : null));
   }
-  side.append(h('div', { class: 'side-foot' }, `Angemeldet als ${S.settings?.user || '–'}`,
+  const tasksEl = h('div', { style: { marginTop: 'auto' } }); side.append(tasksEl); mountTasks(tasksEl);
+  side.append(h('div', { class: 'side-foot', style: { marginTop: 0 } }, `Angemeldet als ${S.settings?.user || '–'}`,
     h('br'), S.system && !S.system.ffmpeg ? h('span', { style: { color: 'var(--bad)' } }, 'ffmpeg fehlt!') : ''));
 }
 
 export function newEpisode() {
-  const season = h('input', { type: 'number', value: 2, min: 1 }), ep = h('input', { type: 'number', value: 1, min: 1 }), title = h('input', { type: 'text', placeholder: 'z. B. Titel der Folge' });
-  modal({ title: 'Neue Folge anlegen', body: h('div', { class: 'col' }, h('div', { class: 'row' }, field('Staffel', season), field('Folge', ep)), field('Titel (optional)', title)),
+  const last = S.episodes.slice().sort((a, b) => a.season - b.season || a.episode - b.episode).at(-1);
+  const season = h('input', { type: 'number', value: last ? last.season : 3, min: 1, max: 99 }), ep = h('input', { type: 'number', value: last ? last.episode + 1 : 1, min: 1, max: 999 }), title = h('input', { type: 'text', placeholder: 'z. B. Titel der Folge' });
+  const m = modal({ title: 'Neue Folge anlegen', body: h('div', { class: 'col' }, h('div', { class: 'row' }, field('Staffel', season), field('Folge', ep)), field('Titel (optional)', title)),
     actions: [{ label: 'Abbrechen' }, { label: 'Anlegen', kind: 'primary', onClick: async () => {
       try { await api.post('/api/episodes', { season: +season.value, episode: +ep.value, title: title.value });
         await loadGlobal(); location.hash = `#/${season.value}/${ep.value}/sources`; } catch (e) { toast(e.message, 'err'); return false; } } }] });
+  title.addEventListener('keydown', (e) => { if (e.key === 'Enter') [...m.el.querySelectorAll('.modal-foot .btn')].at(-1).click(); });
+  ep.focus(); ep.select();
 }
 
 async function route() {

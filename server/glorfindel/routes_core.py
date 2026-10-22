@@ -97,6 +97,16 @@ def system_check():
 
 
 # ---------- Jobs ----------
+@router.get("/jobs")
+def jobs_list(state: AppState = Depends(st)):
+    return state.jobs.list()
+
+
+@router.post("/jobs/{jid}/cancel")
+def job_cancel(jid: str, state: AppState = Depends(st)):
+    return state.jobs.cancel(jid)
+
+
 @router.get("/jobs/{jid}")
 def job(jid: str, state: AppState = Depends(st)):
     return state.jobs.get(jid)
@@ -183,6 +193,8 @@ def import_source(body: ImportSource, ep: Episode = Depends(ep_of), state: AppSt
         raise HTTPException(404, f"Datei nicht gefunden: {body.path}")
     def work(progress):
         s = ep.import_source(body.path, body.role, wait=True)
+        if not ep.proxy_path(s.id).exists():
+            state.jobs.submit(f"Proxy {s.id} ({Path(s.path).name})", lambda progress, sid=s.id: str(ep.ensure_proxy(sid)))
         return s.model_dump()
     return {"job": state.jobs.submit("Quelle importieren", work)}
 
@@ -258,7 +270,9 @@ def _ref_duration(ep: Episode) -> float:
 @router.get("/ep/{season}/{episode}/scenes")
 def scenes(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     th = state.settings.thresholds
-    return [{**s.model_dump(by_alias=True), "report": scene_report(s, th),
+    from . import pipeline
+    out_no = {x.id: i + 1 for i, x in enumerate(pipeline.ordered_scenes(ep, True))}
+    return [{**s.model_dump(by_alias=True), "ausgabe": out_no.get(s.id), "report": scene_report(s, th),
              "lock": store.lock_status(ep.p.locks, s.id), "problems": validate_segments(s, _ref_duration(ep))} for s in ep.scenes()]
 
 
@@ -274,13 +288,24 @@ def create_scene(body: dict, ep: Episode = Depends(ep_of)):
     return ep.save_scene(sc).model_dump(by_alias=True)
 
 
+def _signature(s: Scene) -> tuple:
+    """Inhalt, der den Abgleich mit der Aufnahme ungültig macht (Text, Sprecher, Segmente)."""
+    return (tuple((b.sprecher, b.modus, b.text.strip(), tuple(b.stichpunkte)) for b in s.kommentar),
+            tuple((round(g.in_, 3), round(g.out, 3)) for g in s.segmente))
+
+
 @router.put("/ep/{season}/{episode}/scenes/{sid}")
-def put_scene(sid: str, sc: Scene, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+def put_scene(sid: str, sc: Scene, base: str | None = None, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     if sc.id != sid:
         raise HTTPException(400, "ID passt nicht")
     lock = store.lock_status(ep.p.locks, sid)
     for b in sc.kommentar:
         normalize_block(b)
+    old = next((s for s in ep.scenes() if s.id == sid), None)
+    if base and old and old.geaendert_am and old.geaendert_am > base and old.geaendert_von != state.settings.user:
+        raise HTTPException(409, f"{old.geaendert_von} hat diese Szene inzwischen geändert.")
+    if old and sc.status in ("aufgenommen", "abgeglichen") and old.status == sc.status and _signature(old) != _signature(sc):
+        sc.status = "veraltet"
     ep.save_scene(sc)
     return {"scene": sc.model_dump(by_alias=True), "report": scene_report(sc, state.settings.thresholds),
             "problems": validate_segments(sc, _ref_duration(ep)),
@@ -295,6 +320,11 @@ def delete_scene(sid: str, ep: Episode = Depends(ep_of)):
 
 class Reorder(BaseModel):
     order: list[str]
+
+
+@router.post("/ep/{season}/{episode}/scenes/{sid}/restore")
+def restore_scene(sid: str, ep: Episode = Depends(ep_of)):
+    return ep.restore_scene(sid).model_dump(by_alias=True)
 
 
 @router.post("/ep/{season}/{episode}/scenes-reorder")
@@ -351,3 +381,41 @@ def strands(ep: Episode = Depends(ep_of)):
 def put_strands(body: list[Strand], ep: Episode = Depends(ep_of)):
     ep.save_strands(body)
     return {"ok": True}
+
+
+# ---------- Cockpit ----------
+@router.get("/ep/{season}/{episode}/cockpit")
+def cockpit(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    """„Als Nächstes“-Liste: was fehlt noch, wohin muss man klicken."""
+    from . import pipeline
+    scs, srcs = ep.scenes(), ep.sources()
+    al = pipeline.load_alignment(ep)
+    assets = list(pipeline.load_assets(ep).values())
+    tasks = []
+
+    def add(n, text, view, scene=None):
+        if n:
+            tasks.append({"n": n, "text": text, "view": view, "scene": scene})
+    add(0 if srcs else 1, "Referenz-Episode importieren", "sources")
+    no_seg = [s for s in scs if not s.segmente]
+    add(len(no_seg), "Szene(n) ohne Serienmaterial (Segment)", "editor", no_seg[0].id if no_seg else None)
+    no_strand = [s for s in scs if not s.strang]
+    add(len(no_strand), "Szene(n) ohne Strang", "editor", no_strand[0].id if no_strand else None)
+    no_text = [s for s in scs if not any((b.text.strip() or b.stichpunkte) for b in s.kommentar)]
+    add(len(no_text), "Szene(n) ohne Kommentartext", "editor", no_text[0].id if no_text else None)
+    stale = [s for s in scs if s.status == "veraltet"]
+    add(len(stale), "Szene(n) veraltet – Text oder Segmente wurden nach der Aufnahme geändert", "recording", stale[0].id if stale else None)
+    add(sum(1 for a in assets if not (a.get("credit") or "").strip()), "Bild(er) ohne Credit", "images")
+    red = [s for s in scs if scene_report(s, state.settings.thresholds)["light"] == "rot"]
+    add(len(red), "Szene(n) mit zu langem Segment", "editor", red[0].id if red else None)
+    if scs and al["recordings"]:
+        pending = [s for s in scs if s.status not in ("abgeglichen",) and any(b.text.strip() or b.stichpunkte for b in s.kommentar)]
+        add(len(pending), "Szene(n) noch nicht mit der Aufnahme abgeglichen", "recording", pending[0].id if pending else None)
+    elif scs:
+        add(1, "Sprachaufnahme importieren und abgleichen", "recording")
+    phases = {
+        "vorbereiten": bool(srcs), "skript": bool(scs) and not no_seg and not no_text,
+        "einsprechen": bool(al["recordings"]) and bool(scs) and all(s.status == "abgeglichen" for s in scs if any(b.text.strip() or b.stichpunkte for b in s.kommentar)),
+        "rohschnitt": (ep.p.gl / "schnitt").exists() and any((ep.p.gl / "schnitt").glob("schnitt_v*.json")),
+    }
+    return {"tasks": tasks, "phases": phases, "stale": [s.id for s in stale]}

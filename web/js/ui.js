@@ -40,7 +40,7 @@ const P = {
   refresh: 'M20 11a8 8 0 10-2 6M20 4v7h-7', search: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5', layout: 'M3 4h18v16H3zM3 10h18M9 10v10',
   sun: 'M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5',
   user: 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0', clock: 'M12 7v5l3 2M12 3a9 9 0 100 18 9 9 0 000-18z', copy: 'M8 8h11v12H8zM5 16V4h11',
-  chevron: 'M9 6l6 6-6 6', wand: 'M4 20L16 8M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 12l.7 1.3L21 14l-1.3.7L19 16l-.7-1.3L17 14l1.3-.7z',
+  chevron: 'M9 6l6 6-6 6', up: 'M6 15l6-6 6 6', down: 'M6 9l6 6 6-6', wand: 'M4 20L16 8M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 12l.7 1.3L21 14l-1.3.7L19 16l-.7-1.3L17 14l1.3-.7z',
   video: 'M3 6h12v12H3zM15 10l6-3v10l-6-3', compare: 'M4 4h7v16H4zM13 4h7v16h-7z', info: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 11v6M12 7.5v.5',
 };
 export function icon(name, cls = '') {
@@ -72,6 +72,9 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
   const esc = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } };
   document.addEventListener('keydown', esc);
   $('#overlays').append(ov);
+  const first = m.querySelector('.modal-body input:not([type=checkbox]), .modal-body textarea');
+  if (first) setTimeout(() => first.focus(), 30);
+  m.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') { const p = m.querySelector('.modal-foot .btn.primary'); if (p) { e.preventDefault(); p.click(); } } });
   return { close, el: m };
 }
 export const confirmBox = (title, text, okLabel = 'OK', danger = false) => new Promise((res) => {
@@ -131,7 +134,7 @@ export const parseTC = (str, fps = 24) => {
   const n = Number(str); return isNaN(n) ? null : n;
 };
 export const fmtDur = (s) => { s = Math.round(s || 0); const m = Math.floor(s / 60); return `${m}:${String(s % 60).padStart(2, '0')} min`; };
-export const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+export const debounce = (fn, ms) => { let t; const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; d.now = (...a) => { clearTimeout(t); return fn(...a); }; return d; };
 export const lightLabel = { gruen: 'passt', gelb: 'knapp', rot: 'zu lang' };
 export const empty = (iconName, title, text, ...actions) => h('div', { class: 'empty' }, icon(iconName), h('h2', {}, title), h('p', {}, text), h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '14px' } }, actions));
 export const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);

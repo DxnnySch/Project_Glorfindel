@@ -14,6 +14,10 @@ from .config import Settings, load_settings, save_settings
 from .service import Episode
 
 
+class Abgebrochen(Exception):
+    """Auftrag wurde vom Nutzer abgebrochen."""
+
+
 class Jobs:
     """Einfache Hintergrundjobs mit Fortschritt (Proxys, Transkription, Conform …)."""
 
@@ -30,18 +34,35 @@ class Jobs:
             self.jobs[jid] = job
 
         def progress(p: float) -> None:
+            if job.get("cancel"):
+                raise Abgebrochen("Abgebrochen")
             job["progress"] = round(min(1.0, max(0.0, p)), 3)
 
         def run():
             try:
                 job["result"] = fn(*args, progress=progress, **kw)
                 job["status"], job["progress"] = "fertig", 1.0
+            except Abgebrochen:
+                job["status"], job["error"] = "abgebrochen", "Abgebrochen"
             except Exception as e:  # noqa: BLE001
-                job["status"], job["error"] = "fehler", f"{type(e).__name__}: {e}"
+                msg = str(e) or type(e).__name__
+                job["status"], job["error"] = "fehler", msg if isinstance(e, (ValueError, FileNotFoundError, RuntimeError)) else f"{type(e).__name__}: {msg}"
                 job["trace"] = traceback.format_exc()[-1500:]
 
         self.pool.submit(run)
         return jid
+
+    def cancel(self, jid: str) -> dict:
+        job = self.jobs.get(jid)
+        if not job:
+            raise HTTPException(404, "Job unbekannt")
+        if job["status"] == "laeuft":
+            job["cancel"] = True
+        return self.get(jid)
+
+    def list(self, limit: int = 30) -> list[dict]:
+        items = sorted(self.jobs.values(), key=lambda j: j["started"], reverse=True)[:limit]
+        return [{k: v for k, v in j.items() if k != "trace"} for j in items]
 
     def get(self, jid: str) -> dict:
         job = self.jobs.get(jid)

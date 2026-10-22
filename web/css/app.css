@@ -155,3 +155,5 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
   .seg-row input { min-width: 0; }
   .ep-switch { display: block !important; width: 100%; }
 }
+.nav.bad { color: var(--bad); }
+.meta-row select { width: auto; min-width: 150px; }
