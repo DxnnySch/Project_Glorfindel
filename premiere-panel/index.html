@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: sans-serif; font-size: 12px; padding: 10px; color: #ddd; }
+    button { margin: 2px 0; }
+    .warn { color: #e9b44c; } .err { color: #ef5b5b; } .ok { color: #4cc38a; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h3>Projekt Glorfindel</h3>
+  <p>Schnittpaket laden (lokales Tool muss laufen, oder .json wählen).</p>
+  <div><input id="ep" placeholder="Folge, z. B. 2/7" value="2/7" style="width:60px">
+    <input id="ver" placeholder="Version" style="width:50px">
+    <button id="load">Vom Tool laden</button> <button id="file">Datei wählen …</button></div>
+  <div id="summary"></div>
+  <div><button id="build" disabled>Rohschnitt aufbauen</button>
+    <button id="markers" disabled>Nur Marker setzen</button></div>
+  <pre id="log"></pre>
+  <script src="main.js"></script>
+</body>
+</html>

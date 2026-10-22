@@ -18,7 +18,8 @@ const VIEWS = {
   log:      { label: 'Protokoll',   icon: 'clock',    mod: './views/log.js' },
   settings: { label: 'Einstellungen', icon: 'gear',   mod: './views/settings.js', sec: 'System', global: true },
 };
-let cleanup = null, current = null;
+let cleanup = null, current = null, update = null;
+api.get('/api/update').then((u) => { update = u; if (u.newer) { const el = document.querySelector('.side-foot'); if (el) el.append(h('div', {}, h('a', { href: u.url, target: '_blank', rel: 'noopener' }, `Update ${u.latest} verfügbar`))); } }).catch(() => {});
 
 export function go(view, ep = S.ep) {
   location.hash = ep && !VIEWS[view]?.global ? `#/${ep.season}/${ep.episode}/${view}` : `#/${view}`;
@@ -52,6 +53,7 @@ function renderSide(view) {
   }
   const tasksEl = h('div', { style: { marginTop: 'auto' } }); side.append(tasksEl); mountTasks(tasksEl);
   side.append(h('div', { class: 'side-foot', style: { marginTop: 0 } }, `Angemeldet als ${S.settings?.user || '–'}`,
+    update?.newer ? h('div', {}, h('a', { href: update.url, target: '_blank', rel: 'noopener' }, `Update ${update.latest} verfügbar`)) : null,
     h('br'), S.system && !S.system.ffmpeg ? h('span', { style: { color: 'var(--bad)' } }, 'ffmpeg fehlt!') : ''));
 }
 

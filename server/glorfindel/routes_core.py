@@ -90,10 +90,37 @@ def browse(path: str = "", files: bool = False):
 
 @router.get("/system")
 def system_check():
+    import importlib.util
     import shutil
     from .stt import choose_backend
     return {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),
+            "whisper": importlib.util.find_spec("faster_whisper") is not None,
             "transcription_backend": choose_backend("auto")}
+
+
+REPO = "dxnnysch/project_glorfindel"
+
+
+def _ver_tuple(v: str) -> tuple:
+    import re
+    return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
+
+
+@router.get("/update")
+def update_check():
+    """Neuere Version auf GitHub? Schlägt still fehl (offline, privates Repo, kein Release)."""
+    import httpx
+    from . import __version__
+    out = {"current": __version__, "latest": None, "newer": False, "url": f"https://github.com/{REPO}/releases"}
+    try:
+        r = httpx.get(f"https://api.github.com/repos/{REPO}/releases/latest", timeout=3.0, headers={"Accept": "application/vnd.github+json"})
+        if r.status_code == 200:
+            d = r.json()
+            out.update(latest=d.get("tag_name"), url=d.get("html_url", out["url"]), notes=(d.get("body") or "")[:600])
+            out["newer"] = _ver_tuple(d.get("tag_name", "0")) > _ver_tuple(__version__)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
 
 
 # ---------- Jobs ----------

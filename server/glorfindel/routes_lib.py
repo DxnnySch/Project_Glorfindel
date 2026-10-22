@@ -256,3 +256,26 @@ def put_artists(body: dict[str, str], state: AppState = Depends(st)):
     d.mkdir(parents=True, exist_ok=True)
     pipeline.store.write_json(d / "kuenstler.json", {k.strip().lower(): v.strip() for k, v in body.items() if k.strip() and v.strip()})
     return {"ok": True}
+
+
+@router.get("/ep/{season}/{episode}/maps/{mid}/sheet")
+def map_sheet(mid: str, ep: Episode = Depends(ep_of)):
+    m = pipeline.load_maps(ep).get(mid)
+    if not m or not m.get("sheet"):
+        raise HTTPException(404, "Kartenblatt noch nicht erzeugt (Platzhalter rendern)")
+    f = _safe_under(ep.p.root, m["sheet"])
+    if not f.exists():
+        raise HTTPException(404, "Kartenblatt fehlt")
+    return FileResponse(f, headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/ep/{season}/{episode}/maps/{mid}")
+def delete_map(mid: str, ep: Episode = Depends(ep_of)):
+    f = ep.p.maps / f"{Path(mid).name}.json"
+    if not f.exists():
+        raise HTTPException(404, "Karte unbekannt")
+    users = [s.titel or s.id for s in ep.scenes() for b in s.kommentar for a in b.anker if a.karte == mid]
+    if users:
+        raise HTTPException(409, f"Wird noch verwendet in: {', '.join(sorted(set(users)))}")
+    f.unlink()
+    return {"ok": True}

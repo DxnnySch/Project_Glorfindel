@@ -157,3 +157,6 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 }
 .nav.bad { color: var(--bad); }
 .meta-row select { width: auto; min-width: 150px; }
+.shot img { width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover; background: #000; }
+.shot input { padding: 3px 6px; font-size: 12px; font-family: var(--mono); }
+.lane .strip { min-height: 96px; }

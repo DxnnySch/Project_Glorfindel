@@ -21,6 +21,13 @@ export async function render(main) {
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Einstellungen'), h('p', {}, 'Diese Einstellungen gelten nur für diesen Rechner und werden nicht über OneDrive geteilt.')), btn('Speichern', { kind: 'primary', icon: 'check', onClick: save })),
     !S.settings.onedrive_root ? h('div', { class: 'banner info', style: { marginBottom: '16px' } }, icon('info'), 'Willkommen! Wähle zuerst den OneDrive-Stammordner, in dem „Mythen-Archiv“ und „Videomaterial“ liegen.') : null,
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('div', { class: 'card-head' }, h('h2', {}, 'Ersteinrichtung – Selbsttest')),
+      h('div', { class: 'col gap-s' }, ...[
+        [S.system?.ffmpeg && S.system?.ffprobe, 'ffmpeg/ffprobe gefunden', 'ffmpeg fehlt – ohne geht kein Video (install-Skript ausführen)'],
+        [!!S.settings.onedrive_root && S.settings._onedrive_ok, 'OneDrive-Stammordner gesetzt und vorhanden', 'OneDrive-Stammordner wählen (siehe unten)'],
+        [!!(S.settings.user || '').trim(), `Dein Name: ${S.settings.user}`, 'Trage deinen Namen ein (für Sperren und Protokoll)'],
+        [S.system?.whisper || S.settings.transcription === 'scads', 'Transkription verfügbar', 'Kein lokales Whisper: installieren oder ScaDS-Whisper wählen (optional, nur für den Aufnahme-Abgleich)'],
+        [S.settings._scads_key_present, 'ScaDS-Schlüssel vorhanden (KI-Hilfen)', 'Kein ScaDS-Schlüssel – KI-Hilfen sind aus (optional)']].map(([ok, good, bad]) => h('div', { class: 'row' }, icon(ok ? 'check' : 'alert'), h('span', { style: { color: ok ? 'var(--text)' : 'var(--warn)' } }, ok ? good : bad))))),
     h('div', { class: 'grid g2' },
       h('div', { class: 'card col' }, h('h2', {}, 'Grundlagen'),
         field('Dein Name (für Sperren und Änderungsprotokoll)', inp('user')),

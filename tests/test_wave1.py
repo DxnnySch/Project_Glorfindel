@@ -142,3 +142,41 @@ def test_asset_delete_guard_and_artists(tmp_path, monkeypatch):
     assert c.delete("/api/ep/2/1/assets/art_0001").status_code == 200
     assert c.put("/api/artists", json={"Ted Nasmith": "ted nasmith"}).status_code == 200
     assert c.get("/api/artists").json() == {"ted nasmith": "ted nasmith"}
+
+
+def test_board_save_validation_and_map_sheet(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    ok = c.put("/api/ep/2/1/board", json={"scenes": [{"start": 1, "end": 20, "strang": "eregion"}]})
+    assert ok.status_code == 200 and c.get("/api/ep/2/1/board").json()["scenes"][0]["strang"] == "eregion"
+    assert c.put("/api/ep/2/1/board", json={"scenes": [{"start": 5, "end": 2}]}).status_code == 400
+    # Karte mit Elementen rendern -> Blatt abrufbar
+    from PIL import Image
+    root = tmp_path / "od"
+    Image.new("RGB", (400, 300), (30, 80, 50)).save(root / "karte.png")
+    m = {"id": "map_01", "titel": "Test", "bild": "karte.png", "dauer": 4, "hinweise": "Fahrt nach Osten",
+         "elemente": [{"typ": "marker", "x": .3, "y": .4, "text": "Eregion", "t0": 0}, {"typ": "pfeil", "punkte": [[.3, .4], [.7, .5]], "t0": 1}],
+         "kamera": [{"t": 0, "rect": [0, 0, 1, 1]}, {"t": 3, "rect": [.2, .2, .5, .5]}]}
+    assert c.put("/api/ep/2/1/maps/map_01", json=m).status_code == 200
+    assert c.get("/api/ep/2/1/maps/map_01/sheet").status_code == 404
+    jid = c.post("/api/ep/2/1/maps/map_01/render").json()["job"]
+    import time
+    for _ in range(100):
+        j = c.get(f"/api/jobs/{jid}").json()
+        if j["status"] != "laeuft":
+            break
+        time.sleep(0.1)
+    assert j["status"] == "fertig", j.get("error")
+    assert c.get("/api/ep/2/1/maps/map_01/sheet").status_code == 200
+    assert c.delete("/api/ep/2/1/maps/map_01").status_code == 200
+
+
+def test_update_check_never_fails(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError("offline")))
+    r = c.get("/api/update").json()
+    assert r["newer"] is False and r["current"]
+    from glorfindel.routes_core import _ver_tuple
+    assert _ver_tuple("v0.2.0") > _ver_tuple("0.1.9")
+    s = c.get("/api/system").json()
+    assert "whisper" in s

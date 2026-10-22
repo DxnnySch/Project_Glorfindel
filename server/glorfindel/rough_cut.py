@@ -127,7 +127,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         tl.mark(t, f"Szene {n:02d}: {sc.titel or sc.id}" + (f" [{sc.strang}]" if sc.strang else ""))
         for i, seg in enumerate(sc.segmente):
             if segment_light(seg.duration, th) == "rot":
-                tl.warnings.append(f"{sc.id}: Segment {i + 1} ist {seg.duration:.1f} s lang (> {th.max_segment_s} s)")
+                tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Segment {i + 1} ist {seg.duration:.1f} s lang (> {th.max_segment_s} s)")
             dur = seg.duration
             tl.add(tr["series_video"], "scene_segment", t, t + dur, scene=sc.id, src="episode",
                    src_in=seg.in_, src_out=seg.out)
@@ -177,7 +177,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                 clip["placeholder"] = True
             tl.add(track, "comment", b_start, b_start + dur, **clip)
             if not al:
-                tl.warnings.append(f"{sc.id} Block {bi + 1}: noch keine Aufnahme zugeordnet (Schätzung)")
+                tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}], Block {bi + 1}: noch keine Aufnahme zugeordnet (Schätzung)")
             # ---- Anker: Artworks / Karten ----
             pending = [a for a in block.anker]
             for a in pending:
@@ -202,7 +202,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                     continue
                 asset = assets.get(ident)
                 if asset is None:
-                    tl.warnings.append(f"{sc.id}: Asset {ident} fehlt in der Bibliothek")
+                    tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Asset {ident} fehlt in der Bibliothek")
                     asset = {}
                 if a.layout == "doppel_links":
                     track_a = tr["art"][0]
@@ -221,7 +221,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                 # Credit exakt so lang wie das Artwork
                 artist = asset.get("credit") or credit_from_filename(asset.get("path", ident))
                 if not asset.get("credit"):
-                    tl.warnings.append(f"{sc.id}: Credit für {ident} aus Dateiname vorbelegt („{artist}“)")
+                    tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Credit für {ident} aus Dateiname vorbelegt („{artist}“)")
                 credit_track = tr["credit_artwork"][1 if a.layout == "doppel_rechts" else 0]
                 tl.add(credit_track, "credit", a_start, a_end, slot="credit_artwork",
                        text=credit_text("© {kuenstler}", artist), scene=sc.id, over=track_a,
@@ -237,7 +237,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
             extra = art_end_all - still_end
             still_clip["end"] = amazon_clip["end"] = tl.snap(art_end_all)
             still_end = tl.snap(art_end_all)
-            tl.warnings.append(f"{sc.id}: Standbild um {extra:.1f} s verlängert (Artwork ragte über)")
+            tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Standbild um {extra:.1f} s verlängert (Artwork ragte über)")
         t = still_end
         # Play-Animation vor der nächsten Szene
         if n < len(scenes) and still_len:

@@ -123,6 +123,30 @@ def board(ep: Episode = Depends(ep_of)):
     return store.read_json(ep.p.cache() / "board.json", {"scenes": []})
 
 
+class BoardScene(BaseModel):
+    start: float
+    end: float
+    thumb: str = ""
+    strang: str = ""
+    done: bool = False
+
+
+class BoardBody(BaseModel):
+    source: str = ""
+    scenes: list[BoardScene]
+
+
+@router.put("/ep/{season}/{episode}/board")
+def save_board(body: BoardBody, ep: Episode = Depends(ep_of)):
+    for s in body.scenes:
+        if s.end <= s.start:
+            raise HTTPException(400, f"Ende muss nach dem Anfang liegen ({s.start:.1f}–{s.end:.1f} s)")
+    data = store.read_json(ep.p.cache() / "board.json", {})
+    data.update(source=body.source or data.get("source", ""), scenes=[s.model_dump() for s in body.scenes])
+    store.write_json(ep.p.cache() / "board.json", data)
+    return {"ok": True}
+
+
 @router.get("/ep/{season}/{episode}/thumb/{name}")
 def thumb(name: str, ep: Episode = Depends(ep_of)):
     f = ep.p.cache() / "thumbs" / Path(name).name
@@ -254,7 +278,7 @@ def build(body: BuildBody, ep: Episode = Depends(ep_of), state: AppState = Depen
 def versions(ep: Episode = Depends(ep_of)):
     d = ep.p.gl / "schnitt"
     return [{"version": int(f.stem.split("_v")[1]), "file": f.name, "xml": f.with_suffix(".xml").exists(),
-             "modified": f.stat().st_mtime} for f in sorted(d.glob("schnitt_v*.json"))] if d.exists() else []
+             "modified": f.stat().st_mtime, "path": str(f)} for f in sorted(d.glob("schnitt_v*.json"))] if d.exists() else []
 
 
 @router.get("/ep/{season}/{episode}/rough-cut/{version}/{kind}")
