@@ -1,0 +1,20 @@
+{
+  "sequence": {"name": "Rohschnitt", "width": 1920, "height": 1080, "fps": 60},
+  "timing": {
+    "pause_lead": 0.63, "play_lead": 0.68, "anim_len": 1.32,
+    "comment_lead_in": 0.3, "comment_tail": 0.5, "block_gap": 0.25,
+    "min_still": 3.0, "min_artwork": 1.5, "artwork_fade": 0.42,
+    "blur_in": 2.0, "audio_crossfade": 0.1, "free_block_min": 2.0
+  },
+  "tracks": {
+    "series_video": "V1", "series_audio": "A4", "anim": "V2", "blur": "V2",
+    "art": ["V3", "V4"], "credit_amazon": "V9", "credit_artwork": ["V10", "V13"],
+    "speaker_audio": {"philipp": "A2", "danny": "A3"}
+  },
+  "doppelbild": {
+    "links":  {"x": 0.27, "y": 0.5, "size": 0.62},
+    "rechts": {"x": 0.73, "y": 0.5, "size": 0.62}
+  },
+  "episode_sequence_name": "{slug} Sequenz",
+  "markers": true
+}

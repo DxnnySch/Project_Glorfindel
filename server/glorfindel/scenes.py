@@ -5,7 +5,7 @@ import re
 from typing import Literal
 
 from .config import Thresholds
-from .models import Scene, Strand
+from .models import CommentBlock, Scene, Strand
 
 Light = Literal["gruen", "gelb", "rot"]
 
@@ -30,6 +30,34 @@ def speech_duration(text: str, th: Thresholds) -> float:
     return count_words(text) / th.words_per_second
 
 
+_BULLET_RE = re.compile(r"^\s*(?:[-–—•*·]|\d+[.)])\s+")
+
+
+def parse_bullets(text: str) -> list[str]:
+    """Zeilen mit Aufzählungszeichen -> Stichpunkte; leer, wenn der Text kein Stichpunkt-Skript ist."""
+    lines = [l for l in text.splitlines() if l.strip()]
+    if lines and all(_BULLET_RE.match(l) for l in lines):
+        return [_BULLET_RE.sub("", l).strip() for l in lines]
+    return []
+
+
+def normalize_block(block: CommentBlock) -> CommentBlock:
+    """Erkennt Stichpunkt-Eingaben im Textfeld und stellt Modus/Felder konsistent her."""
+    if block.modus == "text":
+        bullets = parse_bullets(block.text)
+        if bullets:
+            block.modus, block.stichpunkte, block.text = "stichpunkte", bullets, ""
+    elif block.modus == "stichpunkte" and block.text and not block.stichpunkte:
+        block.stichpunkte, block.text = parse_bullets(block.text) or [block.text], ""
+    return block
+
+
+def block_duration(block: CommentBlock, th: Thresholds) -> float:
+    if block.modus == "stichpunkte":
+        return len(block.stichpunkte) * th.bullet_seconds
+    return speech_duration(block.text, th)
+
+
 def scene_report(scene: Scene, th: Thresholds) -> dict:
     segs = [{"duration": s.duration, "light": segment_light(s.duration, th)} for s in scene.segmente]
     order = {"gruen": 0, "gelb": 1, "rot": 2}
@@ -39,7 +67,7 @@ def scene_report(scene: Scene, th: Thresholds) -> dict:
         "segments": segs,
         "light": worst,
         "series_s": scene_series_duration(scene),
-        "comment_s": sum(speech_duration(c.text, th) for c in scene.kommentar),
+        "comment_s": sum(block_duration(c, th) for c in scene.kommentar),
         "montage": len(scene.segmente) > 1,
     }
 

@@ -1,0 +1,18 @@
+{
+  "fancy_in":  {"effect": "Kanten aufrauen", "anchor": "start", "duration": 0.5,
+    "params": {"Rahmen": [500, 8], "Kantenschärfe": [0, 0.2], "Skalieren": [204, 192]},
+    "overridable": {"Konturfarbe": "#752416"}},
+  "fancy_out": {"effect": "Kanten aufrauen", "anchor": "end", "duration": 0.5,
+    "params": {"Rahmen": [8, 500], "Skalieren": [192, 204]},
+    "overridable": {"Konturfarbe": "#752416"}},
+  "zoom_1_0":  {"effect": "Transformieren", "anchor": "start", "duration": 120,
+    "params": {"Skalierung": [100, 240]}},
+  "gauss_in":  {"effect": "Gaußscher Weichzeichner", "anchor": "start", "duration": 0.5,
+    "params": {"Stärke": [0, 15]}},
+  "gauss_out": {"effect": "Gaußscher Weichzeichner", "anchor": "end", "duration": 0.5,
+    "params": {"Stärke": [15, 0]}},
+  "karte_in":  {"effect": "Transformieren", "anchor": "start", "duration": 0.5,
+    "params": {"Position": ["oben", "mitte"]}},
+  "karte_out": {"effect": "Transformieren", "anchor": "end", "duration": 0.5,
+    "params": {"Position": ["mitte", "oben"]}}
+}

@@ -40,6 +40,7 @@ class Thresholds(BaseModel):
     warn_ratio: float = 0.8
     target_series_share: float = 0.34
     words_per_second: float = 2.6  # Sprechtempo Deutsch für die Dauerschätzung
+    bullet_seconds: float = 12.0   # geschätzte Sprechdauer pro frei ausformuliertem Stichpunkt
 
 
 class Settings(BaseModel):

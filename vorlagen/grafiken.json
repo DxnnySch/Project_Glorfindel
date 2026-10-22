@@ -1,0 +1,8 @@
+{
+  "credit_artwork": {"mogrt": "credit_artwork.mogrt", "field": "Text", "rule": "© {kuenstler}", "lowercase": true,
+    "track": "V10", "fade": 0.42, "position": "oben_mitte_ueber_bild"},
+  "credit_amazon":  {"mogrt": "credit_amazon.mogrt", "field": "Text", "rule": "© amazon studios", "lowercase": true,
+    "track": "V9", "position": "unten_links"},
+  "credit_musik":   {"mogrt": "credit_musik.mogrt", "field": "Text", "rule": "© {interpret} - {titel}", "lowercase": true,
+    "track": "V11", "position": "unten_rechts", "enabled": false}
+}

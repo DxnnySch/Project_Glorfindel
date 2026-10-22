@@ -33,11 +33,15 @@ class AssetRef(BaseModel):
     von: int = 0               # Wortindex
     bis: Optional[int] = None  # None = bis Ende des Kommentars
     layout: Literal["einzel", "doppel_links", "doppel_rechts"] = "einzel"
+    einheit: Literal["wort", "stichpunkt"] = "wort"  # von/bis zählen Wörter oder Stichpunkte
 
 
 class CommentBlock(BaseModel):
     sprecher: Speaker = "philipp"
+    modus: Literal["text", "stichpunkte"] = "text"  # Stichpunkte: wird frei ausformuliert gesprochen
     text: str = ""
+    stichpunkte: list[str] = Field(default_factory=list)
+    gesprochen: str = ""  # nach dem Abgleich: tatsächlich gesprochener Text (Transkript)
     anker: list[AssetRef] = Field(default_factory=list)
 
 

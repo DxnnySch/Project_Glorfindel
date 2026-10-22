@@ -27,6 +27,19 @@ def fmt_tc(seconds: float) -> str:
     return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
+def _bullet_marks(block: CommentBlock) -> dict[int, list[str]]:
+    marks: dict[int, list[str]] = {}
+    for a in block.anker:
+        kind, ident = ("bild", a.asset) if a.asset else ("karte", a.karte)
+        if not ident:
+            continue
+        lay = f"|{a.layout}" if a.layout != "einzel" else ""
+        marks.setdefault(a.von, []).append(f"⟦+{kind}:{ident}{lay}⟧")
+        if a.bis is not None:
+            marks.setdefault(a.bis, []).append(f"⟦-{kind}:{ident}⟧")
+    return marks
+
+
 def _marked_words(block: CommentBlock) -> list[tuple[str, str]]:
     """Liste von (typ, inhalt): ('w', wort) oder ('m', markentext) in Lesereihenfolge."""
     words = block.text.split()
@@ -85,8 +98,20 @@ def export_docx(scenes: list[Scene], path, title: str = "", speaker: str | None 
             if speaker and block.sprecher != speaker:
                 continue
             p = doc.add_paragraph()
-            lab = p.add_run(SPEAKERS[block.sprecher] + ": ")
+            lab = p.add_run(SPEAKERS[block.sprecher] + ":")
             lab.bold = True
+            if block.modus == "stichpunkte":
+                marks = _bullet_marks(block)
+                for bi, bullet in enumerate(block.stichpunkte):
+                    bp = doc.add_paragraph(style="List Bullet")
+                    if show_markers:
+                        for m in marks.get(bi, []):
+                            r = bp.add_run(m + " ")
+                            r.font.size = Pt(7)
+                            r.font.color.rgb = GREY
+                    bp.add_run(bullet)
+                continue
+            p.add_run(" ")
             first = True
             for typ, val in _marked_words(block):
                 if typ == "m":
@@ -138,6 +163,22 @@ def _parse_block(label: str, text: str) -> CommentBlock:
     return CommentBlock(sprecher=label.lower(), text=" ".join(words), anker=refs)  # type: ignore[arg-type]
 
 
+def _parse_bullet(text: str, idx: int, refs: list[AssetRef], open_marks: dict) -> str:
+    """Entfernt Marken aus einem Stichpunkt und legt Anker mit Stichpunkt-Index an."""
+    def sub(m):
+        sign, kind, ident, lay = m.groups()
+        key = (kind, ident)
+        if sign == "+":
+            ref = AssetRef(**({"asset": ident} if kind == "bild" else {"karte": ident}),
+                           von=idx, layout=lay or "einzel", einheit="stichpunkt")
+            open_marks[key] = ref
+            refs.append(ref)
+        elif key in open_marks:
+            open_marks.pop(key).bis = idx
+        return ""
+    return _MARK_RE.sub(sub, text).strip()
+
+
 def _para_text(p) -> str:
     return "".join(r.text for r in p.runs)
 
@@ -148,6 +189,7 @@ def import_docx(path) -> ImportResult:
     cur_scene: str | None = None
     cur_free: dict | None = None
     prev_scene: str | None = None
+    open_bullet_marks: dict = {}
     for p in doc.paragraphs:
         text = _para_text(p)
         style = p.style.name if p.style is not None else ""
@@ -171,9 +213,21 @@ def import_docx(path) -> ImportResult:
             if text.lstrip().startswith("Strang:"):
                 continue
             lm = _LABEL_RE.match(text)
+            blocks = res.scenes[cur_scene]["kommentar"]
             if lm:
-                res.scenes[cur_scene]["kommentar"].append(_parse_block(lm.group(1), text[lm.end():]))
-            elif res.scenes[cur_scene]["kommentar"]:  # Fortsetzungsabsatz
+                rest = text[lm.end():]
+                if not rest.strip():   # Label allein -> Stichpunkte folgen
+                    blocks.append(CommentBlock(sprecher=lm.group(1).lower(), modus="stichpunkte"))  # type: ignore[arg-type]
+                    open_bullet_marks.clear()
+                else:
+                    blocks.append(_parse_block(lm.group(1), rest))
+            elif style == "List Bullet" and blocks and blocks[-1].modus == "stichpunkte":
+                blk = blocks[-1]
+                blk.stichpunkte.append(_parse_bullet(text, len(blk.stichpunkte), blk.anker, open_bullet_marks))
+            elif blocks and blocks[-1].modus == "stichpunkte" and not blocks[-1].stichpunkte:
+                blocks[-1].modus = "text"
+                blocks[-1].text = text.strip()
+            elif blocks:  # Fortsetzungsabsatz
                 prev = res.scenes[cur_scene]["kommentar"][-1]
                 extra = _parse_block(prev.sprecher, text)
                 shift = len(prev.text.split())
@@ -196,10 +250,15 @@ def apply_import(scenes: list[Scene], res: ImportResult) -> list[str]:
         if not sc:
             continue
         new = data["kommentar"]
-        old_sig = [(c.sprecher, c.text, [(a.asset, a.karte, a.von, a.bis) for a in c.anker]) for c in sc.kommentar]
-        new_sig = [(c.sprecher, c.text, [(a.asset, a.karte, a.von, a.bis) for a in c.anker]) for c in new]
+        def sig(cs):
+            return [(c.sprecher, c.modus, c.text, tuple(c.stichpunkte),
+                     [(a.asset, a.karte, a.von, a.bis) for a in c.anker]) for c in cs]
+        old_sig, new_sig = sig(sc.kommentar), sig(new)
         title_changed = data["titel"] and data["titel"] != (sc.titel or sc.id)
         if old_sig != new_sig or title_changed:
+            for nb, ob in zip(new, sc.kommentar):   # Aufnahme-Ergebnis (gesprochen) nicht verlieren
+                if not nb.gesprochen and nb.modus == ob.modus:
+                    nb.gesprochen = ob.gesprochen
             sc.kommentar = new
             if title_changed:
                 sc.titel = data["titel"]
