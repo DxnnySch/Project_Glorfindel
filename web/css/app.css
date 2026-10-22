@@ -144,3 +144,5 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 /* Symbolgrößen in Hinweisen, Chips und Blockfüßen */
 .banner svg, .lockbar svg, .block-foot svg, .chip svg, .card-head svg, .scene-item small svg, .row > svg { width: 16px; height: 16px; flex: none; }
 .thumb { cursor: default; }
+.page-head select { width: auto; max-width: 300px; flex: none; }
+.page-head .grow { min-width: 260px; }

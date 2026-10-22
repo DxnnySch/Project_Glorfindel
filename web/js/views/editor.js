@@ -1,5 +1,5 @@
 // Szenen-Editor: Liste mit Längenampel, Player mit I/O-Tasten, Segmente, Kommentarblöcke, Autosave.
-import { h, $, clear, btn, icon, toast, confirmBox, fmtTC, parseTC, fmtDur, debounce, empty, lightLabel } from '../ui.js';
+import { h, $, clear, btn, icon, toast, modal, field, confirmBox, fmtTC, parseTC, fmtDur, debounce, empty, lightLabel } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S, refSource, strandOf } from '../state.js';
 
@@ -9,6 +9,7 @@ export async function render(main, ctx) {
   const ep = S.ep;
   let scenes = await api.get(epUrl(ep, '/scenes'));
   let strands = S.data.strands;
+  const [assets, maps] = await Promise.all([api.get(epUrl(ep, '/assets')), api.get(epUrl(ep, '/maps'))]);
   let sel = scenes.find((s) => s.id === location.hash.split('?id=')[1]) || scenes[0] || null;
   let dirty = false, saving = false, video = null, locked = null;
   const ref = refSource();
@@ -64,6 +65,25 @@ export async function render(main, ctx) {
     if (sel) { try { const l = await api.post(epUrl(ep, `/scenes/${sel.id}/lock`)); locked = l.held === false ? null : sel.id; if (l.held === false) drawScene(l.by); } catch { /* egal */ } }
   }
 
+
+  function anchorDialog(b) {
+    const isB = b.modus === 'stichpunkte';
+    const items = [...assets.map((a) => ({ key: a.id, kind: 'asset', label: `${a.id} ${a.title || a.path.split('/').pop()}` })), ...maps.map((m) => ({ key: m.id, kind: 'karte', label: `${m.id} ${m.titel || ''} (Karte)` }))];
+    const rows = (b.anker || []).map((a) => ({ ...a }));
+    const words = (b.text || '').trim().split(/\s+/);
+    const list = h('div', { class: 'col' });
+    const draw = () => list.replaceChildren(...(rows.length ? rows.map((a, i) => {
+      const cur = a.asset || a.karte;
+      const pos = (k, label) => field(label, h('input', { type: 'number', min: 1, value: a[k] == null ? '' : a[k] + 1, onInput: (e) => { a[k] = e.target.value === '' ? null : Math.max(0, +e.target.value - 1); if (k === 'von' && !isB) hint.textContent = words[a.von] ? `ab „${words[a.von]}“` : ''; } }));
+      const hint = h('span', { class: 'help' }, !isB && words[a.von] ? `ab „${words[a.von]}“` : '');
+      return h('div', { class: 'card tight col' }, h('div', { class: 'row' }, h('select', { onChange: (e) => { const it = items.find((x) => x.key === e.target.value); delete a.asset; delete a.karte; a[it.kind] = it.key; } }, items.map((it) => h('option', { value: it.key, selected: it.key === cur }, it.label))), btn('', { icon: 'trash', kind: 'ghost', onClick: () => { rows.splice(i, 1); draw(); } })),
+        h('div', { class: 'row' }, pos('von', isB ? 'Ab Stichpunkt' : 'Ab Wort Nr.'), pos('bis', isB ? 'Bis Stichpunkt (leer = Ende)' : 'Bis Wort Nr. (leer = Ende)'), field('Layout', h('select', { onChange: (e) => { a.layout = e.target.value; } }, [['einzel', 'Einzeln'], ['doppel_links', 'Doppelbild links'], ['doppel_rechts', 'Doppelbild rechts']].map(([k, l]) => h('option', { value: k, selected: a.layout === k }, l))))), hint);
+    }) : [h('p', { class: 'help' }, items.length ? 'Noch nichts zugeordnet. Das Bild erscheint ab der gewählten Stelle im Kommentar.' : 'Zuerst unter „Bilder“ oder „Karten“ etwas zur Folge hinzufügen.')]));
+    draw();
+    modal({ title: 'Bilder & Karten zuordnen', body: h('div', { class: 'col' }, list, btn('Zuordnung hinzufügen', { icon: 'plus', disabled: !items.length, onClick: () => { const it = items[0]; rows.push({ [it.kind]: it.key, von: 0, bis: null, layout: 'einzel', einheit: isB ? 'stichpunkt' : 'wort' }); draw(); } })),
+      actions: [{ label: 'Abbrechen' }, { label: 'Übernehmen', kind: 'primary', onClick: () => { b.anker = rows.map((a) => ({ ...a, einheit: isB ? 'stichpunkt' : 'wort' })); touch(); drawScene(); } }] });
+  }
+
   function drawScene(lockedBy) {
     clear(mainEl); video = null;
     if (!sel) { mainEl.append(empty('edit', 'Keine Szene gewählt', 'Wähle links eine Szene oder lege eine neue an.', btn('Neue Szene', { kind: 'primary', onClick: addScene }))); return; }
@@ -107,7 +127,7 @@ export async function render(main, ctx) {
         blocks.append(h('div', { class: `block ${b.sprecher}` }, h('div', { class: 'block-head' }, spk, mode, h('span', { class: 'grow' }), info,
           btn('', { icon: 'trash', kind: 'ghost', size: 'sm', onClick: async () => { if (await confirmBox('Block löschen?', 'Dieser Kommentarblock wird entfernt.', 'Löschen', true)) { s.kommentar.splice(i, 1); touch(); drawBlocks(); } } })),
         ta, b.gesprochen ? h('div', { class: 'block-foot' }, icon('mic'), h('span', { class: 'muted' }, 'Gesprochen: '), h('span', {}, b.gesprochen)) : null,
-        (b.anker || []).length ? h('div', { class: 'block-foot' }, icon('image'), `${b.anker.length} Bild-/Kartenanker`) : null));
+        h('div', { class: 'block-foot' }, icon('image'), (b.anker || []).length ? (b.anker || []).map((a) => h('span', { class: 'chip accent' }, `${a.asset || a.karte} · ${a.einheit === 'stichpunkt' ? 'Punkt ' + (a.von + 1) : 'Wort ' + (a.von + 1)}`)) : h('span', { class: 'muted' }, 'Keine Bilder/Karten'), h('span', { class: 'grow' }), btn('Bilder & Karten …', { size: 'sm', onClick: () => anchorDialog(b) }))));
       });
       blocks.append(btn('Kommentarblock hinzufügen', { icon: 'plus', onClick: () => { s.kommentar.push({ sprecher: s.kommentar.at(-1)?.sprecher === 'philipp' ? 'danny' : 'philipp', modus: 'text', text: '', stichpunkte: [], gesprochen: '', anker: [] }); touch(); drawBlocks(); } }));
     }

@@ -308,6 +308,8 @@ class ConformBody(BaseModel):
 
 @router.post("/ep/{season}/{episode}/conform")
 def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    if body.codec not in conform_mod.CODECS:
+        raise HTTPException(400, f"Unbekanntes Format: {body.codec}")
     def work(progress):
         pr = ep.project()
         src, ref = ep.source(body.source), ep.source(pr.reference_source)

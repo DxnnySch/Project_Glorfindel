@@ -7,12 +7,14 @@ const VIEWS = {
   home:     { label: 'Übersicht',   icon: 'home',     mod: './views/home.js' },
   sources:  { label: 'Quellen',     icon: 'film',     mod: './views/sources.js', sec: 'Vorbereitung' },
   board:    { label: 'Strang-Board', icon: 'layers',  mod: './views/board.js' },
+  compare:  { label: 'Kontrolle',   icon: 'compare',  mod: './views/compare.js' },
   editor:   { label: 'Szenen',      icon: 'edit',     mod: './views/editor.js', sec: 'Skript' },
   script:   { label: 'Word-Skript', icon: 'doc',      mod: './views/script.js' },
   images:   { label: 'Bilder',      icon: 'image',    mod: './views/images.js', sec: 'Material' },
   maps:     { label: 'Karten',      icon: 'map',      mod: './views/maps.js' },
   recording:{ label: 'Aufnahme',    icon: 'mic',      mod: './views/recording.js', sec: 'Produktion' },
   cut:      { label: 'Rohschnitt',  icon: 'scissors', mod: './views/cut.js' },
+  log:      { label: 'Protokoll',   icon: 'clock',    mod: './views/log.js' },
   settings: { label: 'Einstellungen', icon: 'gear',   mod: './views/settings.js', sec: 'System', global: true },
 };
 let cleanup = null, current = null;
