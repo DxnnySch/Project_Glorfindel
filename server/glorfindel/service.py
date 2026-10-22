@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import threading
 from pathlib import Path
 
 from . import media, store
@@ -14,6 +15,8 @@ DEFAULT_STRANDS = [
     ("eregion", "Eregion", "#c0392b"), ("numenor", "Númenor", "#2980b9"),
     ("rhun", "Rhûn", "#d68910"), ("khazaddum", "Khazad-dûm", "#7d6608"),
 ]
+
+_PROXY_LOCKS: dict[str, threading.Lock] = {}
 
 
 def list_episodes(settings: Settings) -> list[dict]:
@@ -132,9 +135,10 @@ class Episode:
 
     def ensure_proxy(self, sid: str) -> Path:
         dst = self.proxy_path(sid)
-        if not dst.exists():
-            s = self.source(sid)
-            media.make_proxy(self.source_path(s), dst, crop=s.crop, fps=s.normalize_fps)
+        with _PROXY_LOCKS.setdefault(str(dst), threading.Lock()):  # Auto-Proxy und manueller Auftrag nie gleichzeitig
+            if not dst.exists():
+                s = self.source(sid)
+                media.make_proxy(self.source_path(s), dst, crop=s.crop, fps=s.normalize_fps)
         return dst
 
     # ---- Szenen ----
