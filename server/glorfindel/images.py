@@ -201,19 +201,61 @@ def contour_color(path: Path, frames: int = 5) -> str:
 
 
 # ---------- Web-Import ----------
-def web_import(url: str, dest_dir: Path, client=None, max_bytes: int = 60 * 1024 * 1024) -> dict:
-    """Bild per URL laden. Nur http/https, nur Bild-Content-Types, Größenlimit. Quell-URL wird zurückgegeben."""
-    import httpx
+def _is_public_ip(addr: str) -> bool:
+    import ipaddress
+    ip = ipaddress.ip_address(addr)
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+                or ip.is_multicast or ip.is_unspecified)
+
+
+def _default_resolver(host: str) -> list[str]:
+    import socket
+    return list({ai[4][0] for ai in socket.getaddrinfo(host, None)})
+
+
+def validate_public_url(url: str, resolver=_default_resolver):
+    """Nur http(s) und nur öffentliche Zieladressen (Schutz vor SSRF auf Loopback/LAN/Metadaten-Dienste)."""
     u = urlparse(url)
-    if u.scheme not in ("http", "https") or not u.netloc:
+    if u.scheme not in ("http", "https") or not u.hostname:
         raise ValueError("Nur http(s)-URLs erlaubt")
+    host = u.hostname.rstrip(".").lower()
+    import ipaddress
+    try:
+        ipaddress.ip_address(host)
+        addrs = [host]  # IP-Literal direkt prüfen
+    except ValueError:
+        try:
+            addrs = resolver(host)
+        except OSError as e:
+            raise ValueError(f"Host nicht auflösbar: {host}") from e
+    if not addrs or not all(_is_public_ip(a) for a in addrs):
+        raise ValueError("Nur öffentliche Internet-Adressen erlaubt")
+    return u
+
+
+def web_import(url: str, dest_dir: Path, client=None, max_bytes: int = 60 * 1024 * 1024,
+               resolver=_default_resolver, max_redirects: int = 4) -> dict:
+    """Bild per URL laden. Nur öffentliche http(s)-Ziele (auch nach Weiterleitungen), nur Bild-Content-Types,
+    Größenlimit. Gibt Pfad und Quell-URL zurück."""
+    import httpx
+    from urllib.parse import urljoin
+    u = validate_public_url(url, resolver)
     dest_dir.mkdir(parents=True, exist_ok=True)
     own = client is None
-    client = client or httpx.Client(follow_redirects=True, timeout=30,
+    client = client or httpx.Client(follow_redirects=False, timeout=30,
                                     headers={"User-Agent": "Glorfindel/0.1 (Folgenbesprechung)"})
     try:
-        r = client.get(url)
-        r.raise_for_status()
+        cur = url
+        for _ in range(max_redirects + 1):
+            r = client.get(cur)
+            if r.is_redirect and r.headers.get("location"):
+                cur = urljoin(cur, r.headers["location"])
+                validate_public_url(cur, resolver)  # jeder Hop wird neu geprüft
+                continue
+            r.raise_for_status()
+            break
+        else:
+            raise ValueError("Zu viele Weiterleitungen")
     finally:
         if own:
             client.close()

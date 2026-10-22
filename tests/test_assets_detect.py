@@ -84,6 +84,9 @@ def test_contour_color_animated(tmp_path):
     assert b > r and b > 120
 
 
+PUBLIC = lambda host: ["93.184.216.34"]
+
+
 def test_web_import_validations(tmp_path):
     import httpx
     png = tmp_path / "x.png"
@@ -95,14 +98,38 @@ def test_web_import_validations(tmp_path):
         return httpx.Response(200, content=png.read_bytes(), headers={"content-type": "image/png"})
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    r = images.web_import("https://example.org/a/Bild%20X.png", tmp_path / "assets", client)
+    r = images.web_import("https://example.org/a/Bild%20X.png", tmp_path / "assets", client, resolver=PUBLIC)
     assert r["path"].exists() and r["source_url"].startswith("https://") and r["path"].suffix == ".png"
-    r2 = images.web_import("https://example.org/a/Bild%20X.png", tmp_path / "assets", client)
+    r2 = images.web_import("https://example.org/a/Bild%20X.png", tmp_path / "assets", client, resolver=PUBLIC)
     assert r2["path"] != r["path"]
     with pytest.raises(ValueError):
-        images.web_import("https://example.org/page", tmp_path / "assets", client)
+        images.web_import("https://example.org/page", tmp_path / "assets", client, resolver=PUBLIC)
     with pytest.raises(ValueError):
-        images.web_import("file:///etc/passwd", tmp_path / "assets", client)
+        images.web_import("file:///etc/passwd", tmp_path / "assets", client, resolver=PUBLIC)
+
+
+@pytest.mark.parametrize("url,addr", [
+    ("http://localhost/x.png", "127.0.0.1"), ("http://intranet.local/x.png", "192.168.1.5"),
+    ("http://169.254.169.254/latest/meta-data", None), ("http://10.0.0.1/a.png", None),
+    ("http://[::1]/a.png", None), ("http://evil.example/x.png", "10.1.2.3"),
+])
+def test_web_import_blocks_non_public_targets(tmp_path, url, addr):
+    with pytest.raises(ValueError):
+        images.web_import(url, tmp_path / "a", resolver=lambda h: [addr or h])
+
+
+def test_web_import_rechecks_redirect_hops(tmp_path):
+    import httpx
+
+    def handler(req):
+        if req.url.host == "good.example":
+            return httpx.Response(302, headers={"location": "http://metadata.internal/x.png"})
+        return httpx.Response(200, content=b"x", headers={"content-type": "image/png"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    resolver = lambda h: ["10.0.0.7"] if h == "metadata.internal" else ["93.184.216.34"]
+    with pytest.raises(ValueError, match="öffentliche"):
+        images.web_import("https://good.example/a.png", tmp_path / "a", client, resolver=resolver)
 
 
 # ---- prfpset ----
