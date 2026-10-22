@@ -71,7 +71,8 @@ async def import_apply(file: UploadFile = File(...), ep: Episode = Depends(ep_of
     for b in res.free_blocks:  # Dauer überlebt den Word-Rundlauf
         if old.get(b.get("titel"), {}).get("dauer"):
             b["dauer"] = old[b["titel"]]["dauer"]
-    ep.save_free_blocks(res.free_blocks)
+    if res.free_blocks:  # Dokument ohne Rahmenteile lässt die vorhandenen (samt Dauer) unangetastet
+        ep.save_free_blocks(res.free_blocks)
     return {"changed": changed, "free_blocks": len(res.free_blocks)}
 
 

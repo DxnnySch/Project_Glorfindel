@@ -7,6 +7,7 @@ export async function render(main, ctx) {
   let strands = d.strands.map((s) => ({ ...s }));
   const board = await api.get(epUrl(ep, '/board'));
   const detect = async () => {
+    if (board.scenes.some((s) => s.strang || s.done) && !confirm('Die bisherigen Vorschläge und Strang-Zuordnungen werden verworfen (bereits angelegte Szenen bleiben). Neu erkennen?')) return;
     if (!ref) { toast('Zuerst eine Referenz importieren.', 'warn'); return; }
     try { await runJob('Szenen werden erkannt (das dauert einige Minuten) …', () => api.post(epUrl(ep, '/board/detect'), { source: ref.id })); ctx.refresh(); } catch (e) { toast(e.message, 'err'); }
   };

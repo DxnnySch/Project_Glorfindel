@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import time
 import threading
 from pathlib import Path
 
@@ -145,7 +146,7 @@ class Episode:
     def scenes(self) -> list[Scene]:
         out = []
         for f in sorted(self.p.scenes.glob("sz_*.json")):
-            if store._CONFLICT_RE.match(f.name) and (f.with_name(store._CONFLICT_RE.match(f.name)["stem"] + ".json")).exists():
+            if store.conflict_original(f):
                 continue  # Konfliktkopie, nicht als Szene laden
             try:
                 out.append(Scene.model_validate(store.read_json(f)))
@@ -160,7 +161,8 @@ class Episode:
         return Scene.model_validate(data)
 
     def next_scene_id(self) -> str:
-        nums = [int(m[1]) for f in self.p.scenes.glob("sz_*.json") if (m := re.match(r"sz_(\d+)", f.name))]
+        files = list(self.p.scenes.glob("sz_*.json")) + list((self.p.gl / "papierkorb").glob("sz_*.json"))
+        nums = [int(m[1]) for f in files if (m := re.match(r"sz_(\d+)", f.name))]
         return f"sz_{(max(nums) + 1) if nums else 1:02d}"
 
     def save_scene(self, sc: Scene, what: str = "") -> Scene:
@@ -179,7 +181,18 @@ class Episode:
         if f.exists():
             trash = self.p.gl / "papierkorb"
             trash.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(f), str(trash / f"{sid}.json"))
+            dst = trash / f"{sid}.json"
+            if dst.exists():
+                dst = trash / f"{sid}_{int(time.time())}.json"
+            shutil.move(str(f), str(dst))
+        remaining = [s.id for s in self.scenes()]
+        blocks = self.free_blocks()
+        if any(b.get("after") == sid for b in blocks):  # Rahmenteile wandern zur vorherigen Szene
+            prev = next((x for x in reversed(sorted(remaining)) if x < sid), None)
+            for b in blocks:
+                if b.get("after") == sid:
+                    b["after"] = prev
+            self.save_free_blocks(blocks)
         store.log_change(self.p.gl, self.settings.user, f"Szene {sid} gelöscht")
 
     def restore_scene(self, sid: str) -> Scene:

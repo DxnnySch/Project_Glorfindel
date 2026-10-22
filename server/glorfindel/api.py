@@ -31,8 +31,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
             if origin:
-                o = origin.split("://", 1)[-1].rsplit(":", 1)[0]
-                if o not in LOCAL_HOSTS:
+                o_full = origin.split("://", 1)[-1]
+                o = o_full.rsplit(":", 1)[0] if not o_full.startswith("[") else o_full.split("]")[0] + "]"
+                h_full = request.headers.get("host", "")
+                o_port, h_port = o_full.rsplit(":", 1)[-1] if o_full.count(":") and not o_full.endswith("]") else "", h_full.rsplit(":", 1)[-1] if h_full.count(":") and not h_full.endswith("]") else ""
+                if o not in LOCAL_HOSTS or (o_port.isdigit() and h_port.isdigit() and o_port != h_port):
                     return JSONResponse({"detail": "Fremde Herkunft abgelehnt"}, status_code=403)
         return await call_next(request)
 

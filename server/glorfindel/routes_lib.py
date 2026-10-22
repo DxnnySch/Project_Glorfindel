@@ -16,6 +16,13 @@ from .service import Episode
 router = APIRouter()
 
 
+def _safe_id(i: str) -> str:
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", i):
+        raise HTTPException(400, "Ungültige ID")
+    return i
+
+
 def _index(state: AppState) -> images.ImageIndex:
     return images.ImageIndex(app_dir() / "image_index.db")
 
@@ -113,6 +120,7 @@ def add_asset(body: NewAsset, ep: Episode = Depends(ep_of), state: AppState = De
 
 @router.put("/ep/{season}/{episode}/assets/{aid}")
 def put_asset(aid: str, body: dict, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    _safe_id(aid)
     body["id"] = aid
     out = pipeline.save_asset(ep, body)
     # Künstler-Datenbank wächst über alle Folgen
@@ -160,6 +168,7 @@ def ep_maps(ep: Episode = Depends(ep_of)):
 
 @router.put("/ep/{season}/{episode}/maps/{mid}")
 def put_map(mid: str, body: dict, ep: Episode = Depends(ep_of)):
+    _safe_id(mid)
     body["id"] = mid
     body.setdefault("elemente", [])
     return pipeline.save_map(ep, body)
@@ -199,14 +208,33 @@ def llm_status(state: AppState = Depends(st)):
             "chosen": {f: l.model_for(f) for f in state.settings.llm.features} if models else {}}
 
 
+def _need_llm(state: AppState, feature: str):
+    l = state.llm()
+    if not l.enabled(feature):
+        raise HTTPException(409, "KI-Funktion ist ausgeschaltet oder es fehlt der ScaDS-Schlüssel (Einstellungen).")
+    l.last_error = ""
+    return l
+
+
+def _llm_failed(l):
+    if l.last_error:
+        raise HTTPException(502, f"KI nicht erreichbar: {l.last_error[:160]} – Netzwerk und Schlüssel prüfen.")
+
+
 @router.post("/llm/check-names")
 def check_names(body: TextBody, state: AppState = Depends(st)):
-    return state.llm().check_names(body.text)
+    l = _need_llm(state, "name_check")
+    r = l.check_names(body.text)
+    _llm_failed(l)
+    return r
 
 
 @router.post("/llm/search-terms")
 def search_terms(body: TextBody, state: AppState = Depends(st)):
-    return state.llm().suggest_search_terms(body.text)
+    l = _need_llm(state, "image_suggest")
+    r = l.suggest_search_terms(body.text)
+    _llm_failed(l)
+    return r
 
 
 class MapSuggest(BaseModel):
@@ -228,6 +256,7 @@ def scene_title(body: TextBody, state: AppState = Depends(st)):
 
 @router.delete("/ep/{season}/{episode}/assets/{aid}")
 def delete_asset(aid: str, ep: Episode = Depends(ep_of)):
+    _safe_id(aid)
     f = ep.p.assets / f"{Path(aid).name}.json"
     if not f.exists():
         raise HTTPException(404, "Bild unbekannt")
@@ -271,6 +300,7 @@ def map_sheet(mid: str, ep: Episode = Depends(ep_of)):
 
 @router.delete("/ep/{season}/{episode}/maps/{mid}")
 def delete_map(mid: str, ep: Episode = Depends(ep_of)):
+    _safe_id(mid)
     f = ep.p.maps / f"{Path(mid).name}.json"
     if not f.exists():
         raise HTTPException(404, "Karte unbekannt")

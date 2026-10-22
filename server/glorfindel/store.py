@@ -88,11 +88,23 @@ def lock_status(locks_dir: Path, key: str) -> dict | None:
 _CONFLICT_RE = re.compile(r"^(?P<stem>.+)-(?P<pc>[A-Za-z0-9_]+)(?P<ext>\.json)$")
 
 
+def conflict_original(f: Path) -> tuple[Path, str] | None:
+    """(Originaldatei, Rechnername), wenn `f` eine OneDrive-Konfliktkopie ist (`sz_07-DESKTOP-ABC123.json`)."""
+    name = f.name
+    if not name.endswith(".json"):
+        return None
+    base = name[:-5]
+    for i in range(len(base) - 1, 0, -1):
+        if base[i] == "-" and base[i + 1:] and (f.parent / (base[:i] + ".json")).exists():
+            return f.parent / (base[:i] + ".json"), base[i + 1:]
+    return None
+
+
 def find_conflicts(directory: Path) -> list[dict]:
-    """Findet `sz_07-LAPTOP.json`, wenn `sz_07.json` existiert."""
+    """Findet `sz_07-LAPTOP.json`, wenn `sz_07.json` existiert (auch mit Bindestrich im Rechnernamen)."""
     out = []
     for f in directory.glob("*.json"):
-        m = _CONFLICT_RE.match(f.name)
-        if m and (directory / (m["stem"] + m["ext"])).exists():
-            out.append({"original": str(directory / (m["stem"] + m["ext"])), "copy": str(f), "pc": m["pc"]})
+        c = conflict_original(f)
+        if c:
+            out.append({"original": str(c[0]), "copy": str(f), "pc": c[1]})
     return out

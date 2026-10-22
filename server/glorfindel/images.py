@@ -107,8 +107,8 @@ class ImageIndex:
         terms = [t for t in re.split(r"\s+", query.lower().strip()) if t] + [t.lower() for t in (tags or [])]
         sql, args = "SELECT path,title,description,creator,keywords,animated FROM images", []
         if terms:
-            sql += " WHERE " + " AND ".join("haystack LIKE ?" for _ in terms)
-            args = [f"%{t}%" for t in terms]
+            sql += " WHERE " + " AND ".join("(haystack LIKE ? OR path LIKE ?)" for _ in terms)
+            args = [f"%{t}%" for t in terms for _ in (0, 1)]
         sql += " ORDER BY path LIMIT ?"
         rows = self.db.execute(sql, args + [limit]).fetchall()
         return [{"path": r[0], "title": r[1], "description": r[2], "creator": r[3],

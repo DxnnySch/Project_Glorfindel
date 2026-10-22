@@ -49,3 +49,14 @@ Heft nennt „zwei Credit-Spuren“, V11 (Musik-Credit) und V12 (Bauchbinden) si
 - Antworten erhalten (15:20): F1 → Fokus auf Profi-Optik + einfache Installation/Bedienung (wird umgesetzt). F4 → ScaDS-Whisper wird als wählbares Transkriptions-Backend ergänzt (Heft: „nie Audio senden“ → nur auf deine Anweisung, in den Einstellungen gekennzeichnet). F6 → keine Co-Author-Zeilen in Commits.
 - 2026-10-22 15:10: Kern (Store, Zeitmodell, Conform, Word, Rohschnitt, Abgleich inkl. Stichpunkte) fertig, 54 Tests grün.
 - 2026-10-22: Weboberfläche, Installer und README ergänzt. Der ScaDS-Schlüssel liegt nur in der lokalen `.env` (gitignored). Da er im Chat stand, rotiere ihn bitte bei Gelegenheit.
+- 2026-10-22 (abends): Teil 2 des Projekthefts umgesetzt (Aufgabenleiste, Cockpit, Karten-Editor, Anker setzen u. v. m.), zwei unabhängige Review-Durchgänge eingearbeitet.
+
+## F9 – Reihenfolge im Word: Strang oder Szenen-Editor?  🟡
+Aktuell sortiert Word/Rohschnitt nach Strang-Reihenfolge, der Editor zeigt die Szenen-Reihenfolge (die Liste zeigt jetzt die Ausgabenummer). Beim Word-Export gibt es einen Schalter.
+**Standard:** Nach Strängen (wie im Heft).
+**Antwort:**
+
+## F10 – Soll „Papierkorb“ eine eigene Ansicht bekommen?  🟡
+Gelöschte Szenen liegen im Ordner `glorfindel/papierkorb/` und lassen sich 12 s per „Rückgängig“ zurückholen; eine Übersicht fehlt noch.
+**Standard:** Später, nur bei Bedarf.
+**Antwort:**

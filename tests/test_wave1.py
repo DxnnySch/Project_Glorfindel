@@ -180,3 +180,48 @@ def test_update_check_never_fails(tmp_path, monkeypatch):
     assert _ver_tuple("v0.2.0") > _ver_tuple("0.1.9")
     s = c.get("/api/system").json()
     assert "whisper" in s
+
+
+def test_review2_fixes(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    # N3: IDs werden nach Löschen nicht wiederverwendet
+    a = _scene(c)
+    c.delete(f"/api/ep/2/1/scenes/{a['id']}")
+    b = _scene(c)
+    assert b["id"] != a["id"]
+    c.post(f"/api/ep/2/1/scenes/{a['id']}/restore")  # Original ist im Papierkorb noch da
+    assert {s["id"] for s in c.get("/api/ep/2/1/scenes").json()} == {a["id"], b["id"]}
+    # N27: PUT nach DELETE erweckt Szene nicht wieder
+    full = c.get("/api/ep/2/1/scenes").json()[0]
+    sid = full["id"]
+    for k in ("report", "lock", "problems", "ausgabe"):
+        full.pop(k, None)
+    c.delete(f"/api/ep/2/1/scenes/{sid}")
+    assert c.put(f"/api/ep/2/1/scenes/{sid}", json=full).status_code == 404
+    # N22: Rahmenteile wandern bei gelöschter Bezugsszene
+    rest = c.get("/api/ep/2/1/scenes").json()[0]["id"]
+    c.put("/api/ep/2/1/free-blocks", json=[{"titel": "W", "after": rest, "dauer": 5}])
+    c.delete(f"/api/ep/2/1/scenes/{rest}")
+    assert c.get("/api/ep/2/1/free-blocks").json()[0]["after"] != rest
+    # N6: Konfliktkopie mit Bindestrich im Rechnernamen
+    from glorfindel import store
+    d = tmp_path / "x"
+    d.mkdir()
+    (d / "sz_01.json").write_text("{}")
+    (d / "sz_01-DESKTOP-ABC123.json").write_text("{}")
+    cf = store.find_conflicts(d)
+    assert len(cf) == 1 and cf[0]["pc"] == "ABC123" or cf[0]["pc"] == "DESKTOP-ABC123"
+    # Sicherheit: ungültige Asset-ID
+    assert c.put("/api/ep/2/1/assets/..%5Cx", json={"path": "a"}).status_code in (400, 404, 405)
+    assert c.put("/api/ep/2/1/assets/a%5Cb", json={"path": "a"}).status_code == 400
+    # N5: Word ohne Rahmenteile lässt vorhandene stehen
+    from glorfindel.models import Scene
+    from glorfindel import script_docx
+    ep = c.app.state.gl.episode(2, 1)
+    keep = _scene(c)
+    c.put("/api/ep/2/1/free-blocks", json=[{"titel": "Outro", "after": keep["id"], "dauer": 68}])
+    f = tmp_path / "s.docx"
+    script_docx.export_docx(ep.scenes(), f)
+    r = c.post("/api/ep/2/1/script/import", files={"file": ("s.docx", f.read_bytes(), "application/octet-stream")})
+    assert r.status_code == 200
+    assert any(b.get("dauer") == 68 for b in c.get("/api/ep/2/1/free-blocks").json())

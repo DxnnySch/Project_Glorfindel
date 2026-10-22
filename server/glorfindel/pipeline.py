@@ -240,6 +240,8 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
         raise ValueError("Keine Referenz-Episode importiert (Quellen).")
     for sc in scenes:
         for i, g in enumerate(sc.segmente):
+            if g.out <= g.in_:
+                raise ValueError(f"Szene „{sc.titel or sc.id}“, Segment {i + 1}: Out liegt nicht nach In. Bitte korrigieren.")
             if ref_src.duration and g.out > ref_src.duration + 0.5:
                 raise ValueError(f"Szene „{sc.titel or sc.id}“, Segment {i + 1}: liegt hinter dem Ende der Episode "
                                  f"({g.out:.1f} s > {ref_src.duration:.1f} s). Bitte im Szenen-Editor korrigieren.")

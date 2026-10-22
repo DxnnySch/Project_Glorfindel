@@ -48,7 +48,7 @@ export async function render(main, ctx) {
     const a = [...anchors].sort((x, y) => x.ref - y.ref);
     if (!a.length) return tt;
     if (a.length === 1) return tt - a[0].ref + a[0].src;
-    let i = a.findIndex((x) => x.ref >= tt); i = i <= 0 ? 1 : i === -1 ? a.length - 1 : i;
+    let i = a.findIndex((x) => x.ref >= tt); i = i === -1 ? a.length - 1 : Math.max(1, i);
     const p = a[i - 1], q = a[i], k = (q.src - p.src) / (q.ref - p.ref || 1);
     return p.src + (tt - p.ref) * k;
   };

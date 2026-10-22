@@ -329,6 +329,8 @@ def put_scene(sid: str, sc: Scene, base: str | None = None, ep: Episode = Depend
     for b in sc.kommentar:
         normalize_block(b)
     old = next((s for s in ep.scenes() if s.id == sid), None)
+    if old is None:
+        raise HTTPException(404, "Diese Szene wurde gelöscht (Papierkorb) oder existiert nicht.")
     if base and old and old.geaendert_am and old.geaendert_am > base and old.geaendert_von != state.settings.user:
         raise HTTPException(409, f"{old.geaendert_von} hat diese Szene inzwischen geändert.")
     if old and sc.status in ("aufgenommen", "abgeglichen") and old.status == sc.status and _signature(old) != _signature(sc):

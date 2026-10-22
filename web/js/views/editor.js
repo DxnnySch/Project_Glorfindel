@@ -11,7 +11,7 @@ export async function render(main, ctx) {
   let strands = S.data.strands;
   const [assets, maps] = await Promise.all([api.get(epUrl(ep, '/assets')), api.get(epUrl(ep, '/maps'))]);
   let sel = scenes.find((s) => s.id === location.hash.split('?id=')[1]) || scenes[0] || null;
-  let dirty = false, saving = false, video = null, locked = null, query = '', filt = '', focusBlock = 0;
+  let dirty = false, saving = false, blocked = false, hb = null, video = null, locked = null, query = '', filt = '', focusBlock = 0;
   const ref = refSource();
   const listEl = h('div', { class: 'scene-list' }), mainEl = h('div', { class: 'editor-main' });
   main.append(h('div', { class: 'editor' }, listEl, mainEl));
@@ -20,7 +20,7 @@ export async function render(main, ctx) {
   const stateEl = h('span', { class: 'savestate' });
   const setState = (t) => { stateEl.textContent = t; };
   const save = debounce(async () => {
-    if (!sel || saving) return;
+    if (!sel || saving || blocked) return;
     saving = true; setState('Speichert …');
     try {
       const q = sel.geaendert_am && !forceNext ? `?base=${encodeURIComponent(sel.geaendert_am)}` : '';
@@ -32,15 +32,16 @@ export async function render(main, ctx) {
     } catch (e) {
       setState('Nicht gespeichert');
       if (e.status === 409) conflictDialog(e.message); else toast(e.message, 'err');
-    } finally { saving = false; if (dirty) save(); }
+    } finally { saving = false; if (dirty && !blocked) save(); }
   }, 700);
   let forceNext = false, drawBanner = () => {}, drawRepOnly = null;
   function conflictDialog(msg) {
-    const stop = true;
-    modal({ title: 'Szene wurde inzwischen geändert', body: h('p', {}, `${msg} Möchtest du deine Version trotzdem speichern (überschreibt die andere) oder die aktuelle Version laden (deine Änderungen an dieser Szene gehen verloren)?`),
-      actions: [{ label: 'Aktuelle laden', onClick: async () => { dirty = false; scenes = await api.get(epUrl(ep, '/scenes')); sel = scenes.find((x) => x.id === sel.id) || scenes[0]; drawList(); drawScene(); } },
-        { label: 'Meine speichern', kind: 'primary', onClick: () => { forceNext = true; dirty = true; save(); } }] });
-    return stop;
+    if (blocked) return true;
+    blocked = true;
+    modal({ title: 'Szene wurde inzwischen geändert', onClose: () => { blocked = false; }, body: h('p', {}, `${msg} Möchtest du deine Version trotzdem speichern (überschreibt die andere) oder die aktuelle Version laden (deine Änderungen an dieser Szene gehen verloren)?`),
+      actions: [{ label: 'Aktuelle laden', onClick: async () => { blocked = false; dirty = false; scenes = await api.get(epUrl(ep, '/scenes')); sel = scenes.find((x) => x.id === sel.id) || scenes[0]; drawList(); drawScene(); } },
+        { label: 'Meine speichern', kind: 'primary', onClick: () => { blocked = false; forceNext = true; dirty = true; save(); } }] });
+    return true;
   }
   const touch = () => { dirty = true; setState('Ungespeichert …'); save(); };
   const clean = (s) => { const { report, lock, problems, ...rest } = s; return rest; };
@@ -97,9 +98,10 @@ export async function render(main, ctx) {
     scenes = await api.get(epUrl(ep, '/scenes')); select(scenes[scenes.length - 1].id);
   }
   async function select(id) {
-    if (dirty && sel) { try { await api.put(epUrl(ep, `/scenes/${sel.id}`), clean(sel)); dirty = false; } catch (e) { toast(e.message, 'err'); } }
+    if (dirty && sel) { await save.now(); if (dirty || blocked) return; }
     if (sel && locked === sel.id) { api.del(epUrl(ep, `/scenes/${sel.id}/lock`)).catch(() => {}); locked = null; }
     sel = scenes.find((s) => s.id === id); drawList(); drawScene();
+    listEl.querySelector('.scene-item.active')?.scrollIntoView({ block: 'nearest' });
     if (sel) { try { const l = await api.post(epUrl(ep, `/scenes/${sel.id}/lock`)); locked = l.held === false ? null : sel.id; if (l.held === false) drawScene(l.by); } catch { /* egal */ } }
   }
 
@@ -229,6 +231,7 @@ export async function render(main, ctx) {
     const banner = h('div');
     drawBanner = () => { clear(banner); if (s.problems?.length) { banner.className = 'banner'; banner.style.marginBottom = '12px'; banner.append(icon('alert'), s.problems.join(' · ')); } else { banner.className = ''; } };
     drawBanner();
+    drawRepOnly = () => { drawRep(); [...segBox.querySelectorAll('.seg-row .dot')].forEach((d, i) => { d.className = `dot ${s.report?.segments?.[i]?.light || 'grau'}`; }); };
     const player = buildPlayer(s, redraw);
     drawSegs(); drawBlocks();
     mainEl.append(...[
@@ -294,10 +297,12 @@ export async function render(main, ctx) {
   window.addEventListener('beforeunload', beforeUnload);
   document.addEventListener('keydown', onKey);
   drawList(); drawScene();
+  hb = setInterval(() => { if (locked) api.post(epUrl(ep, `/scenes/${locked}/lock`)).catch(() => {}); }, 60000);
   if (sel) api.post(epUrl(ep, `/scenes/${sel.id}/lock`)).then((l) => { if (l.held !== false) locked = sel.id; else drawScene(l.by); }).catch(() => {});
   return () => {
     document.removeEventListener('keydown', onKey); window.removeEventListener('beforeunload', beforeUnload); main.style.overflow = '';
     if (locked && sel) api.del(epUrl(ep, `/scenes/${locked}/lock`)).catch(() => {});
-    if (dirty && sel) api.put(epUrl(ep, `/scenes/${sel.id}`), clean(sel)).catch(() => {});
+    clearInterval(hb);
+    if (dirty && sel && !blocked) api.put(epUrl(ep, `/scenes/${sel.id}${sel.geaendert_am ? '?base=' + encodeURIComponent(sel.geaendert_am) : ''}`), clean(sel)).catch(() => {});
   };
 }
