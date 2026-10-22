@@ -48,3 +48,4 @@ Heft nennt „zwei Credit-Spuren“, V11 (Musik-Credit) und V12 (Bauchbinden) si
 - 2026-10-22: Datei angelegt.
 - Antworten erhalten (15:20): F1 → Fokus auf Profi-Optik + einfache Installation/Bedienung (wird umgesetzt). F4 → ScaDS-Whisper wird als wählbares Transkriptions-Backend ergänzt (Heft: „nie Audio senden“ → nur auf deine Anweisung, in den Einstellungen gekennzeichnet). F6 → keine Co-Author-Zeilen in Commits.
 - 2026-10-22 15:10: Kern (Store, Zeitmodell, Conform, Word, Rohschnitt, Abgleich inkl. Stichpunkte) fertig, 54 Tests grün.
+- 2026-10-22: Weboberfläche, Installer und README ergänzt. Der ScaDS-Schlüssel liegt nur in der lokalen `.env` (gitignored). Da er im Chat stand, rotiere ihn bitte bei Gelegenheit.
