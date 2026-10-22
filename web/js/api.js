@@ -1,5 +1,7 @@
 // Schlanker API-Client; alle Fehler werden als Error mit lesbarer Meldung geworfen.
+export const own = { lastWrite: 0 };
 async function call(method, url, body, isForm) {
+  if (method !== 'GET') own.lastWrite = Date.now();
   const opt = { method, headers: {} };
   if (body !== undefined) {
     if (isForm) opt.body = body;

@@ -104,7 +104,51 @@ export async function render(main, ctx) {
   }
 
 
-  function anchorDialog(b) {
+
+  function selectionOf(ta, b) {
+    if (b.modus === 'stichpunkte') { const before = ta.value.slice(0, ta.selectionStart).split('\n').length - 1; return { von: Math.max(0, before) }; }
+    const wc = (s) => (s.trim() ? s.trim().split(/\s+/).length : 0);
+    const von = wc(ta.value.slice(0, ta.selectionStart)), n = wc(ta.value.slice(ta.selectionStart, ta.selectionEnd));
+    return { von, bis: n ? von + n : null };
+  }
+  const aiOn = () => S.settings._scads_key_present && S.settings.llm.enabled;
+  const blockText = (b) => (b.modus === 'stichpunkte' ? b.stichpunkte.join('\n') : b.text);
+  async function aiNames(b) {
+    try {
+      const r = await api.post('/api/llm/check-names', { text: blockText(b) });
+      if (!r.length) { toast('Keine auffälligen Namen gefunden.', 'ok'); return; }
+      const picked = new Set(r.map((_, i) => i));
+      modal({ title: 'Namensprüfung', body: h('div', { class: 'col' }, r.map((x, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true, onChange: (e) => (e.target.checked ? picked.add(i) : picked.delete(i)) }), h('span', {}, `„${x.falsch}“ → „${x.richtig}“`)))),
+        actions: [{ label: 'Abbrechen' }, { label: 'Übernehmen', kind: 'primary', onClick: () => {
+          const fix = (s) => r.reduce((acc, x, i) => (picked.has(i) ? acc.split(x.falsch).join(x.richtig) : acc), s);
+          if (b.modus === 'stichpunkte') b.stichpunkte = b.stichpunkte.map(fix); else b.text = fix(b.text);
+          touch(); drawScene(); } }] });
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  async function aiImages(b) {
+    try {
+      const terms = await api.post('/api/llm/search-terms', { text: blockText(b) });
+      if (!terms.length) { toast('Keine Vorschläge erhalten.', 'info'); return; }
+      const res = h('div', { class: 'thumbs' });
+      const search = async (q) => { const r = await api.get(`/api/images/search?q=${encodeURIComponent(q)}&limit=24`); res.replaceChildren(...(r.length ? r.map((i) => h('div', { class: 'thumb', style: { cursor: 'pointer' }, title: 'Hinzufügen und an den Anfang des Blocks setzen', onClick: async () => {
+        try { const a = await api.post(epUrl(ep, '/assets'), { path: i.path }); if (!assets.find((x) => x.id === a.id)) assets.push(a);
+          b.anker = [...(b.anker || []), { asset: a.id, karte: null, von: 0, bis: null, layout: 'einzel', einheit: b.modus === 'stichpunkte' ? 'stichpunkt' : 'wort' }]; touch(); drawScene(); toast('Bild zugeordnet.', 'ok'); } catch (e) { toast(e.message, 'err'); } } },
+      h('img', { src: `/api/images/thumb?path=${encodeURIComponent(i.path)}`, style: { width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' } }), h('div', { style: { padding: '4px 6px', fontSize: '11.5px' } }, i.title || i.path.split('/').pop()))) : [h('p', { class: 'help' }, `Keine Treffer für „${q}“.`)])); };
+      modal({ title: 'Bild-Ideen aus dem Text', wide: true, body: h('div', { class: 'col' }, h('div', { class: 'row wrap gap-s' }, terms.map((x) => h('button', { class: 'chip accent', style: { cursor: 'pointer' }, onClick: () => search(x) }, x))), res) });
+      search(terms[0]);
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  async function aiMap(b) {
+    try { const r = await api.post('/api/llm/suggest-map', { text: blockText(b) });
+      modal({ title: 'Kartenvorschlag', body: r.karte ? h('div', { class: 'col' }, h('p', {}, h('b', {}, r.karte)), h('p', { class: 'help' }, `Zu markierende Orte: ${(r.orte || []).join(', ') || '–'}`)) : h('p', {}, 'Keine passende Karte gefunden.') });
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  async function aiTitle(s) {
+    try { const r = await api.post('/api/llm/scene-title', { text: s.kommentar.map(blockText).join(' ') });
+      if (r.titel) { s.titel = r.titel; touch(); drawScene(); } else toast('Kein Titelvorschlag erhalten.', 'info'); } catch (e) { toast(e.message, 'err'); }
+  }
+
+  function anchorDialog(b, preset) {
     const isB = b.modus === 'stichpunkte';
     const items = [...assets.map((a) => ({ key: a.id, kind: 'asset', label: `${a.id} ${a.title || a.path.split('/').pop()}` })), ...maps.map((m) => ({ key: m.id, kind: 'karte', label: `${m.id} ${m.titel || ''} (Karte)` }))];
     const rows = (b.anker || []).map((a) => ({ ...a }));
@@ -114,9 +158,11 @@ export async function render(main, ctx) {
       const cur = a.asset || a.karte;
       const pos = (k, label) => field(label, h('input', { type: 'number', min: 1, value: a[k] == null ? '' : a[k] + 1, onInput: (e) => { a[k] = e.target.value === '' ? null : Math.max(0, +e.target.value - 1); if (k === 'von' && !isB) hint.textContent = words[a.von] ? `ab „${words[a.von]}“` : ''; } }));
       const hint = h('span', { class: 'help' }, !isB && words[a.von] ? `ab „${words[a.von]}“` : '');
-      return h('div', { class: 'card tight col' }, h('div', { class: 'row' }, h('select', { onChange: (e) => { const it = items.find((x) => x.key === e.target.value); delete a.asset; delete a.karte; a[it.kind] = it.key; } }, items.map((it) => h('option', { value: it.key, selected: it.key === cur }, it.label))), btn('', { icon: 'trash', kind: 'ghost', onClick: () => { rows.splice(i, 1); draw(); } })),
+      const asA = assets.find((x) => x.id === cur), thumb = asA ? h('img', { src: epUrl(ep, `/asset-file?path=${encodeURIComponent(asA.path)}`), style: { width: '64px', height: '48px', objectFit: 'cover', borderRadius: '6px' } }) : null;
+      return h('div', { class: 'card tight col' }, h('div', { class: 'row' }, thumb, h('select', { onChange: (e) => { const it = items.find((x) => x.key === e.target.value); delete a.asset; delete a.karte; a[it.kind] = it.key; draw(); } }, items.map((it) => h('option', { value: it.key, selected: it.key === cur }, it.label))), btn('', { icon: 'trash', kind: 'ghost', onClick: () => { rows.splice(i, 1); draw(); } })),
         h('div', { class: 'row' }, pos('von', isB ? 'Ab Stichpunkt' : 'Ab Wort Nr.'), pos('bis', isB ? 'Bis Stichpunkt (leer = Ende)' : 'Bis Wort Nr. (leer = Ende)'), field('Layout', h('select', { onChange: (e) => { a.layout = e.target.value; } }, [['einzel', 'Einzeln'], ['doppel_links', 'Doppelbild links'], ['doppel_rechts', 'Doppelbild rechts']].map(([k, l]) => h('option', { value: k, selected: a.layout === k }, l))))), hint);
     }) : [h('p', { class: 'help' }, items.length ? 'Noch nichts zugeordnet. Das Bild erscheint ab der gewählten Stelle im Kommentar.' : 'Zuerst unter „Bilder“ oder „Karten“ etwas zur Folge hinzufügen.')]));
+    if (preset && items.length) rows.push({ [items[0].kind]: items[0].key, von: preset.von, bis: preset.bis ?? null, layout: 'einzel', einheit: isB ? 'stichpunkt' : 'wort' });
     draw();
     modal({ title: 'Bilder & Karten zuordnen', body: h('div', { class: 'col' }, list, btn('Zuordnung hinzufügen', { icon: 'plus', disabled: !items.length, onClick: () => { const it = items[0]; rows.push({ [it.kind]: it.key, von: 0, bis: null, layout: 'einzel', einheit: isB ? 'stichpunkt' : 'wort' }); draw(); } })),
       actions: [{ label: 'Abbrechen' }, { label: 'Übernehmen', kind: 'primary', onClick: () => { b.anker = rows.map((a) => ({ ...a, einheit: isB ? 'stichpunkt' : 'wort' })); touch(); drawScene(); } }] });
@@ -136,6 +182,7 @@ export async function render(main, ctx) {
     if (!sel) { mainEl.append(empty('edit', 'Keine Szene gewählt', 'Wähle links eine Szene oder lege eine neue an.', btn('Neue Szene', { kind: 'primary', onClick: addScene }))); return; }
     const s = sel;
     const title = h('input', { type: 'text', value: s.titel, placeholder: 'Szenentitel', style: { fontSize: '18px', fontWeight: 650 }, onInput: (e) => { s.titel = e.target.value; touch(); } });
+    const titleAi = aiOn() ? btn('', { icon: 'sparkle', kind: 'ghost', title: 'KI: Titel vorschlagen', onClick: () => aiTitle(s) }) : null;
     const strandSel = h('select', { onChange: (e) => { s.strang = e.target.value; touch(); drawList(); } }, h('option', { value: '' }, 'ohne Strang'), strands.map((t) => h('option', { value: t.id, selected: s.strang === t.id }, t.name)));
     const statusSel = h('select', { onChange: (e) => { s.status = e.target.value; touch(); drawList(); } }, Object.entries(STATUS).map(([k, v]) => h('option', { value: k, selected: s.status === k }, v)));
     const standbild = h('select', { onChange: (e) => { s.standbild = e.target.value; touch(); } }, [['ende', 'Standbild am Ende'], ['start', 'Standbild am Anfang'], ['aus', 'Kein Standbild']].map(([k, v]) => h('option', { value: k, selected: s.standbild === k }, v)));
@@ -174,7 +221,8 @@ export async function render(main, ctx) {
         blocks.append(h('div', { class: `block ${b.sprecher}` }, h('div', { class: 'block-head' }, spk, mode, h('span', { class: 'grow' }), info,
           btn('', { icon: 'trash', kind: 'ghost', size: 'sm', onClick: async () => { if (await confirmBox('Block löschen?', 'Dieser Kommentarblock wird entfernt.', 'Löschen', true)) { s.kommentar.splice(i, 1); touch(); drawBlocks(); } } })),
         ta, b.gesprochen ? h('div', { class: 'block-foot' }, icon('mic'), h('span', { class: 'muted' }, 'Gesprochen: '), h('span', {}, b.gesprochen)) : null,
-        h('div', { class: 'block-foot' }, icon('image'), (b.anker || []).length ? (b.anker || []).map((a) => h('span', { class: 'chip accent' }, `${a.asset || a.karte} · ${a.einheit === 'stichpunkt' ? 'Punkt ' + (a.von + 1) : 'Wort ' + (a.von + 1)}`)) : h('span', { class: 'muted' }, 'Keine Bilder/Karten'), h('span', { class: 'grow' }), btn('Bilder & Karten …', { size: 'sm', onClick: () => anchorDialog(b) }))));
+        h('div', { class: 'block-foot' }, icon('image'), (b.anker || []).length ? (b.anker || []).map((a) => h('span', { class: 'chip accent' }, `${a.asset || a.karte} · ${a.einheit === 'stichpunkt' ? 'Punkt ' + (a.von + 1) : 'Wort ' + (a.von + 1)}`)) : h('span', { class: 'muted' }, 'Keine Bilder/Karten'), h('span', { class: 'grow' }), btn('Bild an Auswahl', { size: 'sm', title: 'Wörter im Text markieren, dann klicken: Bild/Karte ab dieser Stelle einblenden', onClick: () => anchorDialog(b, selectionOf(ta, b)) }), btn('Alle …', { size: 'sm', onClick: () => anchorDialog(b) }),
+          aiOn() ? btn('', { icon: 'sparkle', size: 'sm', kind: 'ghost', title: 'KI: Namen prüfen', onClick: () => aiNames(b) }) : null, aiOn() ? btn('', { icon: 'image', size: 'sm', kind: 'ghost', title: 'KI: Bild-Ideen aus dem Text', onClick: () => aiImages(b) }) : null, aiOn() ? btn('', { icon: 'map', size: 'sm', kind: 'ghost', title: 'KI: Karte vorschlagen', onClick: () => aiMap(b) }) : null)));
       });
       blocks.append(btn('Kommentarblock hinzufügen', { icon: 'plus', onClick: () => { s.kommentar.push({ sprecher: s.kommentar.at(-1)?.sprecher === 'philipp' ? 'danny' : 'philipp', modus: 'text', text: '', stichpunkte: [], gesprochen: '', anker: [] }); touch(); drawBlocks(); } }));
     }
@@ -186,7 +234,7 @@ export async function render(main, ctx) {
     mainEl.append(...[
       lockedBy ? h('div', { class: 'lockbar' }, icon('lock'), ` ${lockedBy} bearbeitet diese Szene gerade. Änderungen können kollidieren.`) : null,
       banner,
-      h('div', { class: 'row', style: { marginBottom: '14px' } }, h('div', { class: 'grow' }, title), btn('', { icon: 'up', kind: 'ghost', title: 'Szene nach oben (Alt+Umschalt+↑)', onClick: () => moveTo(s.id, scenes.indexOf(sel) - 1) }),
+      h('div', { class: 'row', style: { marginBottom: '14px' } }, h('div', { class: 'grow' }, title), titleAi, btn('', { icon: 'up', kind: 'ghost', title: 'Szene nach oben (Alt+Umschalt+↑)', onClick: () => moveTo(s.id, scenes.indexOf(sel) - 1) }),
         btn('', { icon: 'down', kind: 'ghost', title: 'Szene nach unten (Alt+Umschalt+↓)', onClick: () => moveTo(s.id, scenes.indexOf(sel) + 1) }),
         btn('', { icon: 'trash', kind: 'ghost danger', title: 'Szene löschen (rückgängig machbar)', onClick: () => removeScene(s) })),
       h('div', { class: 'row wrap meta-row', style: { marginBottom: '14px' } }, strandSel, statusSel, standbild, fix, h('span', { class: 'grow' }), rep, stateEl),

@@ -104,7 +104,7 @@ def add_asset(body: NewAsset, ep: Episode = Depends(ep_of), state: AppState = De
     if dup:
         return dup
     meta = _index(state).search_exact(rel) or images.read_xmp(file)
-    artists = pipeline.store.read_json(state.templates_dir() / "kuenstler.json", {})
+    artists = pipeline.store.read_json(_artists_file(state), {})
     data = {"path": rel, "source_url": source_url, "credit": images.default_credit(rel, meta, artists),
             "credit_link": "", "contour_color": images.contour_color(file), "zoom": True,
             "layout": "einzel", "title": (meta or {}).get("title", "")}
@@ -119,12 +119,12 @@ def put_asset(aid: str, body: dict, ep: Episode = Depends(ep_of), state: AppStat
     if body.get("credit") and body.get("path"):
         from .rough_cut import credit_from_filename
         key = credit_from_filename(body["path"])
-        f = state.templates_dir() / "kuenstler.json"
-        if state.templates_dir() != Path(__file__).resolve().parents[2] / "vorlagen":
-            db = pipeline.store.read_json(f, {})
-            if db.get(key) != body["credit"]:
-                db[key] = body["credit"]
-                pipeline.store.write_json(f, db)
+        f = Path(state.settings.onedrive_root) / state.settings.templates_dir / "kuenstler.json"
+        db = pipeline.store.read_json(_artists_file(state), {})
+        if db.get(key) != body["credit"] and body["credit"] != key:
+            db[key] = body["credit"]
+            f.parent.mkdir(parents=True, exist_ok=True)
+            pipeline.store.write_json(f, db)
     return out
 
 
@@ -218,3 +218,41 @@ def suggest_map(body: MapSuggest, state: AppState = Depends(st)):
     folder = Path(state.settings.onedrive_root) / state.settings.maps_dir
     names = [m["name"] for m in maps.list_maps(folder)][:80] if folder.is_dir() else []
     return state.llm().suggest_map(body.text, names) or {}
+
+
+@router.post("/llm/scene-title")
+def scene_title(body: TextBody, state: AppState = Depends(st)):
+    l = state.llm()
+    return {"titel": l.scene_title(body.text) if l.enabled("scene_titles") else None}
+
+
+@router.delete("/ep/{season}/{episode}/assets/{aid}")
+def delete_asset(aid: str, ep: Episode = Depends(ep_of)):
+    f = ep.p.assets / f"{Path(aid).name}.json"
+    if not f.exists():
+        raise HTTPException(404, "Bild unbekannt")
+    users = [f"{s.titel or s.id}" for s in ep.scenes() for b in s.kommentar for a in b.anker if a.asset == aid]
+    if users:
+        raise HTTPException(409, f"Wird noch verwendet in: {', '.join(sorted(set(users)))}")
+    f.unlink()
+    pipeline.store.log_change(ep.p.gl, ep.settings.user, f"Asset {aid} entfernt")
+    return {"ok": True}
+
+
+def _artists_file(state: AppState) -> Path:
+    """OneDrive-Datei (geteilt) hat Vorrang vor der mitgelieferten."""
+    od = Path(state.settings.onedrive_root) / state.settings.templates_dir / "kuenstler.json"
+    return od if od.exists() else state.templates_dir() / "kuenstler.json"
+
+
+@router.get("/artists")
+def get_artists(state: AppState = Depends(st)):
+    return pipeline.store.read_json(_artists_file(state), {})
+
+
+@router.put("/artists")
+def put_artists(body: dict[str, str], state: AppState = Depends(st)):
+    d = Path(state.settings.onedrive_root) / state.settings.templates_dir
+    d.mkdir(parents=True, exist_ok=True)
+    pipeline.store.write_json(d / "kuenstler.json", {k.strip().lower(): v.strip() for k, v in body.items() if k.strip() and v.strip()})
+    return {"ok": True}

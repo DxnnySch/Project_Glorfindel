@@ -1,6 +1,6 @@
 // Einstieg: Seitenleiste, Hash-Routing, Folgenwahl, Live-Nachladen.
 import { h, $, clear, icon, toast, btn, modal, field } from './ui.js';
-import { api, epUrl } from './api.js';
+import { api, epUrl, own } from './api.js';
 import { S, loadGlobal, loadEpisode, slug } from './state.js';
 import { mountTasks } from './tasks.js';
 
@@ -93,8 +93,8 @@ async function route() {
 // Änderungen anderer (OneDrive) erkennen
 let lastVer = null;
 setInterval(async () => {
-  if (!S.ep || document.hidden || current === 'editor') return;
-  try { const v = (await api.get(epUrl(S.ep, '/version'))).version; if (lastVer && v > lastVer) toast('Daten wurden extern geändert – Ansicht neu laden (F5), um sie zu sehen.', 'warn', 6000); lastVer = v; } catch { /* offline */ }
+  if (!S.ep || document.hidden) return;
+  try { const v = (await api.get(epUrl(S.ep, '/version'))).version; if (lastVer && v > lastVer && Date.now() - own.lastWrite > 20000) toast('Daten wurden extern geändert – Ansicht neu laden (F5), um sie zu sehen.', 'warn', 6000); lastVer = v; } catch { /* offline */ }
 }, 8000);
 
 const theme = localStorage.getItem('gl-theme'); if (theme) document.documentElement.dataset.theme = theme;

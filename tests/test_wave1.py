@@ -94,3 +94,51 @@ def test_cockpit(tmp_path, monkeypatch):
     texts = " ".join(t["text"] for t in d["tasks"])
     assert "Referenz" in texts and "ohne Serienmaterial" in texts
     assert d["phases"]["vorbereiten"] is False
+
+
+def test_free_blocks_and_take_choice(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    sc = _scene(c)
+    assert c.put("/api/ep/2/1/free-blocks", json=[{"titel": "Werbung", "after": sc["id"], "dauer": 81}]).status_code == 200
+    assert c.get("/api/ep/2/1/free-blocks").json()[0]["dauer"] == 81
+    assert c.put("/api/ep/2/1/free-blocks", json=[{"titel": "X", "after": "sz_99"}]).status_code == 400
+    ep = c.app.state.gl.episode(2, 1)
+    from glorfindel import pipeline
+    pipeline.save_alignment(ep, {"recordings": [], "scenes": {sc["id"]: [{"block": 0, "rec": "r", "in": 1, "out": 2, "takes": [{"start": 1, "end": 2, "score": 90}, {"start": 5, "end": 7, "score": 75}], "chosen": 0}]}})
+    r = c.put("/api/ep/2/1/recording/take", json={"scene": sc["id"], "block": 0, "take": 1}).json()
+    assert r["in"] == 4.85 and r["chosen"] == 1 and r["uncertain"] is True
+    from glorfindel.rough_cut import build_package, load_template
+    pkg = build_package(ep.scenes(), slug="S", template=load_template(None), th=ep.settings.thresholds, free_blocks=[{"titel": "Werbung", "after": None, "dauer": 81}])
+    fb = next(cl for tr in pkg["tracks"].values() for cl in tr if cl["type"] == "free_block")
+    assert abs((fb["end"] - fb["start"]) - 81) < 0.01
+
+
+def test_word_marker_has_readable_name_and_roundtrips(tmp_path):
+    from glorfindel.models import Scene, CommentBlock, AssetRef
+    from glorfindel import script_docx
+    sc = Scene(id="sz_01", titel="T", kommentar=[CommentBlock(text="Eins zwei drei vier", anker=[AssetRef(asset="art_0001", von=1, bis=3)])])
+    f = tmp_path / "s.docx"
+    script_docx.export_docx([sc], f, labels={"art_0001": "Alan Lee – Celebrimbor"})
+    txt = "\n".join(p.text for p in __import__("docx").Document(str(f)).paragraphs)
+    assert "art_0001~Alan_Lee" in txt
+    res = script_docx.import_docx(f)
+    ref = res.scenes["sz_01"]["kommentar"][0].anker[0]
+    assert ref.asset == "art_0001" and ref.von == 1 and ref.bis == 3
+
+
+def test_asset_delete_guard_and_artists(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    from glorfindel import pipeline
+    ep = c.app.state.gl.episode(2, 1)
+    pipeline.save_asset(ep, {"path": "x.png", "credit": "a"})
+    sc = _scene(c, kommentar=[{"sprecher": "philipp", "text": "t", "anker": [{"asset": "art_0001"}]}])
+    r = c.delete("/api/ep/2/1/assets/art_0001")
+    assert r.status_code == 409 and "A" in r.json()["detail"]
+    full = c.get("/api/ep/2/1/scenes").json()[0]
+    full["kommentar"][0]["anker"] = []
+    for k in ("report", "lock", "problems", "ausgabe"):
+        full.pop(k, None)
+    c.put(f"/api/ep/2/1/scenes/{sc['id']}", json=full)
+    assert c.delete("/api/ep/2/1/assets/art_0001").status_code == 200
+    assert c.put("/api/artists", json={"Ted Nasmith": "ted nasmith"}).status_code == 200
+    assert c.get("/api/artists").json() == {"ted nasmith": "ted nasmith"}

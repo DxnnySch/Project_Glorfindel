@@ -18,7 +18,7 @@ from .models import AssetRef, CommentBlock, Scene
 SPEAKERS = {"philipp": "PHILIPP", "danny": "DANNY"}
 _LABEL_RE = re.compile(r"^\s*(PHILIPP|DANNY)\s*:\s*", re.I)
 _SZ_RE = re.compile(r"⟦sz:([^⟧]+)⟧")
-_MARK_RE = re.compile(r"⟦([+-])(bild|karte):([^|⟧]+)(?:\|([^⟧]+))?⟧")
+_MARK_RE = re.compile(r"⟦([+-])(bild|karte):([^|⟧~]+)(?:~[^|⟧]*)?(?:\|([^⟧]+))?⟧")
 GREY = RGBColor(0x99, 0x99, 0x99)
 
 
@@ -27,20 +27,27 @@ def fmt_tc(seconds: float) -> str:
     return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
 
 
-def _bullet_marks(block: CommentBlock) -> dict[int, list[str]]:
+def _label(ident: str, labels: dict[str, str] | None) -> str:
+    """Lesbarer Zusatz hinter der ID (ohne Leerzeichen), z. B. art_0001~Alan_Lee."""
+    name = (labels or {}).get(ident, "")
+    name = re.sub(r"[\s|⟦⟧~]+", "_", name).strip("_")[:40]
+    return f"{ident}~{name}" if name else ident
+
+
+def _bullet_marks(block: CommentBlock, labels: dict[str, str] | None = None) -> dict[int, list[str]]:
     marks: dict[int, list[str]] = {}
     for a in block.anker:
         kind, ident = ("bild", a.asset) if a.asset else ("karte", a.karte)
         if not ident:
             continue
         lay = f"|{a.layout}" if a.layout != "einzel" else ""
-        marks.setdefault(a.von, []).append(f"⟦+{kind}:{ident}{lay}⟧")
+        marks.setdefault(a.von, []).append(f"⟦+{kind}:{_label(ident, labels)}{lay}⟧")
         if a.bis is not None:
             marks.setdefault(a.bis, []).append(f"⟦-{kind}:{ident}⟧")
     return marks
 
 
-def _marked_words(block: CommentBlock) -> list[tuple[str, str]]:
+def _marked_words(block: CommentBlock, labels: dict[str, str] | None = None) -> list[tuple[str, str]]:
     """Liste von (typ, inhalt): ('w', wort) oder ('m', markentext) in Lesereihenfolge."""
     words = block.text.split()
     marks: dict[int, list[str]] = {}
@@ -49,7 +56,7 @@ def _marked_words(block: CommentBlock) -> list[tuple[str, str]]:
         if not ident:
             continue
         lay = f"|{a.layout}" if a.layout != "einzel" else ""
-        marks.setdefault(min(a.von, len(words)), []).append(f"⟦+{kind}:{ident}{lay}⟧")
+        marks.setdefault(min(a.von, len(words)), []).append(f"⟦+{kind}:{_label(ident, labels)}{lay}⟧")
         if a.bis is not None:
             marks.setdefault(min(a.bis, len(words)), []).append(f"⟦-{kind}:{ident}⟧")
     out: list[tuple[str, str]] = []
@@ -63,7 +70,7 @@ def _marked_words(block: CommentBlock) -> list[tuple[str, str]]:
 
 def export_docx(scenes: list[Scene], path, title: str = "", speaker: str | None = None,
                 show_markers: bool = True, free_blocks: list[dict] | None = None,
-                tc_start: dict[str, float] | None = None) -> None:
+                tc_start: dict[str, float] | None = None, labels: dict[str, str] | None = None) -> None:
     """`free_blocks`: [{'after': 'sz_07'|None, 'titel': str, 'text': str}] werden eingefügt."""
     doc = Document()
     doc.styles["Normal"].font.name = "Calibri"
@@ -101,7 +108,7 @@ def export_docx(scenes: list[Scene], path, title: str = "", speaker: str | None 
             lab = p.add_run(SPEAKERS[block.sprecher] + ":")
             lab.bold = True
             if block.modus == "stichpunkte":
-                marks = _bullet_marks(block)
+                marks = _bullet_marks(block, labels)
                 for bi, bullet in enumerate(block.stichpunkte):
                     bp = doc.add_paragraph(style="List Bullet")
                     if show_markers:
@@ -113,7 +120,7 @@ def export_docx(scenes: list[Scene], path, title: str = "", speaker: str | None 
                 continue
             p.add_run(" ")
             first = True
-            for typ, val in _marked_words(block):
+            for typ, val in _marked_words(block, labels):
                 if typ == "m":
                     if not show_markers:
                         continue

@@ -33,6 +33,7 @@ export async function render(main) {
           h('div', { class: 'help' }, `Aktives Verfahren: ${S.system?.transcription_backend || '–'}`)),
         h('div', { class: 'card col' }, h('h2', {}, 'KI-Hilfen (ScaDS.AI)'),
           h('div', { class: 'help' }, S.settings._scads_key_present ? '✔ API-Schlüssel gefunden.' : '⚠ Kein API-Schlüssel (.env mit SCADS_API_KEY) – KI-Funktionen sind inaktiv.'),
+          btn('Verbindung testen', { size: 'sm', icon: 'refresh', onClick: async () => { try { const r = await api.get('/api/llm/status'); toast(r.key ? (r.models.length ? `Verbunden – ${r.models.length} Modelle verfügbar.` : `Schlüssel da, aber keine Antwort: ${r.error || 'unbekannt'}`) : 'Kein API-Schlüssel gefunden.', r.models.length ? 'ok' : 'warn', 7000); } catch (e) { toast(e.message, 'err'); } } }),
           check('KI-Funktionen aktiv', llm, 'enabled'), ...Object.keys(llm.features).map((k) => check({ transcript_fix: 'Transkript-Nachkorrektur', name_check: 'Namensprüfung', image_suggest: 'Bild-Suchbegriffe', map_suggest: 'Kartenvorschläge', scene_titles: 'Szenentitel' }[k] || k, llm.features, k))),
         h('div', { class: 'card col' }, h('h2', {}, 'Längenampel & Sprechtempo'),
           h('div', { class: 'grid g2' }, field('Max. Segmentlänge (s)', inp('max_segment_s', th, 'number')), field('Warnschwelle (Anteil)', inp('warn_ratio', th, 'number')),

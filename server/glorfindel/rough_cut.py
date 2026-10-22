@@ -112,7 +112,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
     def place_free(key):
         nonlocal t
         for fb in free_after.get(key, []):
-            dur = max(tm["free_block_min"], len((fb.get("text") or "").split()) / th.words_per_second)
+            dur = float(fb["dauer"]) if fb.get("dauer") else max(tm["free_block_min"], len((fb.get("text") or "").split()) / th.words_per_second)
             tl.mark(t, f"Freier Block: {fb.get('titel') or 'ohne Titel'}", "free")
             tl.add("GAP", "free_block", t, t + dur, title=fb.get("titel", ""), text=fb.get("text", ""))
             t += dur

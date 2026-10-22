@@ -25,8 +25,10 @@ def export_script(speaker: str | None = None, markers: bool = True, by_strand: b
                   ep: Episode = Depends(ep_of)):
     scenes = pipeline.ordered_scenes(ep, by_strand)
     out = ep.p.base / f"Skript {ep.p.slug}{'' if not speaker else ' ' + speaker}.docx"
+    labels = {a["id"]: (a.get("title") or Path(a.get("path", "")).stem) for a in pipeline.load_assets(ep).values()}
+    labels.update({m["id"]: m.get("titel", "") for m in pipeline.load_maps(ep).values()})
     script_docx.export_docx(scenes, out, title=f"{ep.p.slug} – {ep.project().title}".strip(" –"), speaker=speaker,
-                            show_markers=markers, free_blocks=ep.free_blocks())
+                            show_markers=markers, free_blocks=ep.free_blocks(), labels=labels)
     store.log_change(ep.p.gl, ep.settings.user, f"Word-Export ({speaker or 'alle'})")
     return FileResponse(out, filename=out.name,
                         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
@@ -48,7 +50,8 @@ async def import_preview(file: UploadFile = File(...), ep: Episode = Depends(ep_
     scenes = ep.scenes()
     probe = [Scene.model_validate(s.model_dump(by_alias=True)) for s in scenes]
     changed = script_docx.apply_import(probe, res)
-    return {"changed": changed, "unknown": [s for s in res.scenes if s not in {x.id for x in scenes}],
+    titles = {s.id: s.titel for s in scenes}
+    return {"changed": changed, "changed_titles": [titles.get(c, c) for c in changed], "unknown": [s for s in res.scenes if s not in {x.id for x in scenes}],
             "free_blocks": res.free_blocks}
 
 
@@ -64,6 +67,10 @@ async def import_apply(file: UploadFile = File(...), ep: Episode = Depends(ep_of
     for sc in scenes:
         if sc.id in changed:
             ep.save_scene(sc, f"Szene {sc.id} aus Word übernommen")
+    old = {b.get("titel"): b for b in ep.free_blocks()}
+    for b in res.free_blocks:  # Dauer überlebt den Word-Rundlauf
+        if old.get(b.get("titel"), {}).get("dauer"):
+            b["dauer"] = old[b["titel"]]["dauer"]
     ep.save_free_blocks(res.free_blocks)
     return {"changed": changed, "free_blocks": len(res.free_blocks)}
 
@@ -332,3 +339,49 @@ def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState
             info["stills"] = pipeline.render_stills(ep, pipeline.ordered_scenes(ep), body.source)
         return info
     return {"job": state.jobs.submit("HQ-Conform", work)}
+
+
+# ---------- Rahmenteile (freie Blöcke) ----------
+class FreeBlock(BaseModel):
+    titel: str = ""
+    text: str = ""
+    after: str | None = None   # Szenen-ID, nach der der Block steht; None = am Anfang
+    dauer: float | None = None  # bekannte Länge in Sekunden (z. B. Werbung 81 s)
+
+
+@router.get("/ep/{season}/{episode}/free-blocks")
+def get_free_blocks(ep: Episode = Depends(ep_of)):
+    return ep.free_blocks()
+
+
+@router.put("/ep/{season}/{episode}/free-blocks")
+def put_free_blocks(body: list[FreeBlock], ep: Episode = Depends(ep_of)):
+    ids = {s.id for s in ep.scenes()}
+    for b in body:
+        if b.after is not None and b.after not in ids:
+            raise HTTPException(400, f"Unbekannte Szene: {b.after}")
+        if b.dauer is not None and b.dauer < 0:
+            raise HTTPException(400, "Dauer darf nicht negativ sein")
+    ep.save_free_blocks([b.model_dump() for b in body])
+    return {"ok": True}
+
+
+# ---------- Take-Wahl ----------
+class TakeBody(BaseModel):
+    scene: str
+    block: int
+    take: int
+
+
+@router.put("/ep/{season}/{episode}/recording/take")
+def choose_take(body: TakeBody, ep: Episode = Depends(ep_of)):
+    data = pipeline.load_alignment(ep)
+    entry = next((b for b in data["scenes"].get(body.scene, []) if b["block"] == body.block), None)
+    if not entry or not entry.get("takes") or not (0 <= body.take < len(entry["takes"])):
+        raise HTTPException(404, "Take nicht gefunden")
+    t = entry["takes"][body.take]
+    entry.update({"in": round(max(0.0, t["start"] - 0.15), 3), "out": round(t["end"] + 0.30, 3), "chosen": body.take,
+                  "confidence": round(t["score"] / 100.0, 3), "uncertain": t["score"] < 80.0, "manual": True})
+    entry.pop("missing", None)
+    pipeline.save_alignment(ep, data)
+    return entry
