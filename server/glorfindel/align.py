@@ -202,15 +202,21 @@ def transcribe(path: Path, model_name: str = "auto", language: str = "de", gloss
         from faster_whisper import WhisperModel
     except ImportError as e:
         raise RuntimeError("faster-whisper nicht installiert (uv pip install '.[whisper]')") from e
+    import numpy as np
+    from . import media
     name, device, ctype = pick_whisper_model(model_name)
     model = WhisperModel(name, device=device, compute_type=ctype)
-    segments, info = model.transcribe(str(path), language=language, word_timestamps=True,
+    # Eigene ffmpeg-Dekodierung statt PyAV von faster-whisper (Versionskonflikte, robuster bei WAV/MOV/MKV)
+    raw = media.run_bytes(["ffmpeg", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", "16000",
+                           "-f", "f32le", "-"])
+    audio = np.frombuffer(raw, dtype=np.float32)
+    segments, info = model.transcribe(audio, language=language, word_timestamps=True,
                                       initial_prompt=glossary, vad_filter=True, beam_size=5)
     words = []
     for seg in segments:
         for w in seg.words or []:
             words.append({"w": w.word.strip(), "start": round(w.start, 3), "end": round(w.end, 3),
                           "p": round(getattr(w, "probability", 1.0), 3)})
-        if progress_cb and info.duration:
-            progress_cb(min(1.0, seg.end / info.duration))
+        if progress_cb and len(audio):
+            progress_cb(min(1.0, seg.end / (len(audio) / 16000)))
     return words

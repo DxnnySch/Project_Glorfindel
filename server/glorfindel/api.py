@@ -1,0 +1,66 @@
+"""FastAPI-App: lokale REST-Schnittstelle + Auslieferung der Weboberfläche (nur localhost)."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from . import __version__
+from .config import Settings
+from .deps import AppState
+
+WEB_DIR = Path(os.environ.get("GLORFINDEL_WEB", Path(__file__).resolve().parents[2] / "web"))
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "testserver"}
+
+
+def create_app(state: AppState | None = None) -> FastAPI:
+    state = state or AppState()
+    app = FastAPI(title="Projekt Glorfindel", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app.state.gl = state
+
+    @app.middleware("http")
+    async def local_only(request: Request, call_next):
+        """Schutz vor DNS-Rebinding und fremden Webseiten: nur localhost-Host, nur gleiche Herkunft bei Schreibzugriffen."""
+        host = request.headers.get("host", "").rsplit(":", 1)[0] if not request.headers.get("host", "").startswith("[") \
+            else request.headers.get("host", "").split("]")[0] + "]"
+        if host not in LOCAL_HOSTS:
+            return JSONResponse({"detail": "Nur lokaler Zugriff"}, status_code=403)
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin")
+            if origin:
+                o = origin.split("://", 1)[-1].rsplit(":", 1)[0]
+                if o not in LOCAL_HOSTS:
+                    return JSONResponse({"detail": "Fremde Herkunft abgelehnt"}, status_code=403)
+        return await call_next(request)
+
+    from . import routes_core, routes_prod, routes_lib
+    app.include_router(routes_core.router, prefix="/api")
+    app.include_router(routes_prod.router, prefix="/api")
+    app.include_router(routes_lib.router, prefix="/api")
+
+    @app.get("/api/health")
+    def health():
+        return {"ok": True, "version": __version__}
+
+    if WEB_DIR.is_dir():
+        app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+        @app.get("/")
+        def index():
+            return FileResponse(WEB_DIR / "index.html")
+
+        @app.get("/favicon.svg")
+        def favicon():
+            f = WEB_DIR / "favicon.svg"
+            if not f.exists():
+                raise HTTPException(404)
+            return FileResponse(f)
+
+    return app
+
+
+def get_state(request: Request) -> AppState:
+    return request.app.state.gl

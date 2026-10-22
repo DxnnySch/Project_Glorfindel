@@ -21,6 +21,13 @@ def run(cmd: list[str], timeout: float | None = None) -> subprocess.CompletedPro
                           encoding="utf-8", errors="replace")
 
 
+def run_bytes(cmd: list[str], timeout: float | None = None) -> bytes:
+    r = subprocess.run(cmd, capture_output=True, timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError(f"{Path(cmd[0]).name} fehlgeschlagen: {r.stderr.decode(errors='replace')[-300:]}")
+    return r.stdout
+
+
 def _fraction(s: str) -> float:
     try:
         n, _, d = s.partition("/")

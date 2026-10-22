@@ -51,6 +51,7 @@ class Settings(BaseModel):
     maps_dir: str = "Videomaterial/Karten"
     templates_dir: str = "Videomaterial/Project_Glorfindel"
     whisper_model: str = "auto"
+    transcription: str = "auto"  # "auto" | "lokal" | "scads" (sendet Audio an ScaDS.AI)
     thresholds: Thresholds = Field(default_factory=Thresholds)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     keep_hq_in_onedrive: bool = False

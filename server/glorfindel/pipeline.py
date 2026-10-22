@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from . import align, align_bullets, fcpxml, media, rough_cut, store
+from . import align, align_bullets, fcpxml, media, rough_cut, stt, store
 from .conform import render_stills_from_hq
 from .models import Anchor, Scene
 from .scenes import normalize_block, sort_scenes
@@ -97,7 +97,13 @@ def transcribe_recording(ep: Episode, rec: dict, llm=None, progress=lambda p: No
     cache = ep.p.recording / f"transkript_{rec['id']}.json"
     tr = store.read_json(cache)
     if tr is None:
-        tr = align.transcribe(ep.p.root / rec["path"], ep.settings.whisper_model, progress_cb=progress)
+        path = ep.p.root / rec["path"]
+        if stt.choose_backend(ep.settings.transcription) == "scads":
+            if llm is None or llm.client is None:
+                raise RuntimeError("ScaDS-Transkription gewählt, aber kein API-Schlüssel (.env) gefunden")
+            tr = stt.transcribe_remote(path, llm.client, progress_cb=progress)
+        else:
+            tr = align.transcribe(path, ep.settings.whisper_model, progress_cb=progress)
         if llm is not None and llm.enabled("transcript_fix"):
             tr = _fix_transcript_with_llm(tr, llm)
         store.write_json(cache, tr)

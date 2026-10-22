@@ -37,7 +37,7 @@ Der Ordner ist (noch) kein Git-Repository. Ich lege lokal eins an (`git init`), 
 ## F7 – Stichpunkt-Skripte (frei ausformulieren)  ⚙️
 Umgesetzt (deine Nachricht): Ein Kommentarblock hat einen Modus „text“ oder „stichpunkte“ (Zeilen mit `-`/`•` im Textfeld werden automatisch erkannt). Word-Export schreibt Stichpunkte als Aufzählung, Rückimport liest sie zurück. Der Abgleich ordnet das Transkript per Schlüsselwörtern den Stichpunkten zu (reihenfolgetreu, Retakes = letzter Take), Bilder/Karten hängen an Stichpunkten. Danach kann der gesprochene Text mit einem Klick als Skript übernommen werden (Anker wandern auf Wörter).
 Offene Feinjustierung: Zeitschätzung ohne Aufnahme = **12 s pro Stichpunkt** (einstellbar `bullet_seconds`). Passt das etwa zu euch?
-**Antwort:**
+**Antwort:** es wird erst das "Skript" erstellt, dann eingesprochen und dann zugeordnet, wenn das geht, dann kann danach der Rawcut gemacht werden easy
 
 ## F8 – Credit-Spuren bei Doppelbild  🟡
 Heft nennt „zwei Credit-Spuren“, V11 (Musik-Credit) und V12 (Bauchbinden) sind belegt. Standard: V10 (links/einzeln) und **V13** (rechts).

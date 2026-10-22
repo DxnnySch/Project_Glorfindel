@@ -1,0 +1,339 @@
+"""Routen: Einstellungen, Dateibrowser, Folgen, Quellen, Szenen, Stränge, Sperren, Jobs."""
+from __future__ import annotations
+
+import os
+import string
+import sys
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from . import media, store
+from .config import Settings
+from .deps import AppState
+from .models import Anchor, CommentBlock, Scene, Segment, Strand
+from .scenes import episode_report, normalize_block, scene_report, validate_segments
+from .service import Episode, list_episodes
+
+router = APIRouter()
+
+
+def st(request: Request) -> AppState:
+    return request.app.state.gl
+
+
+def ep_of(season: int, episode: int, state: AppState = Depends(st)) -> Episode:
+    return state.episode(season, episode)
+
+
+# ---------- Einstellungen ----------
+@router.get("/settings")
+def get_settings(state: AppState = Depends(st)):
+    s = state.settings.model_dump()
+    from .config import scads_credentials
+    s["_scads_key_present"] = bool(scads_credentials()[0])
+    s["_onedrive_ok"] = bool(s["onedrive_root"]) and Path(s["onedrive_root"]).is_dir()
+    return s
+
+
+@router.put("/settings")
+def put_settings(new: Settings, state: AppState = Depends(st)):
+    state.settings = new
+    state.save()
+    return {"ok": True}
+
+
+@router.get("/detect-onedrive")
+def detect_onedrive():
+    """Typische OneDrive-Stammordner vorschlagen (Windows/macOS)."""
+    cands = []
+    home = Path.home()
+    for k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        v = os.environ.get(k)
+        if v:
+            cands.append(v)
+    cands += [str(p) for p in home.glob("OneDrive*")]
+    cands += [str(p) for p in (home / "Library/CloudStorage").glob("OneDrive*")] if sys.platform == "darwin" else []
+    if sys.platform == "win32":
+        cands += [f"{d}:\\OneDrive" for d in string.ascii_uppercase if Path(f"{d}:\\OneDrive").is_dir()]
+    seen, out = set(), []
+    for c in cands:
+        if c not in seen and Path(c).is_dir():
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+@router.get("/fs")
+def browse(path: str = "", files: bool = False):
+    """Einfacher Dateibrowser für die Ordner-/Dateiauswahl (nur lokal)."""
+    if not path:
+        roots = ([f"{d}:\\" for d in string.ascii_uppercase if Path(f"{d}:\\").exists()]
+                 if sys.platform == "win32" else ["/", str(Path.home())])
+        return {"path": "", "parent": None, "entries": [{"name": r, "dir": True, "path": r} for r in roots]}
+    p = Path(path)
+    if not p.is_dir():
+        raise HTTPException(404, "Ordner nicht gefunden")
+    entries = []
+    try:
+        for c in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+            if c.name.startswith("."):
+                continue
+            if c.is_dir() or files:
+                entries.append({"name": c.name, "dir": c.is_dir(), "path": str(c)})
+    except PermissionError:
+        raise HTTPException(403, "Kein Zugriff")
+    return {"path": str(p), "parent": str(p.parent) if p.parent != p else "", "entries": entries[:500]}
+
+
+@router.get("/system")
+def system_check():
+    import shutil
+    from .stt import choose_backend
+    return {"ffmpeg": bool(shutil.which("ffmpeg")), "ffprobe": bool(shutil.which("ffprobe")),
+            "transcription_backend": choose_backend("auto")}
+
+
+# ---------- Jobs ----------
+@router.get("/jobs/{jid}")
+def job(jid: str, state: AppState = Depends(st)):
+    return state.jobs.get(jid)
+
+
+# ---------- Folgen ----------
+class NewEpisode(BaseModel):
+    season: int
+    episode: int
+    title: str = ""
+    fps: float = 23.976
+
+
+@router.get("/episodes")
+def episodes(state: AppState = Depends(st)):
+    if not state.settings.onedrive_root:
+        return []
+    return list_episodes(state.settings)
+
+
+@router.post("/episodes")
+def create_episode(body: NewEpisode, state: AppState = Depends(st)):
+    if not state.settings.onedrive_root or not Path(state.settings.onedrive_root).is_dir():
+        raise HTTPException(409, "OneDrive-Stammordner ist nicht gesetzt (Einstellungen).")
+    Episode.create(state.settings, body.season, body.episode, body.title, body.fps)
+    return {"ok": True}
+
+
+@router.get("/ep/{season}/{episode}")
+def episode_overview(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    sc = ep.scenes()
+    return {"project": ep.project().model_dump(), "sources": [s.model_dump() for s in ep.sources()],
+            "strands": [s.model_dump() for s in ep.strands()], "scenes": [s.model_dump(by_alias=True) for s in sc],
+            "report": episode_report(sc, state.settings.thresholds),
+            "conflicts": store.find_conflicts(ep.p.scenes), "free_blocks": ep.free_blocks()}
+
+
+@router.get("/ep/{season}/{episode}/version")
+def version(ep: Episode = Depends(ep_of)):
+    """Änderungsmarke für Live-Nachladen (Änderungen anderer über OneDrive)."""
+    latest = 0.0
+    for f in list(ep.p.gl.rglob("*.json")):
+        try:
+            latest = max(latest, f.stat().st_mtime)
+        except OSError:
+            pass
+    return {"version": latest}
+
+
+@router.get("/ep/{season}/{episode}/log")
+def change_log(limit: int = 100, ep: Episode = Depends(ep_of)):
+    import json
+    f = ep.p.gl / "log.jsonl"
+    lines = f.read_text(encoding="utf-8").splitlines()[-limit:] if f.exists() else []
+    return [json.loads(l) for l in reversed(lines) if l.strip()]
+
+
+class ProjectPatch(BaseModel):
+    title: str | None = None
+    fps: float | None = None
+
+
+@router.patch("/ep/{season}/{episode}/project")
+def patch_project(body: ProjectPatch, ep: Episode = Depends(ep_of)):
+    pr = ep.project()
+    if body.title is not None:
+        pr.title = body.title
+    if body.fps is not None:
+        pr.fps = body.fps
+    ep.save_project(pr)
+    return pr.model_dump()
+
+
+# ---------- Quellen ----------
+class ImportSource(BaseModel):
+    path: str
+    role: str = "screener"
+
+
+@router.post("/ep/{season}/{episode}/sources")
+def import_source(body: ImportSource, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    def work(progress):
+        s = ep.import_source(body.path, body.role, wait=True)
+        return s.model_dump()
+    return {"job": state.jobs.submit("Quelle importieren", work)}
+
+
+@router.post("/ep/{season}/{episode}/sources/{sid}/proxy")
+def make_proxy(sid: str, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    def work(progress):
+        return str(ep.ensure_proxy(sid))
+    return {"job": state.jobs.submit(f"Proxy {sid}", work)}
+
+
+@router.get("/ep/{season}/{episode}/sources/{sid}/proxy-status")
+def proxy_status(sid: str, ep: Episode = Depends(ep_of)):
+    return {"ready": ep.proxy_path(sid).exists()}
+
+
+@router.get("/ep/{season}/{episode}/media/{sid}")
+def stream_proxy(sid: str, ep: Episode = Depends(ep_of)):
+    f = ep.proxy_path(sid)
+    if not f.exists():
+        raise HTTPException(404, "Proxy fehlt – zuerst erzeugen")
+    return FileResponse(f, media_type="video/mp4")
+
+
+class AnchorsBody(BaseModel):
+    anchors: list[Anchor]
+
+
+@router.put("/ep/{season}/{episode}/sources/{sid}/anchors")
+def set_anchors(sid: str, body: AnchorsBody, ep: Episode = Depends(ep_of)):
+    return ep.set_anchors(sid, body.anchors).model_dump()
+
+
+class SourcePatch(BaseModel):
+    role: str | None = None
+    crop: list[int] | None = None
+    normalize_fps: float | None = None
+    clear_crop: bool = False
+
+
+@router.patch("/ep/{season}/{episode}/sources/{sid}")
+def patch_source(sid: str, body: SourcePatch, ep: Episode = Depends(ep_of)):
+    srcs = ep.sources()
+    for s in srcs:
+        if s.id == sid:
+            if body.role:
+                s.role = body.role  # type: ignore[assignment]
+            if body.clear_crop:
+                s.crop = None
+            elif body.crop is not None:
+                s.crop = body.crop
+            if body.normalize_fps is not None:
+                s.normalize_fps = body.normalize_fps
+            ep._save_sources(srcs)
+            ep.proxy_path(sid).unlink(missing_ok=True)  # Proxy neu erzeugen
+            return s.model_dump()
+    raise HTTPException(404, "Quelle unbekannt")
+
+
+@router.post("/ep/{season}/{episode}/sources/{sid}/detect-crop")
+def detect_crop(sid: str, ep: Episode = Depends(ep_of)):
+    return {"crop": media.detect_crop(ep.source_path(ep.source(sid)))}
+
+
+# ---------- Szenen ----------
+@router.get("/ep/{season}/{episode}/scenes")
+def scenes(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    th = state.settings.thresholds
+    return [{**s.model_dump(by_alias=True), "report": scene_report(s, th),
+             "lock": store.lock_status(ep.p.locks, s.id), "problems": validate_segments(s)} for s in ep.scenes()]
+
+
+@router.post("/ep/{season}/{episode}/scenes")
+def create_scene(body: dict, ep: Episode = Depends(ep_of)):
+    body = {k: v for k, v in body.items() if k in {"titel", "strang", "segmente", "kommentar", "standbild"}}
+    sc = ep.create_scene(**body)
+    for b in sc.kommentar:
+        normalize_block(b)
+    return ep.save_scene(sc).model_dump(by_alias=True)
+
+
+@router.put("/ep/{season}/{episode}/scenes/{sid}")
+def put_scene(sid: str, sc: Scene, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    if sc.id != sid:
+        raise HTTPException(400, "ID passt nicht")
+    lock = store.lock_status(ep.p.locks, sid)
+    for b in sc.kommentar:
+        normalize_block(b)
+    ep.save_scene(sc)
+    return {"scene": sc.model_dump(by_alias=True), "report": scene_report(sc, state.settings.thresholds),
+            "locked_by_other": lock["user"] if lock and lock["user"] != state.settings.user else None}
+
+
+@router.delete("/ep/{season}/{episode}/scenes/{sid}")
+def delete_scene(sid: str, ep: Episode = Depends(ep_of)):
+    ep.delete_scene(sid)
+    return {"ok": True}
+
+
+class Reorder(BaseModel):
+    order: list[str]
+
+
+@router.post("/ep/{season}/{episode}/scenes-reorder")
+def reorder(body: Reorder, ep: Episode = Depends(ep_of)):
+    ep.renumber(body.order)
+    return {"ok": True}
+
+
+@router.post("/ep/{season}/{episode}/scenes/{sid}/lock")
+def lock(sid: str, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    return store.acquire_lock(ep.p.locks, sid, state.settings.user)
+
+
+@router.delete("/ep/{season}/{episode}/scenes/{sid}/lock")
+def unlock(sid: str, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    store.release_lock(ep.p.locks, sid, state.settings.user)
+    return {"ok": True}
+
+
+@router.get("/ep/{season}/{episode}/conflicts")
+def conflicts(ep: Episode = Depends(ep_of)):
+    """OneDrive-Konfliktkopien beider Versionen zum Zusammenführen anzeigen."""
+    out = []
+    for c in store.find_conflicts(ep.p.scenes):
+        out.append({**c, "a": store.read_json(Path(c["original"])), "b": store.read_json(Path(c["copy"]))})
+    return out
+
+
+class Resolve(BaseModel):
+    original: str
+    other: str
+    keep: str  # "original" | "copy"
+
+
+@router.post("/ep/{season}/{episode}/conflicts/resolve")
+def resolve_conflict(body: Resolve, ep: Episode = Depends(ep_of)):
+    orig, copy = Path(body.original), Path(body.other)
+    if ep.p.scenes not in orig.parents or ep.p.scenes not in copy.parents:
+        raise HTTPException(400, "Pfad außerhalb des Szenenordners")
+    if body.keep == "copy":
+        store.write_json(orig, store.read_json(copy))
+    copy.unlink(missing_ok=True)
+    store.log_change(ep.p.gl, ep.settings.user, f"Konflikt {orig.name} gelöst ({body.keep})")
+    return {"ok": True}
+
+
+# ---------- Stränge ----------
+@router.get("/ep/{season}/{episode}/strands")
+def strands(ep: Episode = Depends(ep_of)):
+    return [s.model_dump() for s in ep.strands()]
+
+
+@router.put("/ep/{season}/{episode}/strands")
+def put_strands(body: list[Strand], ep: Episode = Depends(ep_of)):
+    ep.save_strands(body)
+    return {"ok": True}
