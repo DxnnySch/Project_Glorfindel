@@ -164,3 +164,5 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 /* Hilfe */
 .help-body p, .help-body li { line-height: 1.6; max-width: 80ch; } .help-body ul, .help-body ol { padding-left: 22px; margin: 6px 0 10px; }
 .help-body code { background: var(--raised); padding: 0 5px; border-radius: 4px; }
+.help-fig { margin: 12px 0 8px; } .help-fig img { width: 100%; border: 1px solid var(--line); border-radius: 10px; cursor: zoom-in; display: block; }
+.help-fig figcaption { color: var(--faint); font-size: 12px; margin-top: 4px; }

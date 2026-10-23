@@ -36,3 +36,12 @@ def test_help_guide_served_and_complete(tmp_path, monkeypatch):
     assert r.status_code == 200
     for must in ("Installation", "Szenen-Editor", "Aufnahme", "Rohschnitt", "Tastenkürzel", "Probleme und Lösungen"):
         assert must in r.text
+
+
+def test_help_images_exist():
+    import re
+    help_dir = WEB_DIR / "help"
+    imgs = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", (help_dir / "anleitung.md").read_text(encoding="utf-8"))
+    assert len(imgs) >= 10
+    for i in imgs:
+        assert (help_dir / i).is_file(), f"Bild fehlt: {i}"

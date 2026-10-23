@@ -39,6 +39,10 @@ Klicke danach auf **Speichern**. Die Einstellungen gelten nur für diesen Rechne
 
 Wichtig zum Datenschutz: Aufnahmen verlassen deinen Rechner nur, wenn du ausdrücklich „ScaDS.AI Whisper“ als Transkription wählst. Die Einstellung „Automatisch“ nutzt nie das Netz.
 
+![Einstellungen mit Selbsttest](img/01-einstellungen.png)
+
+**Im Bild:** 1 Selbsttest (grün = in Ordnung, gelb = fehlt noch), 2 OneDrive-Stammordner wählen, 3 Namen eintragen, 4 speichern.
+
 ## 4. Eine Folge anlegen
 
 Links oben im Folgen-Menü **+ Neue Folge anlegen …**. Das Tool schlägt die nächste Nummer vor. Titel ist optional. Mit Enter bestätigst du.
@@ -48,6 +52,10 @@ Die **Übersicht** zeigt dir pro Folge:
 - vier Phasenkarten mit Häkchen, wenn die Phase erledigt ist,
 - Kennzahlen: geschätzte Gesamtlänge, Serienanteil (Ziel 34 %), Szenen mit zu langem Segment,
 - **Als Nächstes**: eine konkrete Liste, was noch fehlt (z. B. „3 Szenen ohne Serienmaterial“). Ein Klick springt direkt zur Stelle.
+
+![Übersicht einer Folge](img/02-uebersicht.png)
+
+**Im Bild:** 1 die vier Phasen, 2 Kennzahlen (Serienanteil), 3 „Als Nächstes“ mit Sprungzielen, 4 Aufgabenleiste für Hintergrundaufträge.
 
 ## 5. Quellen importieren
 
@@ -61,6 +69,10 @@ Ansicht **Quellen**.
 
 Zeiten werden als `mm:ss.zz` (Sekunden mit Hundertstel) eingegeben, z. B. `01:23.50`. `mm:ss:bb` meint Bilder.
 
+![Quellen-Ansicht](img/03-quellen.png)
+
+**Im Bild:** 1 Referenz importieren, 2 Rolle jeder Quelle, 3 Proxy für die schnelle Vorschau, 4 Ankerpunkte für die HQ-Fassung.
+
 ## 6. Strang-Board (optional, spart Zeit)
 
 Das Board schlägt aus der Referenz automatisch **Szenen** vor (Schnitt- und Tonpausen).
@@ -71,9 +83,17 @@ Das Board schlägt aus der Referenz automatisch **Szenen** vor (Schnitt- und Ton
 4. Pro Vorschlag: Zeiten anpassen, mit der Schere **teilen**, mit der Kette **mit dem nächsten verbinden**, mit × verwerfen.
 5. **Zugeordnete als Szenen anlegen** erzeugt die Szenen im Szenen-Editor.
 
+![Strang-Board mit Vorschlägen](img/04-board.png)
+
+**Im Bild:** 1 Stränge und ihre Reihenfolge, 2 Vorschlag mit Zeiten, Teilen, Verbinden und Verwerfen, 3 Vorschläge in einen Strang ziehen, 4 als Szenen anlegen.
+
 ## 7. Szenen schreiben (Szenen-Editor)
 
 Hier verbringt ihr die meiste Zeit. Links die Szenenliste, rechts die Szene.
+
+![Szenen-Editor](img/05-editor.png)
+
+**Im Bild:** 1 Suche und Filter, 2 Szenenliste mit Längenampel, 3 Player mit `I`/`O`, 4 Segmente, 5 Kommentarblöcke, 6 Speicherstatus.
 
 **Liste:** Suche nach Titel oder Text, Filter (Strang, Status, „ohne Segment“, „zu langes Segment“). Farbpunkt = **Längenampel** (grün passt, gelb knapp, rot zu lang; Grenze ist 9,5 s pro Segment). Per Maus lässt sich die Reihenfolge ändern, oder mit den Pfeilknöpfen neben dem Titel. Die Zahl links ist die Nummer in Word und Rohschnitt.
 
@@ -85,6 +105,10 @@ Hier verbringt ihr die meiste Zeit. Links die Szenenliste, rechts die Szene.
 - **Stichpunkte** – ein Punkt pro Zeile; wird frei ausformuliert gesprochen und später per Schlüsselwörtern zugeordnet. Danach lässt sich der gesprochene Text mit **Als Skript** übernehmen.
 
 **Bilder und Karten zuordnen:** Markiere im Text ein paar Wörter und klicke **Bild an Auswahl**. Wähle das Bild; es wird ab dieser Stelle eingeblendet (Layout: einzeln oder Doppelbild links/rechts). Über **Alle …** siehst du alle Zuordnungen eines Blocks.
+
+![Bild oder Karte zuordnen](img/06-bild-zuordnen.png)
+
+**Im Bild:** 1 Bild oder Karte wählen, 2 ab welchem Wort es erscheint, 3 bis wohin, 4 übernehmen.
 
 **Speichern:** automatisch. Neben dem Titel steht „Gespeichert 14:32:10“. `Strg+S` speichert sofort.
 
@@ -106,11 +130,25 @@ Für Sprecher, die lieber in Word lesen und schreiben.
 - **Rahmenteile**: Intro, Werbung, Outro mit **bekannter Dauer** eintragen. Der Rohschnitt reserviert dafür eine Lücke exakter Länge.
 - **Altformat importieren**: bestehende Skripte mit `[Szenen]` und `P:`/`D:`-Zeilen.
 
+![Word-Skript-Ansicht](img/07-word.png)
+
+**Im Bild:** 1 Export als Word, 2 bearbeitetes Word zurückspielen, 3 Rahmenteile mit fester Dauer.
+
 ## 9. Bilder und Karten
 
 **Bilder:** Bibliothek durchsuchen (Name, Titel, Stichwörter, Ordner), Klick fügt ein Bild zur Folge hinzu. Credit und Konturfarbe werden vorbelegt und sind änderbar. Mit **Aus Web holen** übernimmst du ein Bild von einer Adresse. Die **Künstler-Datenbank** ordnet Dateinamen einem Credit-Text zu; sie wächst mit und gilt für alle Folgen. **Bildindex aktualisieren** liest neue Dateien ein.
 
+![Bilder-Ansicht](img/08-bilder.png)
+
+**Im Bild:** 1 ein Bild der Folge (anklicken zum Bearbeiten), 2 Künstler-Datenbank, 3 Bibliothek durchsuchen.
+
 **Karten:** Karte aus der Bibliothek wählen, dann **Einzeichnen**: Marker, Text, Pfeil/Pfad, Region und Kamerarahmen (mehrere Rahmen = Kamerafahrt). Pro Element lässt sich der Einsatzzeitpunkt angeben. **Platzhalter rendern** erzeugt das Kartenblatt (Skizze + Hinweise) und einen Platzhalterclip für Danny.
+
+![Karten-Ansicht](img/09-karten.png)
+
+![Karten-Editor](img/10-karteneditor.png)
+
+**Im Bild (Editor):** 1 Werkzeug wählen, 2 Karte anklicken und zeichnen, 3 Elemente mit Einsatzzeitpunkt, Kamerarahmen und Hinweisen.
 
 ## 10. Aufnahme
 
@@ -119,6 +157,10 @@ Für Sprecher, die lieber in Word lesen und schreiben.
 3. Die Wellenform zeigt die zugeordneten Bereiche; Klick springt zur Stelle. `Leertaste`/`K` Pause, `J`/`L` springen zurück/vor.
 4. Pro Block siehst du die **Sicherheit** (Prozent). Mit „Nur unsichere Stellen“ und „Nächste unsichere“ prüfst du nur, was nötig ist. Bei mehreren Takes wählst du den passenden im Menü. Zeiten lassen sich nachtippen und mit dem Haken speichern.
 5. Spontan Ergänzendes wird blau angezeigt.
+
+![Aufnahme-Ansicht mit Wellenform](img/11-aufnahme.png)
+
+**Im Bild:** 1 Aufnahme je Sprecher hinzufügen, 2 Abgleich starten, 3 Wellenform (Farbflächen = zugeordnete Blöcke), 4 nur unsichere Stellen prüfen, 5 Sicherheit der Zuordnung.
 
 ## 11. Kontrolle und HQ-Austausch
 
@@ -129,6 +171,14 @@ Du arbeitest mit dem Screener; vor dem Render wird auf die HQ-Fassung getauscht,
 - **Szenenprüfung**: prüft Anfang und Ende jedes Segments automatisch.
 - **HQ-Conform**: erzeugt eine passend ausgerichtete HQ-Datei (ProRes oder DNxHR).
 
+![Kontrolle: Vergleich](img/12-kontrolle.png)
+
+**Im Bild:** 1 Zeitpunkt wählen, 2 links Referenz und rechts Quelle, 3 alle Szenen prüfen, 4 HQ-Conform.
+
+![Anker setzen](img/13-anker-setzen.png)
+
+**Im Bild:** 1 „Hier verknüpfen“ setzt den Anker, 2 Quelle folgt der Referenz, 3 zwei Player mit Bildschritt.
+
 ## 12. Rohschnitt erzeugen
 
 Ansicht **Rohschnitt** → **Rohschnitt erzeugen**. Optionen: nach Strängen sortieren, Standbilder erzeugen, Quelle für Standbilder.
@@ -138,13 +188,25 @@ Ansicht **Rohschnitt** → **Rohschnitt erzeugen**. Optionen: nach Strängen sor
 - **Warnungen** nennen genau, was fehlt (z. B. „noch keine Aufnahme zugeordnet“). **Zur Szene** springt direkt hin.
 - Das Premiere-Panel (Ordner `premiere-panel`) liest das Schnittpaket. Es ist ein Skelett und noch nicht getestet. Bis dahin importierst du die **Premiere-XML** (enthält Clips, Standbilder, Audio und Marker; Credits und Effekte müssen von Hand ergänzt werden).
 
+![Rohschnitt mit Vorschau und Warnungen](img/14-rohschnitt.png)
+
+**Im Bild:** 1 Rohschnitt erzeugen, 2 Vorschau aller Spuren, 3 Warnungen mit Sprung zur Szene.
+
 ## 13. Protokoll und Konflikte
 
 Ansicht **Protokoll**: wer hat wann was geändert. Haben zwei gleichzeitig dieselbe Szene bearbeitet, legt OneDrive eine Konfliktkopie an. Sie erscheint oben mit **Vergleichen & lösen**: beide Versionen nebeneinander, du behältst eine.
 
+![Protokoll](img/15-protokoll.png)
+
+**Im Bild:** 1 wer hat wann was geändert.
+
 ## 14. Aufgabenleiste
 
 Links unten **Aufgaben**: alle laufenden und letzten Hintergrundaufträge (Proxy, Abgleich, Rohschnitt …) mit Fortschritt, **Abbrechen** und Fehlerdetails zum Kopieren. Sie bleibt auch nach Seitenwechsel erhalten.
+
+![Aufgabenleiste](img/16-aufgaben.png)
+
+**Im Bild:** 1 laufende und letzte Aufträge, 2 Abbrechen oder Fehler kopieren.
 
 ## 15. Tastenkürzel
 

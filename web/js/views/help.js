@@ -25,6 +25,8 @@ export function parseSections(md) {
     if (/^\s*$/.test(line)) { flush(); brk = true; continue; }
     if (line.startsWith('- ')) { if (!list) { list = { type: 'ul', items: [] }; cur.blocks.push(list); } list.items.push(line.slice(2)); continue; }
     flush();
+    const im = line.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (im) { cur.blocks.push({ type: 'img', alt: im[1], src: im[2] }); continue; }
     if (/^\d+\.\s/.test(line)) { const last = cur.blocks.at(-1); if (last?.type === 'ol') last.items.push(line.replace(/^\d+\.\s/, '')); else cur.blocks.push({ type: 'ol', items: [line.replace(/^\d+\.\s/, '')] }); continue; }
     if (line.startsWith('**') && line.endsWith('**') && !line.slice(2, -2).includes('**')) { cur.blocks.push({ type: 'h', text: line.slice(2, -2) }); continue; }
     const last = cur.blocks.at(-1);
@@ -35,7 +37,8 @@ export function parseSections(md) {
   return sections;
 }
 
-const renderBlock = (b) => (b.type === 'ul' ? h('ul', {}, b.items.map((i) => h('li', {}, inline(i))))
+const zoom = (src, alt) => { const ov = h('div', { style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.86)', zIndex: 2000, display: 'grid', placeItems: 'center', cursor: 'zoom-out' }, onClick: () => ov.remove() }, h('img', { src, alt, style: { maxWidth: '96vw', maxHeight: '94vh', borderRadius: '8px' } })); document.body.append(ov); };
+const renderBlock = (b) => (b.type === 'img' ? h('figure', { class: 'help-fig' }, h('img', { src: `/static/help/${b.src}`, alt: b.alt, loading: 'lazy', title: 'Zum Vergrößern anklicken', onClick: () => zoom(`/static/help/${b.src}`, b.alt) }), h('figcaption', {}, b.alt)) : b.type === 'ul' ? h('ul', {}, b.items.map((i) => h('li', {}, inline(i))))
   : b.type === 'ol' ? h('ol', {}, b.items.map((i) => h('li', {}, inline(i))))
     : b.type === 'h' ? h('h3', { style: { margin: '14px 0 4px', textTransform: 'none', letterSpacing: 0, color: 'var(--text)', fontSize: '14px' } }, b.text)
       : h('p', {}, inline(b.text)));
@@ -46,7 +49,7 @@ export async function render(main) {
   const sections = parseSections(md);
   const body = h('div', { class: 'help-body' }), toc = h('div', { class: 'col gap-s' });
   const search = h('input', { type: 'search', placeholder: 'In der Anleitung suchen …', onInput: () => draw() });
-  const text = (s) => `${s.title} ${s.blocks.map((b) => (b.items ? b.items.join(' ') : b.text)).join(' ')}`.toLowerCase();
+  const text = (s) => `${s.title} ${s.blocks.map((b) => (b.items ? b.items.join(' ') : b.text || b.alt || '')).join(' ')}`.toLowerCase();
   function draw() {
     const q = search.value.trim().toLowerCase();
     const shown = sections.filter((s) => !q || text(s).includes(q));
@@ -54,7 +57,7 @@ export async function render(main) {
     body.replaceChildren(...(shown.length ? shown.map((s) => h('section', { id: `help-${s.id}`, class: 'card', style: { marginBottom: '14px', scrollMarginTop: '12px' } }, h('h2', { style: { marginBottom: '8px' } }, s.title), s.blocks.map(renderBlock))) : [h('p', { class: 'help' }, md ? 'Nichts gefunden.' : 'Die Anleitung konnte nicht geladen werden.')]));
   }
   draw();
-  main.append(h('div', { class: 'page', style: { maxWidth: '1100px' } },
+  main.append(h('div', { class: 'page', style: { maxWidth: '1320px' } },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Hilfe'), h('p', {}, 'Schritt-für-Schritt-Anleitung vom Import bis zum Rohschnitt.'))),
     h('div', { class: 'grid', style: { gridTemplateColumns: '240px minmax(0, 1fr)', alignItems: 'start' } },
       h('div', { class: 'card', style: { position: 'sticky', top: '12px', maxHeight: '85vh', overflow: 'auto' } }, search, h('div', { style: { height: '8px' } }), toc), body)));

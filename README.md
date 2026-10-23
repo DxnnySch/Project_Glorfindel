@@ -20,3 +20,8 @@ Eine ausführliche Schritt-für-Schritt-Anleitung steht in der Anwendung unter *
 
 ## Entwicklung
 `uv venv .venv && uv pip install -e ".[dev]"`, Tests: `.venv/bin/python -m pytest -q` (benötigt ffmpeg). Maßgebliche Spezifikation: `Projektheft Folgenbesprechungs-Tool.md`; Arbeitsstand: `STATUS.md`.
+
+### Hilfe-Screenshots neu erzeugen
+Die annotierten Bilder der Anleitung (`web/help/img`) entstehen reproduzierbar aus einer Demo-Folge:
+`python scripts/seed_demo.py <Ordner> 8790 --serve` (Demo-Daten mit synthetischen Medien), dann
+`python scripts/make_help_screenshots.py http://127.0.0.1:8790 <Ordner>` (benötigt Playwright/Chromium).
