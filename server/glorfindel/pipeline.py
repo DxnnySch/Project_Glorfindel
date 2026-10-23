@@ -18,7 +18,10 @@ STILL_SIZE = (1920, 800)
 # ---------- Reihenfolge ----------
 def ordered_scenes(ep: Episode, by_strand: bool = True) -> list[Scene]:
     scenes = ep.scenes()
-    return sort_scenes(scenes, ep.strands()) if by_strand else scenes
+    if not by_strand:
+        return scenes
+    from .scenes import apply_ablauf
+    return apply_ablauf(sort_scenes(scenes, ep.strands()), ep.project().ablauf)
 
 
 # ---------- Assets / Karten (JSON je Eintrag) ----------
@@ -230,11 +233,14 @@ def adopt_spoken_text(ep: Episode, scene_id: str, block: int) -> Scene:
 # ---------- Standbilder ----------
 def still_times(scenes: list[Scene]) -> dict[str, float]:
     """Dateiname -> Episodenzeit des Standbild-Frames (letzter Frame bzw. erster, je Szene)."""
+    from .scenes import still_plan
     out = {}
-    for n, sc in enumerate(scenes, 1):
-        if sc.standbild == "aus" or not sc.segmente:
-            continue
-        out[f"{n}.png"] = sc.segmente[-1].out if sc.standbild == "ende" else sc.segmente[0].in_
+    k = 0
+    for sc in scenes:
+        for si in still_plan(sc):
+            k += 1
+            seg = sc.segmente[si]
+            out[f"{k}.png"] = seg.out if sc.standbild == "ende" else seg.in_
     return out
 
 

@@ -195,7 +195,7 @@ def pick_whisper_model(setting: str = "auto") -> tuple[str, str, str]:
     return "small", "cpu", "int8"
 
 
-def transcribe(path: Path, model_name: str = "auto", language: str = "de", glossary: str = TOLKIEN_GLOSSARY,
+def transcribe(path: Path, model_name: str = "auto", language: str | None = "de", glossary: str = TOLKIEN_GLOSSARY,
                progress_cb=None) -> list[dict]:
     """Wort-Zeitstempel via faster-whisper (optional installiert)."""
     try:
@@ -211,7 +211,7 @@ def transcribe(path: Path, model_name: str = "auto", language: str = "de", gloss
                            "-f", "f32le", "-"])
     audio = np.frombuffer(raw, dtype=np.float32)
     segments, info = model.transcribe(audio, language=language, word_timestamps=True,
-                                      initial_prompt=glossary, vad_filter=True, beam_size=5)
+                                      initial_prompt=glossary or None, vad_filter=True, beam_size=5)
     words = []
     for seg in segments:
         for w in seg.words or []:

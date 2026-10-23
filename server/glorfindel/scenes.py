@@ -18,6 +18,22 @@ def segment_light(duration: float, th: Thresholds) -> Light:
     return "gruen"
 
 
+def segment_of(block: CommentBlock, scene: Scene) -> int:
+    """Index des Segments, zu dem ein Kommentarblock gehört (Standard: letztes Segment, ohne Segmente 0)."""
+    n = len(scene.segmente)
+    if n == 0:
+        return 0
+    return block.segment if block.segment is not None and 0 <= block.segment < n else n - 1
+
+
+def still_plan(scene: Scene) -> list[int]:
+    """Segmente, nach denen ein Standbild folgt: alle mit Kommentar plus das letzte Segment (wenn Standbild nicht „aus“)."""
+    if scene.standbild == "aus" or not scene.segmente:
+        return []
+    with_comment = {segment_of(b, scene) for b in scene.kommentar}
+    return sorted(with_comment | {len(scene.segmente) - 1})
+
+
 def scene_series_duration(scene: Scene) -> float:
     return sum(s.duration for s in scene.segmente)
 
@@ -99,6 +115,16 @@ def validate_segments(scene: Scene, max_t: float = 0.0) -> list[str]:
         if s.in_ < 0:
             problems.append(f"Segment {i + 1}: negative Zeit")
     return problems
+
+
+def apply_ablauf(sorted_scenes: list[Scene], ablauf: list[str]) -> list[Scene]:
+    """Manuelle Reihenfolge anwenden; unbekannte/neue Szenen behalten ihre automatische Position hinten."""
+    if not ablauf:
+        return sorted_scenes
+    by_id = {s.id: s for s in sorted_scenes}
+    first = [by_id[i] for i in ablauf if i in by_id]
+    rest = [s for s in sorted_scenes if s.id not in set(ablauf)]
+    return first + rest
 
 
 def sort_scenes(scenes: list[Scene], strands: list[Strand]) -> list[Scene]:

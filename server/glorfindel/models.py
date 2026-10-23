@@ -15,6 +15,7 @@ SourceRole = Literal["referenz", "screener", "hq", "screencapture"]
 class Segment(BaseModel):
     in_: float = Field(alias="in")
     out: float
+    notiz: str = ""  # eigener Kontext zusätzlich zum automatischen Dialog
     model_config = {"populate_by_name": True}
 
     @property
@@ -43,6 +44,7 @@ class CommentBlock(BaseModel):
     stichpunkte: list[str] = Field(default_factory=list)
     gesprochen: str = ""  # nach dem Abgleich: tatsächlich gesprochener Text (Transkript)
     anker: list[AssetRef] = Field(default_factory=list)
+    segment: Optional[int] = None  # Index des Segments, zu dem der Kommentar gehört; None = letztes Segment
 
 
 class Scene(BaseModel):
@@ -52,6 +54,7 @@ class Scene(BaseModel):
     reihenfolge: int = 0
     titel: str = ""
     segmente: list[Segment] = Field(default_factory=list)
+    bereich: Optional[list[float]] = None  # [Start, Ende] der Szene in der Referenz (Board)
     standbild: Literal["ende", "start", "aus"] = "ende"
     kommentar: list[CommentBlock] = Field(default_factory=list)
     fixiert: bool = False  # "dramaturgisch fixieren"
@@ -89,3 +92,5 @@ class Project(BaseModel):
     title: str = ""
     fps: float = 23.976
     reference_source: str = ""
+    ablauf: list[str] = Field(default_factory=list)  # manuelle Gesamtreihenfolge der Szenen (leer = nach Strängen)
+    dialog_sprache: str = "auto"

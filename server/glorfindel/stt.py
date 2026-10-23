@@ -45,16 +45,16 @@ def parse_verbose(resp, offset: float) -> list[dict]:
     return [w for w in out if w["w"]]
 
 
-def transcribe_remote(path: Path, client, model: str = REMOTE_MODEL, language: str = "de",
+def transcribe_remote(path: Path, client, model: str = REMOTE_MODEL, language: str | None = "de",
                       glossary: str = align.TOLKIEN_GLOSSARY, progress_cb=None) -> list[dict]:
     words: list[dict] = []
     with tempfile.TemporaryDirectory() as td:
         chunks = split_audio(path, Path(td))
         for k, (f, offset) in enumerate(chunks):
             with open(f, "rb") as fh:
+                kw = {k: v for k, v in (("language", language), ("prompt", glossary or None)) if v}
                 resp = client.audio.transcriptions.create(
-                    model=model, file=fh, language=language, prompt=glossary,
-                    response_format="verbose_json", timestamp_granularities=["word"])
+                    model=model, file=fh, response_format="verbose_json", timestamp_granularities=["word"], **kw)
             words += parse_verbose(resp, offset)
             if progress_cb:
                 progress_cb((k + 1) / len(chunks))

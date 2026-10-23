@@ -182,14 +182,15 @@ class SceneFromRange(BaseModel):
     end: float
     strang: str = ""
     titel: str = ""
+    mit_segment: bool = False  # Standard (Segment-Workflow): Szene ohne Segment, Bereich merken – Segmente markiert man selbst
 
 
 @router.post("/ep/{season}/{episode}/board/create-scenes")
 def board_create(body: list[SceneFromRange], ep: Episode = Depends(ep_of)):
     out = []
     for b in body:
-        sc = ep.create_scene(strang=b.strang, titel=b.titel,
-                             segmente=[{"in": b.start, "out": min(b.end, b.start + 9.5)}])
+        sc = ep.create_scene(strang=b.strang, titel=b.titel, bereich=[b.start, b.end],
+                             segmente=[{"in": b.start, "out": min(b.end, b.start + 9.5)}] if b.mit_segment else [])
         out.append(sc.id)
     return {"created": out}
 
@@ -439,3 +440,63 @@ def choose_take(body: TakeBody, ep: Episode = Depends(ep_of)):
     entry.pop("missing", None)
     pipeline.save_alignment(ep, data)
     return entry
+
+
+# ---------- Dialog der Episode ----------
+@router.get("/ep/{season}/{episode}/dialog")
+def get_dialog(ep: Episode = Depends(ep_of)):
+    from . import dialog
+    d = dialog.load(ep)
+    return {**d, "available": bool(d.get("words"))}
+
+
+@router.post("/ep/{season}/{episode}/dialog/transcribe")
+def transcribe_dialog(sprache: str = "auto", ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    from . import dialog
+    pr = ep.project()
+    pr.dialog_sprache = sprache
+    ep.save_project(pr)
+    return {"job": state.jobs.submit("Dialog der Episode transkribieren", lambda progress: dialog.transcribe(ep, state.llm(), sprache, progress))}
+
+
+@router.put("/ep/{season}/{episode}/dialog")
+def put_dialog(body: dict, ep: Episode = Depends(ep_of)):
+    """Transkript von Hand ersetzen/importieren (z. B. aus einer anderen Quelle): {words:[{w,start,end}]}."""
+    from . import dialog
+    words = body.get("words")
+    if not isinstance(words, list) or not all(isinstance(w, dict) and {"w", "start", "end"} <= set(w) for w in words):
+        raise HTTPException(400, "words: Liste mit w, start, end erwartet")
+    store.write_json(dialog.path(ep), {"sprache": body.get("sprache", ""), "quelle": body.get("quelle", ""), "words": words})
+    return {"ok": True, "words": len(words)}
+
+
+# ---------- Reihenfolge (Ablauf) ----------
+class AblaufBody(BaseModel):
+    order: list[str] | None = None   # None/[] = automatisch nach Strängen
+
+
+@router.put("/ep/{season}/{episode}/ablauf")
+def put_ablauf(body: AblaufBody, ep: Episode = Depends(ep_of)):
+    ids = {s.id for s in ep.scenes()}
+    order = [i for i in (body.order or []) if i in ids]
+    pr = ep.project()
+    pr.ablauf = order
+    ep.save_project(pr)
+    store.log_change(ep.p.gl, ep.settings.user, "Reihenfolge angepasst" if order else "Reihenfolge: automatisch nach Strängen")
+    return {"ok": True, "n": len(order)}
+
+
+# ---------- Sprecherskript ----------
+@router.get("/ep/{season}/{episode}/script-speaker.docx")
+def export_speaker_script(speaker: str | None = None, regie: bool = True, by_strand: bool = True,
+                          ep: Episode = Depends(ep_of)):
+    """Reines Vorlese-Dokument: Regieanweisungen, Kommentartext, Bild-/Kartenhinweise als Randnotiz."""
+    from . import dialog
+    scenes = pipeline.ordered_scenes(ep, by_strand)
+    words = dialog.load(ep).get("words", [])
+    labels = {a["id"]: (a.get("title") or Path(a.get("path", "")).stem) for a in pipeline.load_assets(ep).values()}
+    labels.update({m["id"]: m.get("titel", "") for m in pipeline.load_maps(ep).values()})
+    out = ep.p.base / f"Sprecherskript {ep.p.slug}{'' if not speaker else ' ' + speaker}.docx"
+    script_docx.export_speaker_docx(scenes, out, title=f"{ep.p.slug} – {ep.project().title}".strip(" –"), speaker=speaker, labels=labels,
+                                    free_blocks=ep.free_blocks(), dialog_of=(lambda a, b: dialog.text_between(words, a, b)) if words else None, regie=regie)
+    return FileResponse(out, filename=out.name, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")

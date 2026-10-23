@@ -68,17 +68,38 @@ def keywords(state: AppState = Depends(st)):
 
 @router.get("/images/thumb")
 def image_thumb(path: str, state: AppState = Depends(st)):
+    import hashlib
+
+    from PIL import Image, ImageDraw
     root = Path(state.settings.onedrive_root)
     src = _safe_under(root, path)
     if not src.exists():
         raise HTTPException(404)
-    dst = app_dir() / "thumbs" / (str(abs(hash(path))) + ".jpg")
+    key = hashlib.sha1(f"{path}|{src.stat().st_mtime_ns}".encode()).hexdigest()[:20]
+    dst = app_dir() / "thumbs" / f"{key}.jpg"
     if not dst.exists():
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if src.suffix.lower() in images.VIDEO_EXT:
-            media.extract_frame(src, 0.5, dst, width=320)
-        else:
-            maps.thumbnail(src, dst, 320)
+        try:
+            if src.suffix.lower() in images.VIDEO_EXT:
+                # animierte Bilder (.mov mit Alpha o. ä.): Frame aus der Mitte, transparent -> dunkler Grund
+                try:
+                    dur = media.probe(src)["duration"]
+                except Exception:  # noqa: BLE001
+                    dur = 1.0
+                tmp = dst.with_suffix(".png")
+                media.extract_frame(src, max(0.1, dur * 0.4), tmp, width=320)
+                with Image.open(tmp) as im:
+                    im = im.convert("RGBA")
+                    bg = Image.new("RGBA", im.size, (44, 50, 62, 255))
+                    bg.alpha_composite(im)
+                    bg.convert("RGB").save(dst, "JPEG", quality=82)
+                tmp.unlink(missing_ok=True)
+            else:
+                maps.thumbnail(src, dst, 320)
+        except Exception:  # noqa: BLE001
+            im = Image.new("RGB", (320, 240), (44, 50, 62))
+            ImageDraw.Draw(im).text((12, 12), "Vorschau nicht verfügbar", fill=(200, 200, 210))
+            im.save(dst, "JPEG")
     return FileResponse(dst)
 
 
@@ -162,7 +183,8 @@ def map_thumb(path: str, state: AppState = Depends(st)):
     src = _safe_under(root, path)
     if not src.exists():
         raise HTTPException(404)
-    dst = app_dir() / "thumbs" / ("m" + str(abs(hash(path))) + ".jpg")
+    import hashlib
+    dst = app_dir() / "thumbs" / ("m" + hashlib.sha1(f"{path}|{src.stat().st_mtime_ns}".encode()).hexdigest()[:20] + ".jpg")
     return FileResponse(maps.thumbnail(src, dst, 600))
 
 
@@ -318,3 +340,14 @@ def delete_map(mid: str, ep: Episode = Depends(ep_of)):
         raise HTTPException(409, f"Wird noch verwendet in: {', '.join(sorted(set(users)))}")
     f.unlink()
     return {"ok": True}
+
+
+@router.get("/ep/{season}/{episode}/maps/{mid}/clip")
+def map_clip(mid: str, ep: Episode = Depends(ep_of)):
+    m = pipeline.load_maps(ep).get(mid)
+    if not m or not m.get("placeholder_clip"):
+        raise HTTPException(404, "Platzhalter-Clip noch nicht erzeugt (Platzhalter rendern)")
+    f = _safe_under(ep.p.root, m["placeholder_clip"])
+    if not f.exists():
+        raise HTTPException(404, "Clip fehlt")
+    return FileResponse(f, media_type="video/mp4", headers={"Cache-Control": "no-store"})

@@ -12,7 +12,7 @@ from typing import Any
 
 from .config import Thresholds
 from .models import CommentBlock, Scene
-from .scenes import segment_light, speech_duration
+from .scenes import segment_of, still_plan, segment_light, speech_duration
 
 DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "vorlagen" / "rohschnitt_vorlage.json"
 
@@ -118,30 +118,15 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
             t += dur
 
     place_free(None)
-    for n, sc in enumerate(scenes, 1):
-        still_name = (still_names or {}).get(sc.id, f"{n}.png")
-        # ---- Serienmaterial ----
-        s_start = t
-        if not sc.segmente:
-            tl.warnings.append(f"{sc.titel or sc.id}: noch kein Serienmaterial (Segment) gesetzt")
-        tl.mark(t, f"Szene {n:02d}: {sc.titel or sc.id}" + (f" [{sc.strang}]" if sc.strang else ""))
-        for i, seg in enumerate(sc.segmente):
-            if segment_light(seg.duration, th) == "rot":
-                tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Segment {i + 1} ist {seg.duration:.1f} s lang (> {th.max_segment_s} s)")
-            dur = seg.duration
-            tl.add(tr["series_video"], "scene_segment", t, t + dur, scene=sc.id, src="episode",
-                   src_in=seg.in_, src_out=seg.out)
-            tl.add(tr["series_audio"], "scene_audio", t, t + dur, scene=sc.id, src="episode",
-                   src_in=seg.in_, src_out=seg.out,
-                   effects=[{"recipe": "const_power", "edge": "both", "duration": tm["audio_crossfade"]}])
-            t += dur
-        series_end = t
+    still_k = 0
 
-        # ---- Kommentar: Blöcke nacheinander, Zeiten relativ zum Standbild ----
+    def place_still(sc, n, still_name, blocks, last_of_scene, amazon_clip):
+        """Standbild nach einem Segment: Pause-Animation, Kommentarblöcke dieses Segments, Artworks/Karten."""
+        nonlocal t
         sc_align = align_scenes.get(sc.id, [])
         offset = tm["comment_lead_in"]
-        timings = []   # (block_idx, block, start_offset, dur, word_starts)
-        for bi, block in enumerate(sc.kommentar):
+        timings = []   # (block_idx, block, start_offset, dur, word_starts, alignment)
+        for bi, block in blocks:
             if speaker_filter and block.sprecher not in speaker_filter:
                 continue
             al = next((a for a in sc_align if a.get("block") == bi), None)
@@ -151,21 +136,10 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
             timings.append((bi, block, offset, dur, starts, al))
             offset += dur + tm["block_gap"]
         comment_len = (offset - tm["block_gap"] + tm["comment_tail"]) if timings else 0.0
-        if sc.standbild == "aus":
-            still_len = 0.0
-        else:
-            still_len = max(tm["min_still"], comment_len)
+        still_len = max(tm["min_still"], comment_len)
         still_start, still_end = t, t + still_len
-
-        still_clip = None
-        if still_len:
-            still_clip = tl.add(tr["series_video"], "still", still_start, still_end, scene=sc.id, file=f"Videoelemente/{still_name}")
-            # Pause-Animation vor dem Standbild
-            tl.add(tr["anim"], "anim", still_start - tm["pause_lead"], still_start - tm["pause_lead"] + tm["anim_len"],
-                   name="Pause", scene=sc.id)
-        amazon_clip = tl.add(tr["credit_amazon"], "credit", s_start, still_end if still_len else series_end,
-               slot="credit_amazon", text="© amazon studios", scene=sc.id)
-
+        still_clip = tl.add(tr["series_video"], "still", still_start, still_end, scene=sc.id, file=f"Videoelemente/{still_name}" if still_name else "")
+        tl.add(tr["anim"], "anim", still_start - tm["pause_lead"], still_start - tm["pause_lead"] + tm["anim_len"], name="Pause", scene=sc.id)
         art_end_all = still_start
         for bi, block, off, dur, starts, al in timings:
             track = tr["speaker_audio"][block.sprecher]
@@ -233,14 +207,46 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                     tl.add(tr["blur"], "blur", bin_end, a_end, scene=sc.id, effects=[{"recipe": "gauss_const"}])
                 art_end_all = max(art_end_all, a_end)
         # Standbild muss alle Artworks tragen
-        if still_len and art_end_all > still_end:
+        if art_end_all > still_end:
             extra = art_end_all - still_end
-            still_clip["end"] = amazon_clip["end"] = tl.snap(art_end_all)
+            still_clip["end"] = tl.snap(art_end_all)
             still_end = tl.snap(art_end_all)
             tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Standbild um {extra:.1f} s verlängert (Artwork ragte über)")
         t = still_end
+        amazon_clip["end"] = max(amazon_clip["end"], still_end)
+        return still_end
+
+    for n, sc in enumerate(scenes, 1):
+        # ---- Serienmaterial ----
+        s_start = t
+        if not sc.segmente:
+            tl.warnings.append(f"{sc.titel or sc.id}: noch kein Serienmaterial (Segment) gesetzt")
+        tl.mark(t, f"Szene {n:02d}: {sc.titel or sc.id}" + (f" [{sc.strang}]" if sc.strang else ""))
+        amazon_clip = tl.add(tr["credit_amazon"], "credit", s_start, s_start, slot="credit_amazon", text="© amazon studios", scene=sc.id)
+        plan = set(still_plan(sc))
+        by_seg: dict[int, list] = {}
+        for bi, block in enumerate(sc.kommentar):
+            by_seg.setdefault(segment_of(block, sc), []).append((bi, block))
+        last_still = False
+        for i, seg in enumerate(sc.segmente):
+            if segment_light(seg.duration, th) == "rot":
+                tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Segment {i + 1} ist {seg.duration:.1f} s lang (> {th.max_segment_s} s)")
+            dur = seg.duration
+            tl.add(tr["series_video"], "scene_segment", t, t + dur, scene=sc.id, src="episode",
+                   src_in=seg.in_, src_out=seg.out, **({"note": seg.notiz} if seg.notiz else {}))
+            tl.add(tr["series_audio"], "scene_audio", t, t + dur, scene=sc.id, src="episode",
+                   src_in=seg.in_, src_out=seg.out,
+                   effects=[{"recipe": "const_power", "edge": "both", "duration": tm["audio_crossfade"]}])
+            t += dur
+            amazon_clip["end"] = t
+            if i in plan:
+                still_k += 1
+                last_still = place_still(sc, n, f"{still_k}.png", by_seg.get(i, []), i == len(sc.segmente) - 1, amazon_clip) is not None
+        if not sc.segmente and sc.standbild != "aus":      # Szene ohne Material: Platzhalter-Standbild für Kommentare
+            place_still(sc, n, "", by_seg.get(0, []), True, amazon_clip)
+            last_still = True
         # Play-Animation vor der nächsten Szene
-        if n < len(scenes) and still_len:
+        if n < len(scenes) and last_still:
             tl.add(tr["anim"], "anim", t - tm["play_lead"], t - tm["play_lead"] + tm["anim_len"], name="Play", scene=sc.id)
         place_free(sc.id)
 

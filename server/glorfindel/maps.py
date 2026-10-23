@@ -62,6 +62,17 @@ def _ease(x: float) -> float:
     return x * x * (3 - 2 * x)
 
 
+def _el_color(el: dict) -> tuple[int, int, int]:
+    """Farbe eines Elements: eigene `farbe` (#rrggbb) oder Standard je Typ."""
+    f = str(el.get("farbe") or "").lstrip("#")
+    if len(f) == 6:
+        try:
+            return int(f[0:2], 16), int(f[2:4], 16), int(f[4:6], 16)
+        except ValueError:
+            pass
+    return COLORS.get(el.get("typ"), (255, 255, 255))
+
+
 def camera_rect(m: dict, t: float) -> list[float]:
     """Kamerarahmen zur Zeit t: Keyframes weich interpoliert; ohne Keyframes das ganze Bild."""
     kfs = sorted(m.get("kamera", []), key=lambda k: k["t"])
@@ -111,7 +122,7 @@ def draw_elements(im: Image.Image, m: dict, t: float | None = None, scale: float
         if t is not None and t < t0:
             continue
         alpha = 255 if t is None else int(255 * _ease((t - t0) / 0.4))
-        typ, col = el["typ"], COLORS.get(el["typ"], (255, 255, 255))
+        typ, col = el["typ"], _el_color(el)
         if typ == "marker":
             x, y = px((el["x"], el["y"]))
             r = max(6, int(10 * scale))
