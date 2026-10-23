@@ -180,20 +180,26 @@ Ausgewählt wird direkt im Kommentar (Kapitel 7). Die Ansichten **Bilder** und *
 
 ## 12. Kontrolle und HQ-Austausch
 
-Du arbeitest mit dem Screener; vor dem Render wird auf die HQ-Fassung getauscht, ohne dass Feinschnitt verloren geht.
+Du arbeitest mit dem Screener; vor dem Render wird auf die HQ-Fassung getauscht, ohne dass Feinschnitt verloren geht. Die Kontrolle richtet beide Fassungen zeitlich aus (**Anker**) und läuft komplett im Browser: Beim Verschieben wird nichts auf dem Server gerechnet.
 
-- **Anker setzen**: Beide Player auf dasselbe Bild stellen (Bildschritt, ±1 s, ±10 s), **Hier verknüpfen**. Setze einen Anker am Anfang und einen am Ende, bei Werbepausen o. ä. weitere dazwischen. **Quelle auf Referenzzeit springen** hilft beim Finden.
-- **Vergleich**: Schieberegler wählt einen Zeitpunkt; links Referenz, rechts Quelle, oder die Differenz. Die Übereinstimmung zeigt, ob die Zeitabbildung stimmt.
-- **Szenenprüfung**: prüft Anfang und Ende jedes Segments automatisch.
-- **HQ-Conform**: erzeugt eine passend ausgerichtete HQ-Datei (ProRes oder DNxHR).
+**So setzt du einen Anker:**
+1. **Zeit in der Referenz** wählen (Schieberegler, Zeitfeld oder ◀▶-Tasten). Die Quelle springt automatisch auf die Stelle, die die bisherigen Anker vorhersagen.
+2. Die **Quelle nachjustieren**, bis dasselbe Bild zu sehen ist: Bild für Bild (`←`/`→`, mit Umschalt 10), ±1 s, ±10 s. Die **Übereinstimmung** (live berechnet) zeigt, wie gut beide Bilder passen.
+3. Ansicht umschalten: **Nebeneinander**, **Überblendung** oder **Differenz** (schwarz = gleich).
+4. **Hier verknüpfen** (oder `Enter`).
+
+Setze einen Anker am Anfang und einen am Ende, bei Werbepausen o. ä. weitere dazwischen. Grüne Marken am Regler zeigen gesetzte Anker, „Hin“ in der Liste springt zu ihnen. **Beide abspielen** (`Leertaste`) lässt die Quelle der Referenz folgen.
 
 ![Kontrolle: Vergleich](img/12-kontrolle.png)
 
-**Im Bild:** 1 Zeitpunkt wählen, 2 links Referenz und rechts Quelle, 3 alle Szenen prüfen, 4 HQ-Conform.
+**Im Bild:** 1 Zeit in der Referenz, 2 beide Videos, 3 Darstellung, 4 Live-Übereinstimmung, 5 HQ-Conform.
 
 ![Anker setzen](img/13-anker-setzen.png)
 
-**Im Bild:** 1 „Hier verknüpfen“ setzt den Anker, 2 Quelle folgt der Referenz, 3 zwei Player mit Bildschritt.
+**Im Bild:** 1 Quelle nachjustieren, 2 Anker setzen, 3 gesetzte Anker.
+
+- **Szenenprüfung:** prüft Anfang und Ende jedes Segments automatisch (läuft als Hintergrundaufgabe).
+- **HQ-Conform:** erzeugt eine passend ausgerichtete HQ-Datei (ProRes oder DNxHR).
 
 ## 13. Rohschnitt erzeugen
 

@@ -177,19 +177,21 @@ with sync_playwright() as p:
         dict(sel="text:Nur unsichere", text="Nur unsichere Stellen prüfen", at=[640, 380], w=210),
         dict(sel=".pill", nth=0, text="Sicherheit der Zuordnung", at=[800, 540], w=170)])
     go("compare")
-    pg.wait_for_timeout(1500)
-    pg.evaluate("const r=document.querySelector('input[type=range]'); r.value=12; r.dispatchEvent(new Event('input'))")
     pg.wait_for_timeout(2500)
+    pg.evaluate("const r=document.querySelector('.cmp-slider'); r.value=12; r.dispatchEvent(new Event('input'))")
+    pg.wait_for_timeout(1500)
     shot(pg, "12-kontrolle", [
-        dict(sel="input[type=range]", text="Zeitpunkt wählen", at=[640, 100], w=140),
-        dict(sel=".dual", nth=0, text="Links Referenz, rechts Quelle über die Zeitabbildung", at=[520, 520], w=330),
-        dict(sel="text:Alle prüfen", text="Alle Szenen automatisch prüfen", at=[1000, 560], w=260),
-        dict(sel="text:HQ-Conform", text="HQ-Datei erzeugen", at=[1270, 100], w=140)])
-    pg.evaluate("document.querySelector('#main').scrollTo(0, 99999)")
+        dict(sel=".cmp-slider", text="Zeit in der Referenz wählen (grüne Marken = gesetzte Anker)", at=[560, 120], w=300),
+        dict(sel=".cmp-view", text="Links Referenz, rechts Quelle – flüssig, ohne Server-Rechnerei", at=[560, 540], w=300),
+        dict(sel=".seg", nth=0, text="Nebeneinander, Überblendung oder Differenz", at=[980, 214], w=200),
+        dict(sel=".pill", nth=0, text="Live-Übereinstimmung", at=[1200, 214], w=190),
+        dict(sel="text:HQ-Conform", text="HQ-Datei erzeugen", at=[1280, 135], w=120)])
+    pg.evaluate("document.querySelector('#main').scrollTo(0, 400)")
     shot(pg, "13-anker-setzen", [
-        dict(sel="text:Hier verknüpfen", text="Gleiches Bild? Dann Anker setzen", at=[980, 70], w=250),
-        dict(sel="text:Quelle auf Referenzzeit", text="Quelle automatisch mitführen", at=[560, 70], w=240),
-        dict(sel=".dual", nth=1, text="Zwei Player mit Bildschritt und Sprüngen", at=[620, 560], w=260)], wait=500)
+        dict(sel=".card .row.wrap.gap-s", nth=0, text="Quelle auf dasselbe Bild nachjustieren (Bild für Bild)", at=[760, 400], w=300),
+        dict(sel="text:Hier verknüpfen", text="Gleiches Bild? Dann Anker setzen (Enter)", at=[760, 560], w=300),
+        dict(sel="text:Gesetzte Anker", up=".card", text="Gesetzte Anker – Hin springt dorthin", at=[560, 800], w=300)], wait=500)
+    pg.evaluate("document.querySelector('#main').scrollTo(0, 0)")
     pg.set_viewport_size({"width": 1440, "height": 1040})
     go("cut")
     pg.wait_for_timeout(1200)
