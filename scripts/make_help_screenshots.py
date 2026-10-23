@@ -116,33 +116,42 @@ with sync_playwright() as p:
         dict(sel="text:Proxy", nth=0, text="Proxy = schnelle Vorschau", at=[1000, 330], w=200),
         dict(sel="text:Anker", nth=0, text="Ankerpunkte für HQ/Screener", at=[1150, 270], w=230)])
     go("board")
+    pg.wait_for_timeout(600)
+    pg.locator(".shot").nth(0).click()
+    pg.locator(".shot").nth(1).click(modifiers=["Shift"])
     shot(pg, "04-board", [
         dict(sel="text:Stränge", text="Stränge und ihre Reihenfolge festlegen", at=[560, 16], w=300),
-        dict(sel=".shot", nth=0, text="Zeiten ändern · teilen · verbinden", at=[560, 640], w=250),
-        dict(sel=".lane", nth=1, text="Vorschläge mit der Maus in einen Strang ziehen", at=[700, 770], w=300),
+        dict(sel=".board-bar", text="Mehrere Vorschläge wählen (Strg/Umschalt) und mit einem Klick einem Strang zuordnen", at=[600, 476], w=420),
+        dict(sel=".shot.selected", nth=0, text="Ausgewählt · Doppelklick oder ▶ spielt die Szene ab", at=[560, 620], w=290),
         dict(sel="text:Zugeordnete", text="Als Szenen anlegen", at=[1210, 448], w=190)])
     go("editor")
-    pg.wait_for_timeout(1500)
+    pg.wait_for_timeout(1800)
+    pg.evaluate("document.querySelector('.scene-item')?.click()")
     shot(pg, "05-editor", [
         dict(sel=".scene-list-head", text="Suchen und filtern", at=[250, 520], w=200),
-        dict(sel=".scene-item", nth=0, text="Szenenliste: Ampel, Strang, Status – Ziehen sortiert", at=[250, 580], w=270),
-        dict(sel=".player", text="Player: I und O setzen Anfang/Ende des Segments", at=[1010, 70], w=290),
-        dict(sel=".seg-row", nth=0, text="Segmente mit Längenampel", at=[600, 700], w=210),
-        dict(sel=".block", nth=0, text="Kommentarblock: Sprecher, Text oder Stichpunkte", at=[1000, 640], w=300),
-        dict(sel=".savestate", text="Speichert automatisch", at=[880, 120], w=150)])
-    pg.evaluate("const ta=document.querySelector('.block textarea'); ta.focus(); ta.setSelectionRange(24, 40)")
-    pg.click("text=Bild an Auswahl >> nth=0")
+        dict(sel=".si-meta", nth=0, text="Auf einen Blick: Segmente, Kommentare, Bilder", at=[250, 600], w=260),
+        dict(sel=".tl2", text="Zeitleiste: Szenenbereich, Segmente, Kommentarmarken", at=[600, 104], w=330),
+        dict(sel=".dlg-card", text="Dialog der Episode: Wörter ziehen = Stelle markieren", at=[570, 700], w=330),
+        dict(sel=".seg-card", nth=0, text="Segment mit Dialog, Notiz und Kommentaren", at=[1040, 740], w=300),
+        dict(sel=".playseg, .seg-card .btn.primary", nth=0, text="Segment abspielen", at=[1010, 100], w=150)])
+    pg.evaluate("const ta=document.querySelector('.seg-card .mt-ta'); ta.focus(); ta.setSelectionRange(24, 44)")
+    pg.click("text=Bild / Karte einblenden >> nth=0")
     shot(pg, "06-bild-zuordnen", [
-        dict(sel=".modal select", nth=0, text="Bild oder Karte wählen", at=[440, 188], w=190),
-        dict(sel=".modal input[type=number]", nth=0, text="Ab welchem Wort erscheint es", at=[440, 380], w=250),
-        dict(sel=".modal input[type=number]", nth=1, text="Bis wohin (leer = bis Ende)", at=[740, 380], w=220),
-        dict(sel="text:Übernehmen", text="Übernehmen", at=[800, 745], w=120)], wait=600)
+        dict(sel=".modal .seg", text="Bilder oder Karten", at=[260, 120], w=170),
+        dict(sel=".pick-grid", nth=0, text="Bild anklicken = einblenden, ab dem markierten Wort", at=[560, 140], w=300),
+        dict(sel=".modal input[type=search]", text="Bibliothek durchsuchen", at=[1000, 140], w=200)], wait=900)
     pg.keyboard.press("Escape")
     go("script")
     shot(pg, "07-word", [
         dict(sel="text:Gesamtes Skript", text="Exportieren: alles, nur Philipp oder nur Danny", at=[560, 22], w=290),
         dict(sel="text:Word-Datei wählen", text="Bearbeitetes Word zurückspielen", at=[1020, 22], w=250),
+        dict(sel="text:Für Philipp", text="Sprecherskript: nur zum Vorlesen, ohne technische Marken", at=[760, 330], w=300),
         dict(sel="text:Rahmenteil +", text="Rahmenteile (Werbung, Outro) mit fester Dauer", at=[620, 358], w=420)])
+    go("ablauf")
+    shot(pg, "17-ablauf", [
+        dict(sel=".ab-head", nth=0, text="Ganzen Strang ziehen = Reihenfolge ändern", at=[1000, 260], w=260),
+        dict(sel=".ab-row", nth=1, text="Einzelne Szenen frei einsortieren", at=[1000, 320], w=250),
+        dict(sel="text:Automatisch", text="Zurück zur Reihenfolge nach Strängen", at=[560, 130], w=260)])
     go("images")
     shot(pg, "08-bilder", [
         dict(sel=".thumb", nth=2, text="Bild der Folge anklicken: Credit und Konturfarbe bearbeiten", at=[980, 180], w=300),

@@ -126,7 +126,7 @@ def main():
             ids.append(sc["id"])
         sc = api("GET", E + "/scenes")
         def put(i, fn):
-            s = sc[i]
+            s = api("GET", E + "/scenes")[i]
             for k in ("report", "lock", "problems", "ausgabe"):
                 s.pop(k, None)
             fn(s)
@@ -135,6 +135,20 @@ def main():
         put(2, lambda s: s["kommentar"][0].update(anker=[{"asset": assets[1]["id"], "karte": None, "von": 0, "bis": None, "layout": "einzel", "einheit": "wort"}]))
         put(1, lambda s: s["kommentar"][0].update(anker=[{"asset": None, "karte": "map_01", "von": 5, "bis": None, "layout": "einzel", "einheit": "wort"}]))
         put(0, lambda s: s["kommentar"][1].update(modus="stichpunkte", text="", stichpunkte=["Schmiede in Eregion", "Mittelpunkt der Geschichte"]))
+        # Segment-Workflow: Kommentare gehören zu Segmenten, Notizen als Kontext, Dialog der Episode für die Anzeige
+        put(0, lambda s: [s["kommentar"][0].update(segment=0), s["kommentar"][1].update(segment=1), s["segmente"][0].update(notiz="Celebrimbor allein in der Schmiede"), s.update(bereich=[2, 30])])
+        put(1, lambda s: [s["kommentar"][0].update(segment=0), s.update(bereich=[38, 52])])
+        put(2, lambda s: [s["kommentar"][0].update(segment=0), s.update(bereich=[30, 38])])
+        put(3, lambda s: [s["kommentar"][0].update(segment=0), s.update(bereich=[52, 70])])
+        put(4, lambda s: s.update(bereich=[70, 78]))
+        lines = ["I will not fail my people.", "The forge must be ready before the winter comes.", "You have my word, Annatar, as a smith and as a friend.", "Then we begin at dawn.", "Armenelos shines like a jewel in the evening light.", "Nothing here is what it seems.", "Show me the rings."]
+        words, tt = [], 5.0
+        for ln in lines:
+            for w in ln.split():
+                words.append({"w": w, "start": round(tt, 2), "end": round(tt + 0.3, 2)})
+                tt += 0.36
+            tt += 2.2 if ln is not lines[0] else 6.0
+        api("PUT", E + "/dialog", {"words": words, "sprache": "en", "quelle": ref})
         api("PUT", E + "/free-blocks", [{"titel": "Werbung", "text": "", "after": ids[2], "dauer": 81}])
         # Aufnahmen: Transkript direkt in den Cache (kein Whisper nötig) und Abgleich
         from glorfindel.config import load_settings
