@@ -160,3 +160,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .shot img { width: 100%; display: block; aspect-ratio: 16/9; object-fit: cover; background: #000; }
 .shot input { padding: 3px 6px; font-size: 12px; font-family: var(--mono); }
 .lane .strip { min-height: 96px; }
+
+/* Hilfe */
+.help-body p, .help-body li { line-height: 1.6; max-width: 80ch; } .help-body ul, .help-body ol { padding-left: 22px; margin: 6px 0 10px; }
+.help-body code { background: var(--raised); padding: 0 5px; border-radius: 4px; }

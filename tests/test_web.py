@@ -27,3 +27,12 @@ def test_panel_skeleton_is_valid_json():
     m = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     assert m["manifestVersion"] == 5 and m["host"]["app"] == "premierepro"
     assert "Rohschnitt" in (root / "main.js").read_text(encoding="utf-8")
+
+
+def test_help_guide_served_and_complete(tmp_path, monkeypatch):
+    monkeypatch.setenv("GLORFINDEL_HOME", str(tmp_path))
+    c = TestClient(create_app())
+    r = c.get("/static/help/anleitung.md")
+    assert r.status_code == 200
+    for must in ("Installation", "Szenen-Editor", "Aufnahme", "Rohschnitt", "Tastenkürzel", "Probleme und Lösungen"):
+        assert must in r.text

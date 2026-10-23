@@ -16,6 +16,7 @@ const VIEWS = {
   recording:{ label: 'Aufnahme',    icon: 'mic',      mod: './views/recording.js', sec: 'Produktion' },
   cut:      { label: 'Rohschnitt',  icon: 'scissors', mod: './views/cut.js' },
   log:      { label: 'Protokoll',   icon: 'clock',    mod: './views/log.js' },
+  help:     { label: 'Hilfe',       icon: 'info',     mod: './views/help.js', global: true },
   settings: { label: 'Einstellungen', icon: 'gear',   mod: './views/settings.js', sec: 'System', global: true },
 };
 let cleanup = null, current = null, update = null;
@@ -80,7 +81,7 @@ async function route() {
     toast(e.message, 'err');
     if (ep) { location.hash = '#/home'; return; }
   }
-  if (!S.settings.onedrive_root && view !== 'settings') { location.hash = '#/settings'; return; }
+  if (!S.settings.onedrive_root && view !== 'settings' && view !== 'help') { location.hash = '#/settings'; return; }
   renderSide(VIEWS[view] ? view : 'home');
   current = view;
   try {
