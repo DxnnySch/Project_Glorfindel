@@ -67,10 +67,11 @@ def create_app(state: AppState | None = None) -> FastAPI:
         if maintenance.old_proxies():
             state.jobs.submit("Proxys anpassen (Firefox-tauglicher Ton)", lambda progress: maintenance.fix_old_proxies(progress))
 
-    from . import routes_core, routes_prod, routes_lib
+    from . import routes_core, routes_prod, routes_lib, routes_bridge
     app.include_router(routes_core.router, prefix="/api")
     app.include_router(routes_prod.router, prefix="/api")
     app.include_router(routes_lib.router, prefix="/api")
+    app.include_router(routes_bridge.router, prefix="/api")
 
     @app.get("/api/health")
     def health():
