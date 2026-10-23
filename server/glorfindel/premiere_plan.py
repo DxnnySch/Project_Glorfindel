@@ -40,7 +40,7 @@ class PlanEnv:
     credit: Callable[[str, str, float | None], Path]           # (text, art, x_mitte) -> PNG
     image_size: Callable[[Path], tuple[int, int] | None]       # Pixelgröße eines Bildes/Videos
     recipes: dict = field(default_factory=dict)
-    premiere: dict = field(default_factory=dict)              # Einstellungen: project, main, play, pause, adjustment, clear_main
+    premiere: dict = field(default_factory=dict)              # Einstellungen: aep, comp, play_in, pause_in, preset (Pfad .sqpreset), tracks
     doppel: dict = field(default_factory=dict)                # Positionen für Doppelbild-Layouts
 
 
@@ -94,6 +94,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
 
     ep_id = reg(env.episode_media, "episode")
     clips: list[dict] = []
+    blur_periods: list[tuple[float, float]] = []
     fps = pkg["sequence"]["fps"]
     recipes = env.recipes
 
@@ -121,19 +122,11 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 f = env.stills_dir / Path(c["file"]).name
                 clips.append({"kind": "still", **base, "media": reg(f, "still"), "name": f.stem})
             elif typ == "anim":
-                clips.append({"kind": "anim", **base, "template": c["name"], "name": c["name"]})
+                pr = env.premiere
+                clips.append({"kind": "anim", **base, "template": c["name"], "name": c["name"], "comp": pr.get("comp", "Play-Pause"),
+                              "comp_in": float(pr.get("pause_in", 28.7) if c["name"] == "Pause" else pr.get("play_in", 0.0))})
             elif typ == "blur":
-                eff = []
-                for e in c.get("effects", []):
-                    b = recipes.get("blur", {})
-                    spec = b.get("ein") if e["recipe"] == "gauss_in" else None
-                    if e["recipe"] == "gauss_in" and spec:
-                        eff.append({"id": "gauss_in", "match_name": spec["match_name"], "params": [
-                            {"index": spec["param_index"], "name": spec["param"], "value": spec["keyframes"][-1][1], "keyframes": spec["keyframes"]}]})
-                    elif e["recipe"] == "gauss_const" and b.get("ein"):
-                        eff.append({"id": "gauss_const", "match_name": b["match_name"], "params": [
-                            {"index": b["ein"]["param_index"], "name": b["ein"]["param"], "value": b["ein"]["keyframes"][-1][1]}]})
-                clips.append({"kind": "blur", **base, "template": "adjustment", "effects": eff, "name": "Blur"})
+                blur_periods.append((start, end))                   # wird unten dem Standbild als Effekt zugeordnet
             elif typ == "artwork":
                 f = abs_path(c["file"]) if c.get("file") else None
                 if f is None or not f.exists():
@@ -167,17 +160,60 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                     warnings.append(f"{c.get('scene', '')}: Kartenplatzhalter {c.get('ref')} noch nicht gerendert – nur Marker")
                     continue
                 clips.append({"kind": "map", **base, "media": reg(f, "map"), "name": c.get("ref", "Karte")})
+    _assign_blur(clips, merge_periods(blur_periods), recipes, warnings)
     # Videospuren zuerst, je Spur nach Zeit; Premiere bekommt feste Reihenfolge für deterministische Ergebnisse
     clips.sort(key=lambda c: (0 if c["kind"] != "voice" else 1, c["track"], c["start"]))
     return {
         "schema": SCHEMA, "name": pkg["sequence"]["name"], "slug": pkg.get("slug", ""), "fps": fps,
         "episode_sequence": pkg["episode_sequence"], "bin": f"Glorfindel {pkg['sequence']['name']}",
-        "template": {"project": env.premiere.get("project", ""), "main": env.premiere.get("main", "Rohschnitt-Vorlage"),
-                     "clear_main": bool(env.premiere.get("clear_main", True)), "play": env.premiere.get("play", "Play"),
-                     "pause": env.premiere.get("pause", "Pause"), "adjustment": env.premiere.get("adjustment", "Einstellungsebene")},
+        "anim_source": {"aep": env.premiere.get("aep", ""), "comp": env.premiere.get("comp", "Play-Pause")},
+        "preset": {"path": env.premiere.get("preset", ""), "video_tracks": env.premiere.get("video_tracks", 14),
+                   "audio_tracks": env.premiere.get("audio_tracks", 16)},
         "media": list(media.values()), "clips": clips,
         "markers": [{"time": m["time"], "name": m["text"][:60], "comment": m["text"], "kind": m.get("kind", "")} for m in pkg.get("markers", [])],
         "warnings": warnings,
         "stats": {"clips": len(clips), "media": len(media), "duration": pkg.get("duration", 0.0),
                   "by_kind": {k: sum(1 for c in clips if c["kind"] == k) for k in sorted({c["kind"] for c in clips})}},
     }
+
+
+def merge_periods(periods: list[tuple[float, float]], eps: float = 0.02) -> list[tuple[float, float]]:
+    """Aneinandergrenzende Blur-Abschnitte (Gauß In + Rest) zu einer Spanne vereinen."""
+    out: list[list[float]] = []
+    for a, b in sorted(periods):
+        if out and a <= out[-1][1] + eps:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return [(a, b) for a, b in out]
+
+
+def _assign_blur(clips: list[dict], periods: list[tuple[float, float]], recipes: dict, warnings: list[str]) -> None:
+    """Weichzeichner als Effekt am Standbild: je Artwork-Spanne 0 → Stärke → 0 (Rampen 0,5 s wie „Gauß In/Out“).
+
+    Im Ursprungsschnitt liegt das Blur auf Einstellungsebenen; sichtbar ist es nur auf dem Standbild darunter, daher
+    ist ein Weichzeichner direkt am Standbild gleichwertig und braucht keine Vorlage."""
+    spec = recipes.get("blur", {})
+    ein = spec.get("ein")
+    if not ein or not periods:
+        return
+    strength = ein["keyframes"][-1][1]
+    ramp = ein["keyframes"][-1][0]
+    stills = [c for c in clips if c["kind"] == "still"]
+    per_still: dict[int, list[tuple[float, float]]] = {}
+    for a, b in periods:
+        best = max(range(len(stills)), key=lambda i: min(b, stills[i]["end"]) - max(a, stills[i]["start"]), default=None)
+        if best is None or min(b, stills[best]["end"]) - max(a, stills[best]["start"]) <= 0:
+            warnings.append(f"Blur {a:.1f}–{b:.1f} s: kein Standbild darunter – übersprungen")
+            continue
+        per_still.setdefault(best, []).append((max(a, stills[best]["start"]), min(b, stills[best]["end"])))
+    for i, ps in per_still.items():
+        st = stills[i]["start"]
+        kfs: list[list[float]] = []
+        for a, b in ps:
+            r = min(ramp, (b - a) / 2)
+            for t, v in ((a - st, 0.0), (a - st + r, strength), (b - st - r, strength), (b - st, 0.0)):
+                if not kfs or t > kfs[-1][0] + 1e-6:
+                    kfs.append([round(t, 4), v])
+        stills[i].setdefault("effects", []).append(
+            {"id": "blur", "match_name": spec["match_name"], "params": [{"index": ein["param_index"], "name": ein["param"], "value": 0.0, "keyframes": kfs}]})

@@ -32,7 +32,7 @@ def env(tmp_path):
         return p
 
     e = PlanEnv(root=root, episode_media=tmp_path / "ref_cfr.mp4", stills_dir=root / "Videoelemente", credit=credit,
-                image_size=lambda p: Image.open(p).size, recipes=load_recipes(), premiere={"project": "F:/Vorlage.prproj"},
+                image_size=lambda p: Image.open(p).size, recipes=load_recipes(), premiere={"aep": "F:/Play-Pause.aep", "comp": "Play-Pause", "pause_in": 28.7, "play_in": 0.0, "preset": "C:/x/r.sqpreset"},
                 doppel=TPL["doppelbild"])
     e.calls = calls
     return e
@@ -62,13 +62,14 @@ def test_plan_structure_media_and_stills(env):
     plan = build_plan(package(), env)
     kinds = plan["stats"]["by_kind"]
     assert kinds["episode"] == 3 and kinds["still"] == 2 and kinds["anim"] >= 3 and kinds["artwork"] == 2
-    assert kinds["blur"] >= 2 and kinds["credit"] >= 3                       # Artwork-Credits + © amazon studios je Szene
+    assert "blur" not in kinds and kinds["credit"] >= 3                      # Blur sitzt als Effekt am Standbild; Credits je Artwork + © amazon
     eps = [c for c in plan["clips"] if c["kind"] == "episode"]
     assert eps[0]["src_in"] == 100 and eps[0]["src_out"] == 106 and eps[0]["audio"] == 3 and eps[0]["track"] == 0
     still = next(c for c in plan["clips"] if c["kind"] == "still")
     m = {x["id"]: x for x in plan["media"]}
     assert Path(m[still["media"]]["path"]).parent == env.stills_dir and m[eps[0]["media"]]["kind"] == "episode"
-    assert plan["template"]["project"] == "F:/Vorlage.prproj" and plan["episode_sequence"] == "S3 E1 Sequenz"
+    assert plan["anim_source"] == {"aep": "F:/Play-Pause.aep", "comp": "Play-Pause"} and plan["episode_sequence"] == "S3 E1 Sequenz"
+    assert plan["preset"] == {"path": "C:/x/r.sqpreset", "video_tracks": 14, "audio_tracks": 16}
     json.dumps(plan)                                                          # vollständig JSON-fähig
 
 
@@ -100,9 +101,11 @@ def test_credits_blur_voice_and_markers(env):
     cred = [c for c in plan["clips"] if c["kind"] == "credit" and c["name"] == "© alan lee"][0]
     art = [c for c in plan["clips"] if c["kind"] == "artwork"][0]
     assert cred["start"] == art["start"] and cred["end"] == art["end"] and cred["fade"] == pytest.approx(0.42) and cred["track"] == 9
-    blur = sorted([c for c in plan["clips"] if c["kind"] == "blur"], key=lambda c: c["start"])
-    assert blur[0]["effects"][0]["id"] == "gauss_in" and blur[0]["effects"][0]["params"][0]["keyframes"] == [[0.0, 0.0], [0.5, 15.0]]
-    assert blur[1]["effects"][0]["id"] == "gauss_const" and blur[1]["effects"][0]["params"][0]["value"] == 15.0
+    still = next(c for c in plan["clips"] if c["kind"] == "still")               # Weichzeichner am Standbild, Rampen 0,5 s auf 15
+    blur = next(e for e in still["effects"] if e["id"] == "blur")["params"][0]
+    kf = blur["keyframes"]
+    assert kf[0] == [pytest.approx(art["start"] - still["start"], abs=0.02), 0.0] and kf[1][1] == 15.0 and kf[-1][1] == 0.0
+    assert kf[1][0] - kf[0][0] == pytest.approx(0.5, abs=0.02) and [t for t, _ in kf] == sorted(t for t, _ in kf)
     assert [c for c in plan["clips"] if c["kind"] == "voice"] == []           # alle Blöcke noch ohne Aufnahme -> Platzhalter
     assert any("noch keine Aufnahme" in w for w in plan["warnings"])
     assert plan["markers"] and plan["markers"][0]["time"] == 0
@@ -116,6 +119,7 @@ def test_voice_clips_with_alignment_and_pause_play_template(env):
     assert len(v) == 1 and v[0]["src_in"] == 10.0 and v[0]["track"] == 1 and Path(media[v[0]["media"]]["path"]).name == "philipp.wav"
     anims = [c for c in plan["clips"] if c["kind"] == "anim"]
     assert {a["template"] for a in anims} == {"Pause", "Play"} and all(a["track"] == 6 for a in anims)     # V7 wie im Original
+    assert {a["template"]: a["comp_in"] for a in anims} == {"Pause": 28.7, "Play": 0.0} and all(a["comp"] == "Play-Pause" for a in anims)
 
 
 def test_missing_artwork_is_skipped_with_warning(env):
