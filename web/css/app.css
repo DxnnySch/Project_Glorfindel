@@ -200,3 +200,48 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .mt-ta { position: relative; background: transparent !important; border: 0 !important; border-radius: 0 !important; resize: none; min-height: 72px; display: block; overflow: hidden; caret-color: var(--accent); }
 .mt-ta:focus { box-shadow: none !important; }
 .pick-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); max-height: 260px; overflow: auto; } .thumb.pick:hover { outline: 2px solid var(--accent); }
+
+/* ===== Szenen-Editor (Segment-Workflow) ===== */
+.editor-main { padding: 16px 20px 60px; }
+.scene-head { margin-bottom: 12px; } .scene-title { font-size: 18px; font-weight: 650; }
+.ed-cols { display: grid; grid-template-columns: minmax(380px, 0.9fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+.ed-left { position: sticky; top: 0; align-self: start; max-height: calc(100vh - 150px); display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+@media (max-width: 1250px) { .ed-cols { grid-template-columns: 1fr; } .ed-left { position: static; max-height: none; } }
+/* Zeitleiste */
+.tl2 { position: relative; height: 56px; background: var(--bg); border-top: 1px solid var(--line); cursor: pointer; user-select: none; overflow: hidden; }
+.tl2-band { position: absolute; top: 14px; bottom: 16px; background: rgba(255,255,255,.07); border-radius: 3px; }
+.tl2-seg { position: absolute; top: 18px; height: 22px; border-radius: 4px; opacity: .92; display: flex; align-items: center; justify-content: center; color: #0b0e13; font-size: 11px; cursor: pointer; min-width: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.tl2-seg b { font-weight: 800; }
+.tl2-dot { position: absolute; top: 6px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(0,0,0,.5); } .tl2-dot.philipp { background: var(--accent); } .tl2-dot.danny { background: var(--info); }
+.tl2-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.6); pointer-events: none; }
+.tl2-pend { position: absolute; top: 10px; bottom: 10px; width: 3px; background: var(--ok); }
+.tl2-tick { position: absolute; bottom: 1px; font-size: 10px; color: var(--faint); transform: translateX(2px); pointer-events: none; }
+.player-bar .btn.primary { padding: 7px 12px; }
+/* Dialog */
+.dlg-card { padding: 10px; } .dlg-box { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 6px 4px; }
+.dlg-line { display: flex; gap: 8px; padding: 2px 8px; line-height: 1.7; } .dlg-line > small { flex: none; width: 38px; padding-top: 2px; }
+.dw { cursor: pointer; border-radius: 3px; padding: 1px 0; } .dw:hover { background: var(--accent-soft); } .dw.dnow { background: var(--accent); color: var(--accent-ink); } .dw.dsel { background: rgba(77,163,224,.4); }
+.dlg-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-top: 8px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px; font-size: 12.5px; }
+.dlg-empty { display: flex; gap: 12px; align-items: center; padding: 14px; } .dlg-empty svg { width: 28px; height: 28px; flex: none; opacity: .6; }
+/* Segmentkarten */
+.seg-cards { display: flex; flex-direction: column; gap: 14px; }
+.seg-card { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--accent); border-radius: var(--radius); overflow: hidden; transition: box-shadow .3s; }
+.seg-card.flash { box-shadow: 0 0 0 3px var(--accent); }
+.seg-card-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.seg-card-head input { width: 92px; font-family: var(--mono); font-size: 12.5px; padding: 5px 7px; }
+.seg-no { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; color: #0b0e13; font-weight: 800; flex: none; }
+.seg-card-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.seg-dialog { display: flex; gap: 8px; align-items: flex-start; font-style: italic; color: var(--muted); font-size: 13px; background: var(--bg); border-radius: 6px; padding: 7px 10px; } .seg-dialog svg { width: 15px; height: 15px; flex: none; margin-top: 3px; }
+.seg-notiz { font-size: 13px; }
+.seg-card .block { margin-bottom: 0; } .seg-move { width: auto; padding: 3px 6px; font-size: 12px; }
+.seg-empty { display: flex; gap: 14px; align-items: center; } .seg-empty svg { width: 30px; height: 30px; opacity: .6; flex: none; }
+.mini-thumb { width: 34px; height: 26px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); background: #222; }
+.achip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 4px 3px 3px; background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; cursor: pointer; max-width: 100%; }
+.achip:hover { border-color: var(--accent); } .achip img, .achip-noimg { width: 44px; height: 32px; object-fit: cover; border-radius: 5px; background: #222; display: grid; place-items: center; flex: none; }
+.achip-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; } .achip-t b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; } .achip-t small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.range-strip { line-height: 2.1; font-size: 15px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; max-height: 300px; overflow: auto; }
+.rw { cursor: pointer; border-radius: 4px; padding: 2px 1px; } .rw:hover { background: var(--accent-soft); } .rw.on { background: var(--accent); color: var(--accent-ink); }
+/* Liste */
+.si-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; } .si-meta .chip { padding: 1px 7px; } .si-meta .chip svg { width: 12px; height: 12px; } .chip.faint { opacity: .45; }
+.sdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 2px; } .sdot.philipp { background: var(--accent); } .sdot.danny { background: var(--info); }
+.bullets-ta { border: 0; border-radius: 0; background: var(--bg); min-height: 90px; font-size: 15px; line-height: 1.6; }

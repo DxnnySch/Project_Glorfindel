@@ -61,8 +61,12 @@ Gelöschte Szenen liegen im Ordner `glorfindel/papierkorb/` und lassen sich 12 s
 **Standard:** Später, nur bei Bedarf.
 **Antwort:**
 
-## F11 – Premiere-XML: „Dateiimport fehlgeschlagen“ ohne Meldung  🟡
-Die erzeugte `schnitt_v1.xml` ließ sich in Premiere nicht öffnen. Ich konnte Premiere nicht testen, habe aber die Datei an die Struktur angepasst, die Premiere selbst exportiert (URL-kodierte Pfade, eindeutige IDs, `rate`/`masterclipid`/`sourcetrack`, vollständige Datei-Blöcke, Bild-/Audioraten in Frames statt Samples, Überlappungen auf Zusatzspuren) und prüfe sie vor dem Schreiben automatisch.
-**Bitte:** Neuen Rohschnitt erzeugen und die neue XML erneut importieren. Falls es wieder scheitert: Premiere-Protokoll (Hilfe › Protokoll/Log) oder die XML schicken, dann grenze ich es weiter ein. Dein ursprünglicher Pfad `F:\OneDrive\…\glorfindel\schnitt\` bleibt gleich.
-**Standard:** Bis dahin ist das Schnittpaket (`.json`) für das Panel der Hauptweg; die XML bleibt Fallback.
+## F11 – Premiere-XML: „Dateiimport fehlgeschlagen“ ohne Meldung  🟢→🟡
+Danke für die `schnitt_v1.xml` – damit konnte ich die Ursachen im echten Export finden:
+- 4 Kommentar-Clips **ohne Datei** (Blöcke ohne Aufnahme, als 1-Bild-Clips geschrieben) – Premiere bricht bei Clips ohne Medien ab,
+- **kein `<rate>`** an irgendeinem Clip und **kein `<sourcetrack>`** an Audio-Clips,
+- Pfade **nicht URL-kodiert** (Leerzeichen, `[ENGLISCH]`), Stand-bilder im falschen Ordner (`F:/OneDrive/Videoelemente` statt Folgenordner),
+- Aufnahme-Clips mit Zeitbasis 48000 (Samples) statt Bildern.
+Alles behoben (Clips ohne Medien werden weggelassen und im Rohschnitt als Warnung gemeldet, Struktur wie Premiere sie exportiert, automatische Prüfung vor dem Schreiben, Regressionstest mit genau diesem Fall).
+**Bitte:** Rohschnitt neu erzeugen und die neue XML importieren. Wenn Premiere wieder ablehnt: bitte die neue Datei schicken (oder das Premiere-Log), dann prüfe ich weiter.
 **Antwort:**

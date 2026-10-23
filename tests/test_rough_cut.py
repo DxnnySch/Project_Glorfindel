@@ -174,3 +174,20 @@ def test_xmeml_validator_catches_problems():
     bad = ET.fromstring("<xmeml><sequence><media><video><track><clipitem id='a'><start>5</start><end>5</end><in>0</in><out>x</out></clipitem><clipitem id='a'/></track></video></media></sequence></xmeml>")
     probs = " ".join(validate_xmeml(bad))
     assert "doppelte" in probs and "ganze Zahl" in probs and "Sequenzformat" in probs
+
+
+def test_xmeml_never_contains_clips_without_media():
+    """Regression aus dem echten S2-E7-Export: Kommentar-Platzhalter (keine Aufnahme) wurden als Clip ohne <file> geschrieben,
+    alle Clips hatten kein <rate>, Audio-Clips kein <sourcetrack> – Premiere meldete „Dateiimport fehlgeschlagen“."""
+    import xml.etree.ElementTree as ET
+    from glorfindel.fcpxml import validate_xmeml
+    p = pkg()
+    p["tracks"]["A2"] = [{"type": "comment", "start": 84.8, "end": 84.8 + 1 / 60, "placeholder": True, "scene": "sz_09", "block": 0, "speaker": "philipp", "text": ""},
+                         {"type": "comment", "start": 100.0, "end": 104.0, "placeholder": True, "scene": "sz_10", "block": 0, "speaker": "philipp", "text": "Text ohne Aufnahme"}]
+    xml = to_fcpxml(p, "Videos/Folge 7 [ENGLISCH].mov", 3000.0, "F:/OneDrive")
+    root = ET.fromstring(xml.split("<!DOCTYPE xmeml>")[1])
+    assert validate_xmeml(root) == []
+    assert all(ci.find("file") is not None and ci.find("rate") is not None for ci in root.iter("clipitem"))
+    assert all(ci.find("sourcetrack") is not None for ci in root.iterfind("sequence/media/audio/track/clipitem"))
+    assert any("%5BENGLISCH%5D" in u.text for u in root.iter("pathurl"))     # Klammern/Leerzeichen kodiert
+    assert not any("48000" == r.text for r in root.iter("timebase"))        # keine Sample-Zeitbasis für Clips
