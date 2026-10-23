@@ -24,10 +24,19 @@ export async function render(main, ctx) {
   // ---------- Videos ----------
   const mk = (id) => h('video', { src: epUrl(ep, `/media/${id}`), preload: 'metadata', muted: true, playsinline: true, class: 'cmp-video' });
   const vR = mk(ref.id), vS = mk(src.id);
-  const seeker = (v) => {                       // Zusammenfassen schneller Sprünge: immer nur ein Seek gleichzeitig
-    v._want = 0; v._busy = false;
+  // Ein Seek zur Zeit: erst wenn die Metadaten da sind (vorher geht ein Seek verloren und das Video bleibt schwarz),
+  // nie mehrere gleichzeitig, mit Wächter gegen hängende Seeks.
+  const seeker = (v) => {
+    v._want = 0; v._busy = false; v._busyAt = 0;
+    const go = (vid, t) => {
+      vid._want = Math.max(0, t);
+      if (vid.readyState < 1) return;                       // wird bei loadedmetadata nachgeholt
+      if (vid._busy && Date.now() - vid._busyAt < 3000) return;
+      vid._busy = true; vid._busyAt = Date.now(); vid.currentTime = vid._want;
+    };
+    v.addEventListener('loadedmetadata', () => { v._busy = false; go(v, v._want); });
     v.addEventListener('seeked', () => { v._busy = false; if (Math.abs(v.currentTime - v._want) > 0.03) go(v, v._want); else scheduleMatch(); });
-    const go = (vid, t) => { vid._want = Math.max(0, t); if (vid._busy) return; vid._busy = true; vid.currentTime = vid._want; };
+    v.addEventListener('loadeddata', () => scheduleMatch());
     return go;
   };
   const goR = seeker(vR), goS = seeker(vS);
@@ -36,6 +45,10 @@ export async function render(main, ctx) {
   vR.addEventListener('timeupdate', upd); vS.addEventListener('timeupdate', upd); vR.addEventListener('seeked', upd); vS.addEventListener('seeked', upd);
   for (const v of [vR, vS]) v.addEventListener('error', () => { errBox.textContent = 'Ein Video kann nicht abgespielt werden (Proxy fehlt oder Browser unterstützt H.264 nicht). Proxys unter „Quellen“ erzeugen; Chrome/Edge verwenden.'; errBox.style.display = ''; }, { once: true });
   const errBox = h('div', { class: 'banner', style: { display: 'none' } });
+  const loading = (v, label) => { const o = h('div', { class: 'cmp-loading' }, h('div', { class: 'spinner' }), `${label} lädt …`);
+    const upd2 = () => { o.style.display = v.readyState >= 2 && !v.seeking ? 'none' : ''; };
+    for (const ev of ['loadedmetadata', 'loadeddata', 'canplay', 'seeking', 'seeked', 'waiting', 'playing', 'emptied']) v.addEventListener(ev, upd2);
+    upd2(); return o; };
 
   // ---------- Live-Übereinstimmung (im Browser, ohne Server) ----------
   const cw = 64, ch = 36, ca = document.createElement('canvas'), cb = document.createElement('canvas');
@@ -43,10 +56,10 @@ export async function render(main, ctx) {
   const ga = ca.getContext('2d', { willReadFrequently: true }), gb = cb.getContext('2d', { willReadFrequently: true });
   const match = h('span', { class: 'pill' }, 'Übereinstimmung …');
   let matchT = 0;
-  function scheduleMatch() { clearTimeout(matchT); matchT = setTimeout(computeMatch, 120); }
+  function scheduleMatch(ms = 120) { clearTimeout(matchT); matchT = setTimeout(computeMatch, ms); }
   function computeMatch() {
     try {
-      if (vR.readyState < 2 || vS.readyState < 2 || vR.seeking || vS.seeking) return;
+      if (vR.readyState < 2 || vS.readyState < 2 || vR.seeking || vS.seeking) { scheduleMatch(500); return; }
       ga.drawImage(vR, 0, 0, cw, ch); gb.drawImage(vS, 0, 0, cw, ch);
       const A = ga.getImageData(0, 0, cw, ch).data, B = gb.getImageData(0, 0, cw, ch).data;
       let sa = 0, sb = 0, n = cw * ch; const ya = new Float32Array(n), yb = new Float32Array(n);
@@ -74,11 +87,12 @@ export async function render(main, ctx) {
     ...[['−10 s', -10], ['−1 s', -1], ['−10 B', -10 / fps], ['‹ Bild', -1 / fps], ['Bild ›', 1 / fps], ['+10 B', 10 / fps], ['+1 s', 1], ['+10 s', 10]].map(([l, d]) => btn(l, { size: 'sm', onClick: () => fn(d) })));
 
   // ---------- Anzeige ----------
+  const loadR = loading(vR, 'Referenz'), loadS = loading(vS, 'Quelle');
   const viewer = h('div', { class: 'cmp-view' });
   function drawViewer() {
     const mode = ui.mode;
     const capR = h('div', { class: 'cmp-cap' }, h('b', {}, 'Referenz'), labelR), capS = h('div', { class: 'cmp-cap' }, h('b', {}, 'Quelle'), labelS);
-    if (mode === 'dual') viewer.replaceChildren(h('div', { class: 'dual' }, h('div', {}, capR, h('div', { class: 'cmp-frame' }, vR)), h('div', {}, capS, h('div', { class: 'cmp-frame' }, vS))));
+    if (mode === 'dual') viewer.replaceChildren(h('div', { class: 'dual' }, h('div', {}, capR, h('div', { class: 'cmp-frame' }, vR, loadR)), h('div', {}, capS, h('div', { class: 'cmp-frame' }, vS, loadS))));
     else {
       const stack = h('div', { class: 'cmp-frame cmp-stack' }, vR, vS);
       vS.style.opacity = mode === 'overlay' ? ui.opacity / 100 : 1; vS.style.mixBlendMode = mode === 'diff' ? 'difference' : 'normal';
