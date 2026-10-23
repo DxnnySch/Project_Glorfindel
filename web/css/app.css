@@ -263,3 +263,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .cmp-flag { position: absolute; top: 0; width: 3px; height: 12px; background: var(--ok); border-radius: 2px; pointer-events: auto; cursor: pointer; transform: translateX(-1px); }
 
 .cmp-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; background: rgba(8,10,14,.72); color: var(--muted); pointer-events: none; }
+
+.scene-item.unused { opacity: .55; } .scene-item.unused:hover, .scene-item.unused.active { opacity: 1; }
+.seg-tools { padding: 4px 0 10px; } .seg-foreign { margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.scene-unit { display: flex; gap: 6px; align-items: flex-start; } .scene-unit svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }

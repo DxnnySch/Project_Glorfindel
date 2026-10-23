@@ -26,6 +26,7 @@ export function createPlayer(E) {
     const pts = [];
     if (s?.bereich) pts.push(...s.bereich);
     (s?.segmente || []).forEach((g) => pts.push(g.in, g.out));
+    (s?.beruehrt || []).forEach((t) => pts.push(t.in, t.out));
     if (!pts.length) return [0, dur];
     const a = Math.min(...pts), b = Math.max(...pts);
     const pad = Math.max(4, (b - a) * 0.04);

@@ -164,6 +164,8 @@ def create_episode(body: NewEpisode, state: AppState = Depends(st)):
 
 @router.get("/ep/{season}/{episode}")
 def episode_overview(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    from . import units
+    units.migrate(ep)
     sc = ep.scenes()
     return {"project": ep.project().model_dump(), "sources": [s.model_dump() for s in ep.sources()],
             "strands": [s.model_dump() for s in ep.strands()], "scenes": [s.model_dump(by_alias=True) for s in sc],
@@ -311,10 +313,21 @@ def _ref_duration(ep: Episode) -> float:
 @router.get("/ep/{season}/{episode}/scenes")
 def scenes(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     th = state.settings.thresholds
-    from . import pipeline
-    out_no = {x.id: i + 1 for i, x in enumerate(pipeline.ordered_scenes(ep, True))}
-    return [{**s.model_dump(by_alias=True), "ausgabe": out_no.get(s.id), "report": scene_report(s, th),
-             "lock": store.lock_status(ep.p.locks, s.id), "problems": validate_segments(s, _ref_duration(ep))} for s in ep.scenes()]
+    from . import pipeline, units
+    from .scenes import coverage, in_video, overlap_problems
+    units.migrate(ep)                      # einmalig: Szenen = Messeinheiten, keine automatischen Segmente
+    allsc = ep.scenes()
+    out_no = {x.id: i + 1 for i, x in enumerate(x for x in pipeline.ordered_scenes(ep, True) if in_video(x))}
+    cov, overl = coverage(allsc), overlap_problems(allsc)
+    by_id = {x.id: x for x in allsc}
+    out = []
+    for s in allsc:
+        touched = [{**t, "titel": by_id[t["scene"]].titel, "nr": cov["nr"].get(t["scene"])} for t in cov["touched"].get(s.id, []) if t["scene"] != s.id]
+        out.append({**s.model_dump(by_alias=True), "ausgabe": out_no.get(s.id), "nr": cov["nr"].get(s.id),
+                    "segmente_info": cov["segments"].get(s.id, []), "beruehrt": touched,
+                    "report": scene_report(s, th), "lock": store.lock_status(ep.p.locks, s.id),
+                    "problems": validate_segments(s, _ref_duration(ep)) + overl.get(s.id, [])})
+    return out
 
 
 @router.post("/ep/{season}/{episode}/scenes")
@@ -357,6 +370,12 @@ def put_scene(sid: str, sc: Scene, base: str | None = None, ep: Episode = Depend
 
 @router.delete("/ep/{season}/{episode}/scenes/{sid}")
 def delete_scene(sid: str, ep: Episode = Depends(ep_of)):
+    try:
+        sc = ep.scene(sid)
+    except KeyError:
+        raise HTTPException(404, "Szene unbekannt")
+    if sc.bereich:   # Szenen sind feste Messeinheiten der Erkennung; nur Segmente lassen sich löschen
+        raise HTTPException(409, "Szenen sind feste Messeinheiten und werden nicht gelöscht. Entferne stattdessen die Segmente.")
     ep.delete_scene(sid)
     return {"ok": True}
 

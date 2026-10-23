@@ -97,11 +97,20 @@ Das Board schlägt aus der Referenz automatisch **Szenen** vor (Schnitt- und Ton
 
 Hier verbringt ihr die meiste Zeit. Links die Szenenliste, in der Mitte Player und Dialog, rechts die **Segmente** der Szene mit ihren Kommentaren.
 
+**Szene oder Segment?** Eine **Szene** ist die Einheit, die die Szenenerkennung findet – eine reine **Messeinheit** mit Nummer und Zeitbereich. Szenen werden **nicht gelöscht** und kommen **nicht automatisch ins Video**. Ins Video (und ins Word-Skript) kommen **nur Segmente**. Ein Segment kann
+- eine **ganze Szene** sein („Ganze Szene als Segment“),
+- **mehrere Szenen überspannen** („Über mehrere Szenen …“ oder einfach mit I/O über die Grenze hinaus markieren),
+- oder nur einen **Teil einer Szene** ausmachen.
+
+Segmente kannst du jederzeit löschen. Jedes Segment zeigt, welche Szenen es überdeckt („ganze Szene 4“, „Teil von Szene 7“, „über Szenen 2–5“). In der Liste sind Szenen ohne Segment abgedunkelt und mit „nicht im Video“ markiert; reicht ein Segment aus einer anderen Szene hinein, steht dort „+1“. Überschneiden sich zwei Segmente, warnt dich der Editor, denn dieselbe Stelle käme doppelt ins Video.
+
+Projekte aus der ersten Version bekommen beim ersten Öffnen einmalig die Messeinheiten nachgetragen: Der Zeitbereich jeder Szene wird gespeichert und die damals automatisch angelegten 9,5-Sekunden-Segmente werden entfernt – **nur wenn du sie nicht bearbeitet hast**. Segmente mit Kommentar oder Notiz und alle selbst gesetzten bleiben. Von jeder geänderten Szene liegt vorher eine Sicherung im Ordner `glorfindel/sicherung`.
+
 ![Szenen-Editor](img/05-editor.png)
 
 **Im Bild:** 1 Suche und Filter, 2 Szene auf einen Blick (Segmente, Kommentare je Sprecher, Vorschaubilder), 3 Zeitleiste mit Szenenbereich, Segmenten und Kommentarmarken, 4 Dialog der Episode, 5 Segmentkarte, 6 Segment abspielen.
 
-**Szenenliste:** Ein Klick auf eine Szene **springt im Player zur Stelle**. Ampelpunkt (grün/gelb/rot = Längenampel, grau = noch kein Segment), Strang, Status und darunter Zähler für Segmente und Kommentare (mit Punkten für Philipp/Danny) sowie Vorschaubilder der eingeblendeten Bilder/Karten. Suche über Titel, Kommentare und Notizen; Filter u. a. „Ohne Segment“, „Ohne Kommentar“. Filter und Auswahl **bleiben erhalten**, wenn du die Ansicht wechselst.
+**Szenenliste:** Ein Klick auf eine Szene **springt im Player zur Stelle**. Ampelpunkt (grün/gelb/rot = Längenampel, grau = noch kein Segment, Szene abgedunkelt = nicht im Video), Strang, Status und darunter Zähler für Segmente und Kommentare (mit Punkten für Philipp/Danny) sowie Vorschaubilder der eingeblendeten Bilder/Karten. Suche über Titel, Kommentare und Notizen; Filter u. a. „Nicht im Video“, „Im Video“, „Ohne Kommentar“. Filter und Auswahl **bleiben erhalten**, wenn du die Ansicht wechselst.
 
 **Segmente markieren – nur das kommt ins Video:**
 - **Im Dialog:** Die Episode ist transkribiert. Klick auf ein Wort springt dorthin, **Wörter ziehen** markiert eine Stelle → **Als Segment markieren**. Die Zeiten kommen aus den Wörtern.
@@ -282,7 +291,8 @@ Auch kürzere Wartezeiten sind sichtbar: Seiten zeigen beim Laden, was sie gerad
 - **Referenz** – die Episode, die die Zeitachse festlegt.
 - **Anker** – Paar „Zeit in Referenz = Zeit in Quelle“; mehrere Anker gleichen Versatz und Tempo aus.
 - **Strang** – Handlungsstrang/Ort; bestimmt Reihenfolge und Farbe.
-- **Segment** – ein Stück Serienmaterial einer Szene (höchstens 9,5 s).
+- **Szene** – Messeinheit aus der Szenenerkennung (Nummer, Zeitbereich); wird nicht gelöscht, kommt nicht automatisch ins Video.
+- **Segment** – ein Stück Serienmaterial, das ins Video kommt: eine ganze Szene, mehrere Szenen oder ein Teil einer Szene (Längenampel ab 9,5 s).
 - **Standbild** – letztes (oder erstes) Bild der Szene, darunter läuft der Kommentar.
 - **Proxy** – kleine Vorschauversion für die Oberfläche.
 - **Schnittpaket** – die Datei, aus der der Rohschnitt in Premiere gebaut wird.

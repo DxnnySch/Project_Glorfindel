@@ -1,5 +1,5 @@
 // Szenen-Editor (Segment-Workflow): Liste mit Status auf einen Blick, Player + Dialog, Segmentkarten mit Kommentaren, Autosave.
-import { h, $, clear, btn, icon, toast, modal, confirmBox, busy, fmtDur, debounce, empty, lightLabel, remember, thumbOfAsset, thumbOfMap } from '../ui.js';
+import { h, $, clear, btn, icon, toast, modal, confirmBox, busy, fmtDur, fmtTC, debounce, empty, lightLabel, remember, thumbOfAsset, thumbOfMap } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S, refSource, strandOf } from '../state.js';
 import { createPlayer, segColor } from '../scene/player.js';
@@ -21,6 +21,7 @@ export async function render(main, ctx) {
 
   const E = { ep, ref, ui, assets, maps, dialog, focusBlock: null,
     sel: () => sel, touch: () => touch(), redrawSegments: () => segs.redraw(), redrawAll: () => drawScene(),
+    scenes: () => scenes, gotoScene: (id) => select(id),
     addSegment, focusSegment: (i) => segs.focus(i) };
   const player = createPlayer(E);
   E.player = player;
@@ -43,12 +44,19 @@ export async function render(main, ctx) {
       const { scene, report, locked_by_other, problems } = await api.put(epUrl(ep, `/scenes/${sel.id}${q}`), clean(sel));
       Object.assign(sel, { report, problems: problems || [], status: scene.status, geaendert_von: scene.geaendert_von, geaendert_am: scene.geaendert_am }); dirty = false;
       setState(`${locked_by_other ? `Achtung: ${locked_by_other} bearbeitet ebenfalls · ` : ''}Gespeichert ${new Date().toLocaleTimeString('de-DE')}`);
-      drawList(); drawBanner(); drawPills();
+      drawList(); drawBanner(); drawPills(); refreshCoverage();
     } catch (e) {
       setState('Nicht gespeichert');
       if (e.status === 409) conflictDialog(e.message); else toast(e.message, 'err');
     } finally { saving = false; if (dirty && !blocked) save(); }
   }, 700);
+  async function refreshCoverage() {   // welche Szenen ein Segment überdeckt, ändert sich beim Speichern – Inhalt bleibt unangetastet
+    try {
+      const fresh = new Map((await api.get(epUrl(ep, '/scenes'))).map((x) => [x.id, x]));
+      for (const s of scenes) { const f = fresh.get(s.id); if (!f) continue; s.nr = f.nr; s.segmente_info = f.segmente_info; s.beruehrt = f.beruehrt; s.ausgabe = f.ausgabe; if (s !== sel) { s.report = f.report; s.problems = f.problems; } else { s.problems = f.problems; } }
+      drawList(); drawBanner(); segs.updateSpans();
+    } catch { /* nächstes Speichern versucht es erneut */ }
+  }
   function conflictDialog(msg) {
     if (blocked) return;
     blocked = true;
@@ -64,7 +72,8 @@ export async function render(main, ctx) {
     if (q && !`${s.titel} ${(s.kommentar || []).map((k) => `${k.text} ${(k.stichpunkte || []).join(' ')}`).join(' ')} ${(s.segmente || []).map((g) => g.notiz).join(' ')}`.toLowerCase().includes(q)) return false;
     const f = ui.filt;
     if (!f) return true;
-    if (f === 'ohne_segment') return !s.segmente.length;
+    if (f === 'ohne_segment') return !s.segmente.length && !(s.beruehrt || []).length;
+    if (f === 'mit_segment') return s.segmente.length || (s.beruehrt || []).length;
     if (f === 'ohne_kommentar') return !s.kommentar.length;
     if (f === 'rot') return s.report?.light === 'rot';
     if (f.startsWith('st:')) return s.strang === f.slice(3);
@@ -77,10 +86,10 @@ export async function render(main, ctx) {
   function drawList() {
     if (!listEl.firstChild) {
       const search = h('input', { type: 'search', placeholder: 'Suchen (Titel, Text, Notiz) …', value: ui.query, onInput: (e) => { ui.query = e.target.value; drawList(); } });
-      const fsel = h('select', { onChange: (e) => { ui.filt = e.target.value; drawList(); } }, h('option', { value: '' }, 'Alle Szenen'), h('option', { value: 'ohne_segment' }, 'Ohne Segment'), h('option', { value: 'ohne_kommentar' }, 'Ohne Kommentar'), h('option', { value: 'rot' }, 'Zu langes Segment'),
+      const fsel = h('select', { onChange: (e) => { ui.filt = e.target.value; drawList(); } }, h('option', { value: '' }, 'Alle Szenen'), h('option', { value: 'ohne_segment' }, 'Nicht im Video (ohne Segment)'), h('option', { value: 'mit_segment' }, 'Im Video (mit Segment)'), h('option', { value: 'ohne_kommentar' }, 'Ohne Kommentar'), h('option', { value: 'rot' }, 'Zu langes Segment'),
         ...S.data.strands.map((x) => h('option', { value: `st:${x.id}` }, `Strang: ${x.name}`)), ...Object.entries(STATUS).map(([k, v]) => h('option', { value: `status:${k}` }, `Status: ${v}`)));
       fsel.value = ui.filt;
-      listEl.append(h('div', { class: 'scene-list-head' }, h('div', { class: 'row' }, h('b', { class: 'grow' }, 'Szenen'), h('span', { class: 'help', id: 'scene-count' }), btn('Neu', { size: 'sm', icon: 'plus', onClick: addScene })), h('div', { class: 'col gap-s', style: { marginTop: '8px' } }, search, fsel)));
+      listEl.append(h('div', { class: 'scene-list-head' }, h('div', { class: 'row' }, h('b', { class: 'grow', title: 'Szenen sind die Messeinheiten aus der Szenenerkennung. Ins Video kommen nur Segmente.' }, 'Szenen'), h('span', { class: 'help', id: 'scene-count' })), h('div', { class: 'col gap-s', style: { marginTop: '8px' } }, search, fsel)));
       listBody = h('div'); listEl.append(listBody);
       listEl.addEventListener('scroll', () => { ui.listScroll = listEl.scrollTop; });
     }
@@ -91,23 +100,27 @@ export async function render(main, ctx) {
       const i = scenes.indexOf(s), st = strandOf(s.strang), light = s.report?.light || 'grau';
       const nPh = s.kommentar.filter((b) => b.sprecher === 'philipp').length, nDa = s.kommentar.filter((b) => b.sprecher === 'danny').length;
       const anchors = anchorsOf(s);
-      const el = h('div', { class: `scene-item ${sel?.id === s.id ? 'active' : ''}`, draggable: 'true', style: { borderLeftColor: st?.color || 'transparent' },
+      const unused = !s.segmente.length && !(s.beruehrt || []).length && !s.kommentar.length, touched = (s.beruehrt || []).length;
+      const el = h('div', { class: `scene-item ${sel?.id === s.id ? 'active' : ''} ${unused ? 'unused' : ''}`, draggable: 'true', style: { borderLeftColor: st?.color || 'transparent' },
         onClick: () => select(s.id),
         onDragstart: (e) => { e.dataTransfer.setData('text/plain', s.id); },
         onDragover: (e) => { e.preventDefault(); el.classList.add('dragover'); }, onDragleave: () => el.classList.remove('dragover'),
         onDrop: async (e) => { e.preventDefault(); el.classList.remove('dragover'); const from = e.dataTransfer.getData('text/plain'); if (from && from !== s.id) await move(from, s.id); } },
-      h('span', { class: 'no', title: s.ausgabe && s.ausgabe !== i + 1 ? `Position im Ablauf: ${s.ausgabe}` : '' }, String(s.ausgabe || i + 1).padStart(2, '0')),
+      h('span', { class: 'no', title: s.nr ? `Szene ${s.nr} (Messeinheit der Szenenerkennung)${s.ausgabe ? ` · Position im Video: ${s.ausgabe}` : ''}` : '' }, String(s.nr || s.ausgabe || i + 1).padStart(2, '0')),
       h('div', { class: 'grow' }, h('div', { class: 't' }, s.titel || '(ohne Titel)'),
         h('small', {}, h('span', { class: `dot ${light}`, title: lightLabel[light] || 'kein Material' }), st ? st.name : 'ohne Strang', '·', STATUS[s.status] || s.status, s.fixiert ? icon('lock') : null,
           s.lock && s.lock.user !== S.settings.user ? h('span', { class: 'chip' }, `${s.lock.user}`) : null),
         h('div', { class: 'si-meta' },
-          h('span', { class: `chip ${s.segmente.length ? '' : 'faint'}`, title: `${s.segmente.length} markierte Segmente` }, icon('scissors'), String(s.segmente.length)),
+          s.bereich ? h('span', { class: 'chip faint mono', title: 'Zeitbereich dieser Szene in der Episode' }, `${fmtTC(s.bereich[0]).slice(0, 5)}–${fmtTC(s.bereich[1]).slice(0, 5)}`) : null,
+          h('span', { class: `chip ${s.segmente.length ? '' : 'faint'}`, title: `${s.segmente.length} Segment(e), die in dieser Szene beginnen` }, icon('scissors'), String(s.segmente.length)),
+          touched ? h('span', { class: 'chip accent', title: `${touched} Segment(e) aus anderen Szenen reichen hier hinein` }, `+${touched}`) : null,
+          unused ? h('span', { class: 'chip faint' }, 'nicht im Video') : null,
           h('span', { class: `chip ${nPh + nDa ? '' : 'faint'}`, title: `Kommentare: Philipp ${nPh}, Danny ${nDa}` }, icon('edit'), String(nPh + nDa), nPh ? h('i', { class: 'sdot philipp' }) : null, nDa ? h('i', { class: 'sdot danny' }) : null),
           ...anchors.slice(0, 4).map((a) => h('img', { class: 'mini-thumb', src: thumbFor(a) || '', title: a.karte || a.asset })),
           anchors.length > 4 ? h('small', {}, `+${anchors.length - 4}`) : null)));
       listBody.append(el);
     });
-    if (!scenes.length) listBody.append(empty('edit', 'Keine Szenen', 'Lege im Strang-Board Szenen an oder erstelle hier eine neue.'));
+    if (!scenes.length) listBody.append(empty('edit', 'Keine Szenen', 'Szenen entstehen durch die Szenenerkennung im Strang-Board. Dort erkennen und als Szenen anlegen.'));
     else if (!shown.length) listBody.append(h('p', { class: 'help', style: { padding: '14px' } }, 'Keine Szene passt zum Filter.'));
   }
   async function moveTo(id, index) {
@@ -117,11 +130,6 @@ export async function render(main, ctx) {
   async function move(from, to) {
     const ids = scenes.map((s) => s.id), fi = ids.indexOf(from), ti = ids.indexOf(to); ids.splice(fi, 1); ids.splice(fi < ti ? ti : ti, 0, from);
     await api.post(epUrl(ep, '/scenes-reorder'), { order: ids }); scenes = await api.get(epUrl(ep, '/scenes')); scenes.forEach(normalize); sel = scenes.find((s) => s.id === sel?.id) || sel; drawList();
-  }
-  async function addScene() {
-    const strand = sel?.strang || S.data.strands[0]?.id || '';
-    await api.post(epUrl(ep, '/scenes'), { titel: 'Neue Szene', strang: strand });
-    scenes = await api.get(epUrl(ep, '/scenes')); scenes.forEach(normalize); select(scenes[scenes.length - 1].id);
   }
   async function select(id) {
     if (dirty && sel) { await save.now(); if (dirty || blocked) return; }
@@ -165,7 +173,8 @@ export async function render(main, ctx) {
     head.append(h('div', { class: 'row' }, h('div', { class: 'grow' }, title), titleAi,
       btn('', { icon: 'up', kind: 'ghost', title: 'Szene nach oben (Alt+Umschalt+↑)', onClick: () => moveTo(s.id, scenes.indexOf(sel) - 1) }),
       btn('', { icon: 'down', kind: 'ghost', title: 'Szene nach unten (Alt+Umschalt+↓)', onClick: () => moveTo(s.id, scenes.indexOf(sel) + 1) }),
-      btn('', { icon: 'trash', kind: 'ghost danger', title: 'Szene löschen (rückgängig machbar)', onClick: () => removeScene(s) })),
+      s.bereich ? null : btn('', { icon: 'trash', kind: 'ghost danger', title: 'Lose Szene löschen (rückgängig machbar)', onClick: () => removeScene(s) })),
+    s.bereich ? h('div', { class: 'help scene-unit', style: { marginTop: '6px' } }, icon('info'), ` Szene ${s.nr || ''} · ${fmtTC(s.bereich[0])} – ${fmtTC(s.bereich[1])} (${(s.bereich[1] - s.bereich[0]).toFixed(0)} s) · Messeinheit der Szenenerkennung, wird nicht gelöscht. Ins Video kommen nur Segmente: ein Segment kann eine Szene sein, mehrere Szenen überspannen oder nur einen Teil ausmachen.`) : null,
     h('div', { class: 'row wrap meta-row', style: { marginTop: '8px' } }, strandSel, statusSel, standbild, fix, h('span', { class: 'grow' }), pills, stateEl));
     drawPills();
   }
@@ -182,7 +191,7 @@ export async function render(main, ctx) {
   let leftCol = null, rightCol = null;
   function drawScene() {
     clear(mainEl);
-    if (!sel) { mainEl.append(empty('edit', 'Keine Szene gewählt', 'Wähle links eine Szene oder lege eine neue an.', btn('Neue Szene', { kind: 'primary', onClick: addScene }))); return; }
+    if (!sel) { mainEl.append(empty('edit', 'Keine Szene gewählt', 'Wähle links eine Szene. Szenen sind Messeinheiten; ins Video kommen nur die Segmente, die du darin markierst.')); return; }
     drawHead(); drawBanner();
     leftCol = h('div', { class: 'ed-left' }, player.el);
     rightCol = h('div', { class: 'ed-right' }, segs.el);

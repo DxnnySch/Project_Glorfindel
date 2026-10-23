@@ -94,3 +94,4 @@ class Project(BaseModel):
     reference_source: str = ""
     ablauf: list[str] = Field(default_factory=list)  # manuelle Gesamtreihenfolge der Szenen (leer = nach Strängen)
     dialog_sprache: str = "auto"
+    einheiten_migriert: bool = False  # Szenen = Messeinheiten (Bereich), Segmente frei: Altdaten einmalig umgestellt

@@ -16,6 +16,12 @@ STILL_SIZE = (1920, 800)
 
 
 # ---------- Reihenfolge ----------
+def scenes_in_video(scenes: list[Scene]) -> list[Scene]:
+    """Szenen sind Messeinheiten; nur solche mit Segment oder Kommentar kommen in Rohschnitt und Skript."""
+    from .scenes import in_video
+    return [s for s in scenes if in_video(s)]
+
+
 def ordered_scenes(ep: Episode, by_strand: bool = True) -> list[Scene]:
     scenes = ep.scenes()
     if not by_strand:
@@ -284,7 +290,7 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     pg.plan([("Szenen ordnen und prüfen", 1), ("Schnittpaket berechnen (Spuren, Marker, Credits)", 3), ("Standbilder erzeugen", 12 if with_stills else 0.01),
              ("Premiere-XML schreiben", 1), ("Speichern und protokollieren", 1)])
     pg.step(0, "Reihenfolge nach Strängen" if by_strand else "Reihenfolge wie im Szenen-Editor")
-    scenes = ordered_scenes(ep, by_strand)
+    scenes = scenes_in_video(ordered_scenes(ep, by_strand))
     tpl_file = templates_dir / "rohschnitt_vorlage.json"
     template = rough_cut.load_template(tpl_file if tpl_file.exists() else None)
     out_dir = ep.p.gl / "schnitt"

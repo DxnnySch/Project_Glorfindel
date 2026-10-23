@@ -124,6 +124,29 @@ export function createSegments(E) {
         aiOn() ? btn('', { icon: 'sparkle', size: 'sm', kind: 'ghost', title: 'KI: Namen prüfen', onClick: () => aiNames(b) }) : null, aiOn() ? btn('', { icon: 'wand', size: 'sm', kind: 'ghost', title: 'KI: Bild-Ideen', onClick: () => aiImages(b) }) : null));
   }
 
+  // Welche Szenen überdeckt das Segment? (ganze Szene / Teil einer Szene / mehrere Szenen)
+  function spanChip(s, si) {
+    const info = s.segmente_info?.[si];
+    if (!info || !info.nr.length) return null;
+    const nr = info.nr, a = info.anteil || {};
+    const whole = nr.length === 1 && (a[info.szenen[0]] || 0) >= 0.97;
+    const txt = nr.length > 1 ? `über Szenen ${nr[0]}–${nr.at(-1)}` : whole ? `ganze Szene ${nr[0]}` : `Teil von Szene ${nr[0]}`;
+    return h('span', { class: `chip ${nr.length > 1 ? 'accent' : ''}`, title: 'Dieses Segment liegt in den Szenen (Messeinheiten) ' + nr.join(', ') }, txt);
+  }
+
+  // Segment über mehrere Szenen: von dieser Szene bis zu einer späteren
+  function pickSpan(s) {
+    const units = (E.scenes?.() || []).filter((x) => x.bereich).sort((x, y) => x.bereich[0] - y.bereich[0]);
+    const from = units.findIndex((x) => x.id === s.id);
+    if (from < 0) return;
+    const later = units.slice(from + 1, from + 41);
+    if (!later.length) { toast('Nach dieser Szene folgt keine weitere.', 'info'); return; }
+    let to = later[0].id;
+    const sel = h('select', { onChange: (e) => { to = e.target.value; } }, later.map((x) => h('option', { value: x.id }, `Szene ${x.nr} · ${fmtTC(x.bereich[0]).slice(0, 5)}–${fmtTC(x.bereich[1]).slice(0, 5)}${x.titel ? ' · ' + x.titel : ''}`)));
+    modal({ title: 'Segment über mehrere Szenen', body: h('div', { class: 'col' }, h('p', { class: 'help' }, `Das Segment beginnt am Anfang von Szene ${s.nr} und endet am Ende der gewählten Szene. Den Feinschnitt machst du danach über Anfang/Ende.`), field('Bis einschließlich', sel)),
+      actions: [{ label: 'Abbrechen' }, { label: 'Segment anlegen', kind: 'primary', onClick: () => { const end = units.find((x) => x.id === to); E.addSegment(s.bereich[0], end.bereich[1]); } }] });
+  }
+
   // ---- Segmentkarte ----
   function cardEl(s, g, si) {
     const color = segColor(si);
@@ -144,6 +167,7 @@ export function createSegments(E) {
         btn('Abspielen', { icon: 'play', size: 'sm', kind: 'primary', class: 'playseg', title: 'Dieses Segment abspielen', onClick: () => E.player.playRange(g.in, g.out) }),
         tin, h('span', { class: 'faint' }, '–'), tout,
         h('span', { class: `pill ${LIGHT[light] || ''}`, title: 'Längenampel' }, `${dur.toFixed(1)} s`),
+        h('span', { class: 'span-slot' }, spanChip(s, si)),
         h('span', { class: 'grow' }),
         ...allAnchors.slice(0, 4).map((a) => h('img', { class: 'mini-thumb', src: thumbOf(a), title: nameOf(a) })),
         mine.length ? h('span', { class: 'chip', title: 'Kommentare' }, icon('edit'), String(mine.length)) : null,
@@ -175,14 +199,24 @@ export function createSegments(E) {
     if (!s) { host.replaceChildren(); return; }
     const parts = s.segmente.map((g, i) => cardEl(s, g, i));
     const orphan = s.segmente.length ? [] : s.kommentar;
+    const tools = s.bereich ? h('div', { class: 'row gap-s wrap seg-tools' },
+      btn('Ganze Szene als Segment', { size: 'sm', icon: 'plus', title: 'Der komplette Zeitbereich dieser Szene wird ein Segment', onClick: () => E.addSegment(s.bereich[0], s.bereich[1]) }),
+      btn('Über mehrere Szenen …', { size: 'sm', icon: 'layers', title: 'Segment von dieser Szene bis zu einer späteren Szene', onClick: () => pickSpan(s) }),
+      h('span', { class: 'help' }, 'oder im Player mit I/O (Anfang/Ende) und im Dialog beliebige Stellen markieren')) : null;
     if (!s.segmente.length) {
-      parts.push(h('div', { class: 'card seg-empty' }, icon('scissors'), h('div', {}, h('b', {}, 'Noch kein Segment in dieser Szene'),
-        h('p', { class: 'help' }, 'Markiere im Dialog links die Stelle, die ins Video soll – oder setze im Player mit „I Anfang“ und „O Ende“ ein Segment. Nur markierte Segmente werden übernommen.')),
-        s.bereich ? btn('Ganzen Szenenbereich übernehmen', { size: 'sm', onClick: () => E.addSegment(s.bereich[0], Math.min(s.bereich[1], s.bereich[0] + 9.5)) }) : null));
+      parts.push(h('div', { class: 'card seg-empty' }, icon('scissors'), h('div', {}, h('b', {}, 'Diese Szene ist (noch) nicht im Video'),
+        h('p', { class: 'help' }, 'Szenen sind nur Messeinheiten. Markiere die Stelle, die ins Video soll – ganz oder in Teilen, auch über Szenengrenzen hinweg. Nur Segmente werden übernommen.'))));
       if (orphan.length) parts.push(h('div', { class: 'banner' }, icon('alert'), `${orphan.length} Kommentar(e) ohne Segment – lege zuerst ein Segment an, dann verschiebe sie dorthin.`));
     }
+    if (tools) parts.push(tools);
+    if ((s.beruehrt || []).length) parts.push(h('div', { class: 'card tight seg-foreign' }, h('div', { class: 'help' }, icon('scissors'), ` In diese Szene reicht ${s.beruehrt.length === 1 ? 'ein Segment' : s.beruehrt.length + ' Segmente'} aus anderen Szenen hinein:`),
+      ...s.beruehrt.map((t) => h('div', { class: 'row gap-s' }, h('span', { class: 'chip' }, `Szene ${t.nr || '?'} · Segment ${t.index + 1}`), h('span', { class: 'mono faint' }, `${fmtTC(t.in)} – ${fmtTC(t.out)}`), h('span', { class: 'grow' }), btn('Dorthin', { size: 'sm', kind: 'ghost', onClick: () => E.gotoScene?.(t.scene) })))));
     host.replaceChildren(...parts);
     if (scrollTop != null && host.parentElement) host.parentElement.scrollTop = scrollTop;
   }
-  return { el: host, redraw, focus(i) { const c = host.querySelector(`#segcard-${i}`); c?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); c?.classList.add('flash'); setTimeout(() => c?.classList.remove('flash'), 900); }, addBlock };
+  function updateSpans() {          // Szenen-Hinweise nach dem Speichern auffrischen, ohne Textfelder neu zu zeichnen
+    const s = E.sel(); if (!s) return;
+    host.querySelectorAll('.seg-card').forEach((c) => { const si = +c.id.replace('segcard-', ''); const slot = c.querySelector('.span-slot'); if (slot) slot.replaceChildren(...[spanChip(s, si)].filter(Boolean)); });
+  }
+  return { el: host, redraw, updateSpans, focus(i) { const c = host.querySelector(`#segcard-${i}`); c?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); c?.classList.add('flash'); setTimeout(() => c?.classList.remove('flash'), 900); }, addBlock };
 }

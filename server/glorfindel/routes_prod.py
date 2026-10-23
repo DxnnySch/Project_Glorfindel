@@ -35,7 +35,7 @@ def _rec_file(ep: Episode, path: str) -> Path:
 @router.get("/ep/{season}/{episode}/script.docx")
 def export_script(speaker: str | None = None, markers: bool = True, by_strand: bool = True,
                   ep: Episode = Depends(ep_of)):
-    scenes = pipeline.ordered_scenes(ep, by_strand)
+    scenes = pipeline.scenes_in_video(pipeline.ordered_scenes(ep, by_strand))
     out = ep.p.base / f"Skript {ep.p.slug}{'' if not speaker else ' ' + speaker}.docx"
     labels = {a["id"]: (a.get("title") or Path(a.get("path", "")).stem) for a in pipeline.load_assets(ep).values()}
     labels.update({m["id"]: m.get("titel", "") for m in pipeline.load_maps(ep).values()})
@@ -399,7 +399,7 @@ def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState
         info = {"file": str(dst)}
         progress.step(2, "Letztes Bild jeder Szene")
         if body.stills:
-            info["stills"] = pipeline.render_stills(ep, pipeline.ordered_scenes(ep), body.source, progress)
+            info["stills"] = pipeline.render_stills(ep, pipeline.scenes_in_video(pipeline.ordered_scenes(ep)), body.source, progress)
         else:
             progress.skip(2, "abgeschaltet")
         return info
@@ -502,7 +502,7 @@ def export_speaker_script(speaker: str | None = None, regie: bool = True, by_str
                           ep: Episode = Depends(ep_of)):
     """Reines Vorlese-Dokument: Regieanweisungen, Kommentartext, Bild-/Kartenhinweise als Randnotiz."""
     from . import dialog
-    scenes = pipeline.ordered_scenes(ep, by_strand)
+    scenes = pipeline.scenes_in_video(pipeline.ordered_scenes(ep, by_strand))
     words = dialog.load(ep).get("words", [])
     labels = {a["id"]: (a.get("title") or Path(a.get("path", "")).stem) for a in pipeline.load_assets(ep).values()}
     labels.update({m["id"]: m.get("titel", "") for m in pipeline.load_maps(ep).values()})

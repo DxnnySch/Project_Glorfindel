@@ -34,6 +34,63 @@ def still_plan(scene: Scene) -> list[int]:
     return sorted(with_comment | {len(scene.segmente) - 1})
 
 
+def in_video(scene: Scene) -> bool:
+    """Eine Szene ist nur Messeinheit. Ins Video (und ins Skript) kommen nur Segmente – Szenen ohne Segment und
+    ohne Kommentar kommen nicht vor."""
+    return bool(scene.segmente or scene.kommentar)
+
+
+MIN_OVERLAP_S = 0.3   # so viel muss ein Segment in eine Szene hineinreichen, damit sie als „berührt“ gilt
+
+
+def unit_numbers(scenes: list[Scene]) -> dict[str, int]:
+    """Zeitliche Nummer der Szenen (Messeinheiten) 1..N nach Beginn ihres Bereichs."""
+    units = sorted((s for s in scenes if s.bereich), key=lambda s: (s.bereich[0], s.id))
+    return {s.id: i + 1 for i, s in enumerate(units)}
+
+
+def coverage(scenes: list[Scene]) -> dict:
+    """Welche Szenen (Messeinheiten) überdeckt welches Segment? Ein Segment kann eine Szene sein, mehrere Szenen
+    überspannen oder nur einen Teil einer Szene ausmachen – unabhängig davon, in welcher Szene es angelegt wurde.
+
+    Rückgabe: {'nr': {szene: nummer}, 'segments': {szene: [ {'szenen': [ids], 'nr': [nummern], 'anteil': {id: 0..1}} ]},
+               'touched': {szene: [ {'scene': heimat, 'index': i, 'in': a, 'out': b} ]}}"""
+    nr = unit_numbers(scenes)
+    units = sorted((s for s in scenes if s.bereich), key=lambda s: s.bereich[0])
+    seg_info: dict[str, list[dict]] = {}
+    touched: dict[str, list[dict]] = {u.id: [] for u in units}
+    for sc in scenes:
+        rows = []
+        for i, g in enumerate(sc.segmente):
+            hit, share = [], {}
+            for u in units:
+                a, b = max(g.in_, u.bereich[0]), min(g.out, u.bereich[1])
+                if b - a >= MIN_OVERLAP_S:
+                    hit.append(u.id)
+                    share[u.id] = round((b - a) / max(1e-6, u.bereich[1] - u.bereich[0]), 3)
+                    touched[u.id].append({"scene": sc.id, "index": i, "in": g.in_, "out": g.out})
+            rows.append({"szenen": hit, "nr": [nr[x] for x in hit], "anteil": share})
+        seg_info[sc.id] = rows
+    return {"nr": nr, "segments": seg_info, "touched": touched}
+
+
+def overlap_problems(scenes: list[Scene]) -> dict[str, list[str]]:
+    """Segmente verschiedener (oder derselben) Szene, die sich zeitlich überschneiden: dieselbe Stelle käme doppelt ins Video."""
+    segs = [(sc, i, g) for sc in scenes for i, g in enumerate(sc.segmente)]
+    out: dict[str, list[str]] = {}
+    for x in range(len(segs)):
+        for y in range(x + 1, len(segs)):
+            (sa, ia, ga), (sb, ib, gb) = segs[x], segs[y]
+            ov = min(ga.out, gb.out) - max(ga.in_, gb.in_)
+            if ov > 0.25:
+                lab_b = f"Segment {ib + 1}" + ("" if sa.id == sb.id else f" von „{sb.titel or sb.id}“")
+                lab_a = f"Segment {ia + 1}" + ("" if sa.id == sb.id else f" von „{sa.titel or sa.id}“")
+                out.setdefault(sa.id, []).append(f"Segment {ia + 1} überschneidet sich {ov:.1f} s mit {lab_b}")
+                if sb.id != sa.id:
+                    out.setdefault(sb.id, []).append(f"Segment {ib + 1} überschneidet sich {ov:.1f} s mit {lab_a}")
+    return out
+
+
 def scene_series_duration(scene: Scene) -> float:
     return sum(s.duration for s in scene.segmente)
 
