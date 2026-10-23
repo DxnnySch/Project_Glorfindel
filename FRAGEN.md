@@ -60,3 +60,9 @@ Aktuell sortiert Word/Rohschnitt nach Strang-Reihenfolge, der Editor zeigt die S
 Gelöschte Szenen liegen im Ordner `glorfindel/papierkorb/` und lassen sich 12 s per „Rückgängig“ zurückholen; eine Übersicht fehlt noch.
 **Standard:** Später, nur bei Bedarf.
 **Antwort:**
+
+## F11 – Premiere-XML: „Dateiimport fehlgeschlagen“ ohne Meldung  🟡
+Die erzeugte `schnitt_v1.xml` ließ sich in Premiere nicht öffnen. Ich konnte Premiere nicht testen, habe aber die Datei an die Struktur angepasst, die Premiere selbst exportiert (URL-kodierte Pfade, eindeutige IDs, `rate`/`masterclipid`/`sourcetrack`, vollständige Datei-Blöcke, Bild-/Audioraten in Frames statt Samples, Überlappungen auf Zusatzspuren) und prüfe sie vor dem Schreiben automatisch.
+**Bitte:** Neuen Rohschnitt erzeugen und die neue XML erneut importieren. Falls es wieder scheitert: Premiere-Protokoll (Hilfe › Protokoll/Log) oder die XML schicken, dann grenze ich es weiter ein. Dein ursprünglicher Pfad `F:\OneDrive\…\glorfindel\schnitt\` bleibt gleich.
+**Standard:** Bis dahin ist das Schnittpaket (`.json`) für das Panel der Hauptweg; die XML bleibt Fallback.
+**Antwort:**

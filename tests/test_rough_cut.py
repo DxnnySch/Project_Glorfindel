@@ -145,3 +145,32 @@ def test_fcpxml_is_wellformed_and_has_structure():
 
 def test_credit_underscore_title_split():
     assert credit_from_filename("Ted Nasmith_Armenelos.png") == "ted nasmith"
+
+
+def test_xmeml_is_importable_shape(tmp_path):
+    """Strukturprüfung gegen typische Premiere-Importfehler (IDs, Frames, Dateiverweise, Pfad-URLs, Überlappungen)."""
+    import xml.etree.ElementTree as ET
+    from glorfindel.fcpxml import path_url, validate_xmeml
+    p = pkg()
+    # absichtlich überlappende Artworks und eine Aufnahme-Datei
+    p["tracks"]["V3"] = [{"type": "artwork", "start": 1.0, "end": 5.0, "file": "Bilder/a b.jpg", "scene": "s"},
+                         {"type": "artwork", "start": 3.0, "end": 6.0, "file": "Bilder/c.jpg", "scene": "s"}]
+    p["tracks"]["A2"] = [{"type": "comment", "start": 1.0, "end": 4.0, "src_in": 2.0, "src_out": 5.0, "rec": "r1", "rec_path": "Aufnahmen/Philipp S3E1.wav", "scene": "s"}]
+    xml = to_fcpxml(p, "Videos/S2 E7/Folge.mp4", 1500.0, "F:\\OneDrive", stills_base="F:\\OneDrive\\Videos\\S2 E7")
+    root = ET.fromstring(xml.split("<!DOCTYPE xmeml>")[1])
+    assert validate_xmeml(root) == []
+    assert len(root.findall("sequence/media/video/track")) >= 4          # Überlappung -> Zusatzspur
+    urls = [u.text for u in root.iter("pathurl")]
+    assert "file://localhost/F%3a/OneDrive/Videos/S2%20E7/Folge.mp4" in urls
+    assert any(u.endswith("Philipp%20S3E1.wav") for u in urls)
+    aud = root.find("sequence/media/audio/track/clipitem")
+    assert aud.find("sourcetrack/mediatype").text == "audio" and aud.find("rate/timebase") is not None
+    assert path_url("/tmp/a b.mp4") == "file://localhost/tmp/a%20b.mp4"
+
+
+def test_xmeml_validator_catches_problems():
+    import xml.etree.ElementTree as ET
+    from glorfindel.fcpxml import validate_xmeml
+    bad = ET.fromstring("<xmeml><sequence><media><video><track><clipitem id='a'><start>5</start><end>5</end><in>0</in><out>x</out></clipitem><clipitem id='a'/></track></video></media></sequence></xmeml>")
+    probs = " ".join(validate_xmeml(bad))
+    assert "doppelte" in probs and "ganze Zahl" in probs and "Sequenzformat" in probs

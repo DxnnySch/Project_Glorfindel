@@ -159,3 +159,13 @@ export const debounce = (fn, ms) => { let t; const d = (...a) => { clearTimeout(
 export const lightLabel = { gruen: 'passt', gelb: 'knapp', rot: 'zu lang' };
 export const empty = (iconName, title, text, ...actions) => h('div', { class: 'empty' }, icon(iconName), h('h2', {}, title), h('p', {}, text), h('div', { class: 'row', style: { justifyContent: 'center', marginTop: '14px' } }, actions));
 export const field = (label, input) => h('label', { class: 'field' }, h('span', {}, label), input);
+
+// Ansichtszustand merken (Filter, Auswahl, …): bleibt beim Wechseln zwischen Ansichten und nach Neuladen erhalten
+export function remember(key, defaults = {}) {
+  const k = `gl-ui:${key}`;
+  let data = { ...defaults };
+  try { data = { ...defaults, ...JSON.parse(localStorage.getItem(k) || '{}') }; } catch { /* leer */ }
+  return new Proxy(data, { set(tgt, prop, val) { tgt[prop] = val; try { localStorage.setItem(k, JSON.stringify(tgt)); } catch { /* voll/gesperrt */ } return true; } });
+}
+export const thumbOfAsset = (a) => `/api/images/thumb?path=${encodeURIComponent(a.path)}`;
+export const thumbOfMap = (m) => `/api/maps/thumb?path=${encodeURIComponent(m.bild)}`;

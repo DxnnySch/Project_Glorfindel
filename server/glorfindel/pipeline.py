@@ -321,10 +321,16 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     else:
         pg.skip(2, "abgeschaltet")
     pg.step(3, f"Version {version}")
-    json_path = rough_cut.write_package(pkg, out_dir)
     xml_path = out_dir / f"schnitt_v{version}.xml"
-    xml_path.write_text(fcpxml.to_fcpxml(pkg, ref.path, ref.duration, ep.p.root), encoding="utf-8")
+    xml_text = None
+    try:
+        xml_text = fcpxml.to_fcpxml(pkg, ref.path, ref.duration, ep.p.root, stills_base=ep.p.base)
+    except ValueError as e:  # nie still scheitern: Paket bleibt nutzbar, Hinweis statt kaputter Datei
+        pkg["warnings"].append(str(e))
+    json_path = rough_cut.write_package(pkg, out_dir)
+    if xml_text:
+        xml_path.write_text(xml_text, encoding="utf-8")
     pg.step(4)
     store.log_change(ep.p.gl, ep.settings.user, f"Rohschnitt v{version} erzeugt")
-    return {"version": version, "json": str(json_path), "xml": str(xml_path), "duration": pkg["duration"],
+    return {"version": version, "json": str(json_path), "xml": str(xml_path) if xml_text else None, "duration": pkg["duration"],
             "warnings": pkg["warnings"], "stills": still_info, "markers": len(pkg["markers"])}
