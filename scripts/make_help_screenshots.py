@@ -5,6 +5,7 @@ Chromium ohne H.264: Proxy-Videos werden für die Aufnahme per ffmpeg nach WebM 
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -79,6 +80,10 @@ shots = []
 
 
 def shot(pg, name, items=None, wait=900, clip=None):
+    try:  # erst fotografieren, wenn die Ladeanzeige verschwunden ist (kalter Start ist langsam)
+        pg.wait_for_function("!document.body.innerText.includes('Wird geladen')", timeout=30000)
+    except Exception:  # noqa: BLE001
+        pass
     pg.wait_for_timeout(wait)
     pg.evaluate(SAN_JS, str(work / 'od'))
     if items:
@@ -90,7 +95,8 @@ def shot(pg, name, items=None, wait=900, clip=None):
 
 
 with sync_playwright() as p:
-    br = p.chromium.launch(executable_path="/opt/pw-browsers/chromium", args=["--no-sandbox"])
+    br = p.chromium.launch(executable_path=os.environ.get("PW_CHROMIUM") or None,
+                           args=["--no-sandbox"] if sys.platform.startswith("linux") else [])
     pg = br.new_page(viewport={"width": 1440, "height": 860})
     msgs = []
     pg.on("console", lambda m: msgs.append(m.text) if "FEHLT" in m.text else None)

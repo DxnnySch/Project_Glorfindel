@@ -202,3 +202,20 @@ def test_recording_api_without_whisper(client, tmp_path):
     t = client.put("/api/ep/3/1/recording/block", json={"scene": "sz_01", "block": 0, "t_in": 1.0, "t_out": 4.0}).json()
     assert t["manual"] and client.get("/api/ep/3/1/recording").json()["scenes"]["sz_01"][0]["in"] == 1.0
     assert client.post("/api/ep/3/1/recording/adopt", json={"scene": "sz_01", "block": 0}).status_code == 400
+
+
+def test_security_hardening_paths_and_csrf(client):
+    client.post("/api/episodes", json={"season": 3, "episode": 1})
+    sid = client.post("/api/ep/3/1/scenes", json={"titel": "A"}).json()["id"]
+    d = client.root / "Mythen-Archiv/Videos/S3 E1/glorfindel/szenen"
+    victim = client.root / "geheim.json"
+    victim.write_text("{}", encoding="utf-8")
+    sneaky = str(d / ".." / ".." / ".." / ".." / "geheim.json")        # lexikalisch "unter" szenen, real außerhalb
+    r = client.post("/api/ep/3/1/conflicts/resolve", json={"original": str(d / f"{sid}.json"), "other": sneaky, "keep": "copy"})
+    assert r.status_code == 400 and victim.exists()
+    # Aufnahmen: nur Mediendateien
+    (client.root / "notiz.txt").write_text("x")
+    assert client.post("/api/ep/3/1/recording", json={"path": "notiz.txt", "speaker": "danny"}).status_code == 400
+    # Browser-CSRF ohne Origin, aber als cross-site gekennzeichnet
+    bad = client.put("/api/settings", json=Settings().model_dump(), headers={"sec-fetch-site": "cross-site"})
+    assert bad.status_code == 403

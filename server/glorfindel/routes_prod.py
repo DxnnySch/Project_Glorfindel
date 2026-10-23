@@ -17,6 +17,18 @@ from .service import Episode
 from .timemap import TimeMap
 
 router = APIRouter()
+MEDIA_EXT = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".aif", ".aiff", ".mp4", ".mov", ".mkv", ".webm"}
+
+
+def _rec_file(ep: Episode, path: str) -> Path:
+    """Aufnahmedatei auflösen: nur Audio/Video-Dateien; außerhalb des OneDrive-Stamms nur absolute Pfade dieser Art."""
+    p = Path(path)
+    f = (p if p.is_absolute() else Path(ep.p.root) / p).resolve()
+    if f.suffix.lower() not in MEDIA_EXT:
+        raise HTTPException(400, "Nur Audio-/Videodateien erlaubt")
+    if not f.is_file():
+        raise HTTPException(404, f"Aufnahme nicht gefunden: {path}")
+    return f
 
 
 # ---------- Word ----------
@@ -210,9 +222,7 @@ def recording(ep: Episode = Depends(ep_of)):
 def add_recording(body: AddRecording, ep: Episode = Depends(ep_of)):
     if body.speaker not in ("philipp", "danny", "alle"):
         raise HTTPException(400, "Sprecher: philipp, danny oder alle")
-    p = Path(body.path)
-    if not (p if p.is_absolute() else Path(ep.p.root) / p).is_file():
-        raise HTTPException(404, f"Aufnahme nicht gefunden: {body.path}")
+    _rec_file(ep, body.path)
     return pipeline.add_recording(ep, body.path, body.speaker)
 
 
@@ -232,7 +242,7 @@ def waveform(rid: str, ep: Episode = Depends(ep_of)):
     cache = ep.p.cache() / f"wave_{rid}.json"
     peaks = store.read_json(cache)
     if peaks is None:
-        peaks = media.waveform_peaks(ep.p.root / rec["path"], buckets=3000)
+        peaks = media.waveform_peaks(_rec_file(ep, rec["path"]), buckets=3000)
         store.write_json(cache, peaks)
     return {"peaks": peaks, "duration": rec["duration"]}
 
@@ -242,7 +252,7 @@ def rec_audio(rid: str, ep: Episode = Depends(ep_of)):
     rec = next((r for r in pipeline.load_alignment(ep)["recordings"] if r["id"] == rid), None)
     if not rec:
         raise HTTPException(404)
-    return FileResponse(ep.p.root / rec["path"])
+    return FileResponse(_rec_file(ep, rec["path"]))
 
 
 class BlockTiming(BaseModel):

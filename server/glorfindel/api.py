@@ -30,6 +30,10 @@ def create_app(state: AppState | None = None) -> FastAPI:
             return JSONResponse({"detail": "Nur lokaler Zugriff"}, status_code=403)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
+            # Browser senden bei fremden Seiten immer Origin bzw. Sec-Fetch-Site; fehlt Origin, aber der Browser
+            # meldet "cross-site/same-site", wird abgelehnt. Nicht-Browser-Clients (curl, Tests) bleiben möglich.
+            if not origin and request.headers.get("sec-fetch-site", "none") in ("cross-site", "same-site"):
+                return JSONResponse({"detail": "Fremde Herkunft abgelehnt"}, status_code=403)
             if origin:
                 o_full = origin.split("://", 1)[-1]
                 o = o_full.rsplit(":", 1)[0] if not o_full.startswith("[") else o_full.split("]")[0] + "]"

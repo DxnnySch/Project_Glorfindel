@@ -404,8 +404,9 @@ class Resolve(BaseModel):
 
 @router.post("/ep/{season}/{episode}/conflicts/resolve")
 def resolve_conflict(body: Resolve, ep: Episode = Depends(ep_of)):
-    orig, copy = Path(body.original), Path(body.other)
-    if ep.p.scenes not in orig.parents or ep.p.scenes not in copy.parents:
+    orig, copy = Path(body.original).resolve(), Path(body.other).resolve()   # ".." und Symlinks auflösen
+    base = ep.p.scenes.resolve()
+    if base not in orig.parents or base not in copy.parents or orig.suffix != ".json" or copy.suffix != ".json":
         raise HTTPException(400, "Pfad außerhalb des Szenenordners")
     if body.keep == "copy":
         store.write_json(orig, store.read_json(copy))
