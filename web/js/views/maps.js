@@ -1,7 +1,8 @@
 import { h, btn, empty, runJob, toast, field, icon, debounce } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S } from '../state.js';
-import { openMapEditor } from '../mapeditor.js';
+import { openMapEditor, openMapPreview } from '../mapeditor.js';
+import { modal } from '../ui.js';
 
 export async function render(main) {
   const ep = S.ep;
@@ -10,6 +11,8 @@ export async function render(main) {
   const q = h('input', { type: 'search', placeholder: 'Karten suchen …' });
   const drawOwn = () => own.replaceChildren(...(mine.length ? mine.map((m) => h('div', { class: 'card tight row' },
     h('div', { class: 'grow' }, h('b', {}, m.titel || m.id), h('div', { class: 'help' }, m.bild), m.placeholder_clip ? h('span', { class: 'chip ok' }, 'Platzhalter-Clip vorhanden') : null),
+    btn('Vorschau', { size: 'sm', icon: 'play', title: 'Animation im Browser abspielen', onClick: () => openMapPreview(m) }),
+    m.placeholder_clip ? btn('Clip', { size: 'sm', icon: 'video', title: 'Gerenderten Platzhalter-Clip abspielen', onClick: () => modal({ title: `Platzhalter-Clip: ${m.titel || m.id}`, wide: true, body: h('video', { src: epUrl(ep, `/maps/${m.id}/clip?_=${Date.now()}`), controls: true, autoplay: true, style: { width: '100%', borderRadius: '8px', background: '#000' } }) }) }) : null,
     btn('Einzeichnen', { size: 'sm', icon: 'edit', onClick: () => openMapEditor(m, (saved) => { Object.assign(m, saved); drawOwn(); }) }),
     m.sheet ? btn('Blatt', { size: 'sm', icon: 'doc', title: 'Kartenblatt (Skizze + Hinweise) öffnen', onClick: () => window.open(epUrl(ep, `/maps/${m.id}/sheet?_=${Date.now()}`), '_blank') }) : null,
     btn('', { size: 'sm', icon: 'trash', kind: 'ghost', title: 'Aus Folge entfernen', onClick: async () => { try { await api.del(epUrl(ep, `/maps/${m.id}`)); mine = mine.filter((x) => x.id !== m.id); drawOwn(); } catch (e) { toast(e.message, 'err'); } } }),

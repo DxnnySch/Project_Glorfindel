@@ -1,5 +1,5 @@
 // Kontrolle: Doppelansicht Referenz vs. Quelle (Frames + Differenz), Szenenprüfung, HQ-Conform.
-import { h, btn, runJob, toast, fmtTC, parseTC, icon, empty } from '../ui.js';
+import { h, btn, runJob, toast, fmtTC, parseTC, icon, empty, remember } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S, refSource } from '../state.js';
 
@@ -7,9 +7,10 @@ let chosen = '';
 export async function render(main, ctx) {
   const ep = S.ep, ref = refSource(), others = S.data.sources.filter((s) => s.id !== ref?.id);
   if (!ref || !others.length) { main.append(h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('h1', {}, 'Kontrolle')), h('div', { class: 'card' }, empty('compare', 'Zweite Quelle nötig', 'Importiere unter „Quellen“ eine weitere Fassung (HQ/Screener) und setze Ankerpunkte.', btn('Zu den Quellen', { kind: 'primary', onClick: () => ctx.go('sources') }))))); return; }
-  let src = others.find((s) => s.id === chosen) || others[0];
-  const srcSel = h('select', { onChange: (e) => { chosen = e.target.value; ctx.refresh(); } }, others.map((s) => h('option', { value: s.id, selected: s.id === src.id }, `${s.role}: ${s.path.split('/').pop()}`)));
-  const t = h('input', { type: 'range', min: 0, max: ref.duration, step: 0.5, value: 0, style: { flex: 1 } });
+  let src = others.find((s) => s.id === chosen) || others.find((s) => s.id === remember(`${S.ep.season}-${S.ep.episode}:compare`, {}).src) || others[0];
+  const srcSel = h('select', { onChange: (e) => { chosen = e.target.value; remember(`${S.ep.season}-${S.ep.episode}:compare`, {}).src = chosen; ctx.refresh(); } }, others.map((s) => h('option', { value: s.id, selected: s.id === src.id }, `${s.role}: ${s.path.split('/').pop()}`)));
+  const ui = remember(`${S.ep.season}-${S.ep.episode}:compare`, { t: 0, src: '' });
+  const t = h('input', { type: 'range', min: 0, max: ref.duration, step: 0.5, value: ui.t || 0, style: { flex: 1 } });
   const tc = h('input', { type: 'text', value: fmtTC(0), style: { width: '110px' } });
   const imgA = h('img', { style: { width: '100%', display: 'block', background: '#000', aspectRatio: '16/9', objectFit: 'contain' } }), imgB = h('img', { style: { width: '100%', display: 'block', background: '#000', aspectRatio: '16/9', objectFit: 'contain' } });
   const imgD = h('img', { style: { width: '100%', display: 'block', background: '#000', aspectRatio: '16/9', objectFit: 'contain' } });
@@ -19,7 +20,7 @@ export async function render(main, ctx) {
   const diffBox = h('div', { class: 'hidden' }, h('h3', {}, 'Differenz'), imgD);
   let pending = 0;
   async function show() {
-    const my = ++pending, time = +t.value; tc.value = fmtTC(time);
+    const my = ++pending, time = +t.value; tc.value = fmtTC(time); ui.t = time;
     try {
       const r = await api.get(epUrl(ep, `/compare?a=${ref.id}&b=${src.id}&t=${time}`));
       if (my !== pending) return;

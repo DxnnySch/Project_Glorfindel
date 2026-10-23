@@ -10,6 +10,7 @@ const VIEWS = {
   board:    { label: 'Strang-Board', icon: 'layers',  mod: './views/board.js' },
   compare:  { label: 'Kontrolle',   icon: 'compare',  mod: './views/compare.js' },
   editor:   { label: 'Szenen',      icon: 'edit',     mod: './views/editor.js', sec: 'Skript' },
+  ablauf:   { label: 'Ablauf',      icon: 'layers',   mod: './views/ablauf.js' },
   script:   { label: 'Word-Skript', icon: 'doc',      mod: './views/script.js' },
   images:   { label: 'Bilder',      icon: 'image',    mod: './views/images.js', sec: 'Material' },
   maps:     { label: 'Karten',      icon: 'map',      mod: './views/maps.js' },
@@ -20,6 +21,7 @@ const VIEWS = {
   settings: { label: 'Einstellungen', icon: 'gear',   mod: './views/settings.js', sec: 'System', global: true },
 };
 let cleanup = null, current = null, update = null;
+const scrollMem = new Map();   // Scrollposition je Ansicht
 api.get('/api/update').then((u) => { update = u; if (u.newer) { const el = document.querySelector('.side-foot'); if (el) el.append(h('div', {}, h('a', { href: u.url, target: '_blank', rel: 'noopener' }, `Update ${u.latest} verfügbar`))); } }).catch(() => {});
 
 export function go(view, ep = S.ep) {
@@ -95,6 +97,9 @@ async function route() {
     step.textContent = `Ansicht „${def.label}“ aufbauen (Daten abrufen) …`;
     cleanup = (await mod.render(main, { go, refresh: () => route() })) || null;
     stopLoader();
+    const key = location.hash.split('?')[0];
+    if (scrollMem.has(key)) setTimeout(() => { main.scrollTop = scrollMem.get(key); }, 60);
+    main.onscroll = () => scrollMem.set(key, main.scrollTop);
   } catch (e) {
     stopLoader();
     console.error(e);

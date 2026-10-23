@@ -145,7 +145,7 @@ export function createPlayer(E) {
     video = h('video', { src: epUrl(ep, `/media/${ref.id}`), preload: 'metadata' });
     video.addEventListener('error', async () => {
       const ready = (await api.get(epUrl(ep, `/sources/${ref.id}/proxy-status`)).catch(() => ({ ready: false }))).ready;
-      box.replaceChildren(h('div', { style: { padding: '26px', textAlign: 'center' } }, ready ? h('p', { class: 'muted' }, 'Das Video kann in diesem Browser nicht abgespielt werden. Bitte Chrome oder Edge verwenden.')
+      video.replaceWith(h('div', { class: 'player-msg' }, ready ? h('p', { class: 'muted' }, 'Das Video kann in diesem Browser nicht abgespielt werden. Bitte Chrome oder Edge verwenden.')
         : [h('p', { class: 'muted' }, 'Für die Vorschau fehlt der Proxy.'), btn('Proxy jetzt erzeugen', { kind: 'primary', onClick: async () => { await runJob('Proxy wird erzeugt …', () => api.post(epUrl(ep, `/sources/${ref.id}/proxy`))); E.redrawAll(); } })]));
     }, { once: true });
     const tick = () => { raf = 0; if (!video) return; tc.textContent = fmtTC(video.currentTime, fps); drawTimeline(); highlightWord();
@@ -160,6 +160,7 @@ export function createPlayer(E) {
       h('label', { class: 'check help', title: 'Zeitleiste und Dialog auf die ganze Episode ausdehnen' }, h('input', { type: 'checkbox', checked: !!ui.allEp, onChange: (e) => { ui.allEp = e.target.checked; drawTimeline(); drawDialog(); } }), 'ganze Episode'));
     box.append(video, tl, bar);
   }
+  // Hinweis: Zeitleiste und Dialog funktionieren auch ohne abspielbares Video (Springen/Markieren)
   build();
   const el = h('div', { class: 'col' }, box, h('div', { class: 'card tight dlg-card' }, h('div', { class: 'card-head' }, h('h3', {}, 'Dialog der Episode'), h('span', { class: 'help grow' }, 'Klick = springen · Wörter ziehen = Stelle markieren'), E.dialog.available ? null : null), dlgBox, dlgBar));
   return {

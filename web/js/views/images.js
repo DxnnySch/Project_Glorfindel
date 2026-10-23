@@ -1,9 +1,10 @@
-import { h, btn, empty, runJob, toast, modal, field, icon, debounce } from '../ui.js';
+import { h, btn, empty, runJob, toast, modal, field, icon, debounce, remember, thumbOfAsset } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S } from '../state.js';
 
 export async function render(main) {
   const ep = S.ep;
+  const ui = remember(`${ep.season}-${ep.episode}:images`, { q: '' });
   let assets = await api.get(epUrl(ep, '/assets'));
   const grid = h('div', { class: 'thumbs' }), res = h('div', { class: 'thumbs' }), mine = h('div', { class: 'thumbs' });
   const q = h('input', { type: 'search', placeholder: 'Bildbibliothek durchsuchen (Name, Tags, Titel) …' });
@@ -14,17 +15,18 @@ export async function render(main) {
         h('img', { src: `/api/images/thumb?path=${encodeURIComponent(i.path)}`, loading: 'lazy', style: { width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' } }), h('div', { style: { padding: '6px 8px', fontSize: '12px' } }, assets.some((a) => a.path === i.path) ? '✔ ' : '', i.title || i.path.split('/').pop()))) : [h('p', { class: 'help' }, 'Keine Treffer. Ist der Bildindex aufgebaut?')]));
     } catch (e) { toast(e.message, 'err'); }
   }, 300);
-  q.addEventListener('input', search);
+  q.value = ui.q || '';
+  q.addEventListener('input', () => { ui.q = q.value; search(); });
   function edit(a) {
     const f = { ...a };
     const inp = (k, label) => field(label, h('input', { type: 'text', value: f[k] || '', onInput: (e) => { f[k] = e.target.value; } }));
-    modal({ title: 'Bild bearbeiten', body: h('div', { class: 'col' }, h('img', { src: epUrl(ep, `/asset-file?path=${encodeURIComponent(a.path)}`), style: { maxHeight: '240px', objectFit: 'contain', background: '#000', borderRadius: '8px' } }),
+    modal({ title: 'Bild bearbeiten', body: h('div', { class: 'col' }, (/\.(mov|mp4|webm|m4v)$/i.test(a.path) ? h('video', { src: epUrl(ep, `/asset-file?path=${encodeURIComponent(a.path)}`), poster: thumbOfAsset(a), controls: true, loop: true, muted: true, style: { maxHeight: '260px', background: '#1d222b', borderRadius: '8px' } }) : h('img', { src: epUrl(ep, `/asset-file?path=${encodeURIComponent(a.path)}`), onError: (e) => { e.target.src = thumbOfAsset(a); }, style: { maxHeight: '260px', objectFit: 'contain', background: '#1d222b', borderRadius: '8px' } })),
       inp('title', 'Titel'), inp('credit', 'Credit (Künstler)'), inp('credit_link', 'Link zur Quelle'),
       h('div', { class: 'row' }, field('Konturfarbe', h('input', { type: 'color', value: f.contour_color || '#888888', onInput: (e) => { f.contour_color = e.target.value; } })), h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: f.zoom, onChange: (e) => { f.zoom = e.target.checked; } }), 'Langsamer Zoom'))),
     actions: [{ label: 'Abbrechen' }, { label: 'Speichern', kind: 'primary', onClick: async () => { try { Object.assign(a, await api.put(epUrl(ep, `/assets/${a.id}`), f)); drawMine(); } catch (e) { toast(e.message, 'err'); return false; } } }] });
   }
   function drawMine() {
-    mine.replaceChildren(...(assets.length ? assets.map((a) => h('div', { class: 'thumb', style: { cursor: 'pointer' }, onClick: () => edit(a) }, h('img', { src: epUrl(ep, `/asset-file?path=${encodeURIComponent(a.path)}`), loading: 'lazy', style: { width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block', borderBottom: `3px solid ${a.contour_color || 'transparent'}` } }),
+    mine.replaceChildren(...(assets.length ? assets.map((a) => h('div', { class: 'thumb', style: { cursor: 'pointer' }, onClick: () => edit(a) }, h('img', { src: thumbOfAsset(a), loading: 'lazy', style: { width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block', background: '#222', borderBottom: `3px solid ${a.contour_color || 'transparent'}` } }),
       h('div', { style: { padding: '6px 8px', fontSize: '12px' } }, h('b', {}, a.id), ' ', a.title || ''), h('div', { class: 'row', style: { padding: '0 8px 8px' } }, h('span', { class: `help grow ${a.credit ? '' : 'warn'}`, style: a.credit ? null : { color: 'var(--warn)' } }, a.credit || 'Credit fehlt'), btn('', { icon: 'trash', size: 'sm', kind: 'ghost', title: 'Aus Folge entfernen', onClick: async (ev) => { ev.stopPropagation(); try { await api.del(epUrl(ep, `/assets/${a.id}`)); assets = assets.filter((x) => x.id !== a.id); drawMine(); search(); } catch (e) { toast(e.message, 'err'); } } })))) : [h('p', { class: 'help' }, 'Noch keine Bilder in dieser Folge.')]));
   }
   const url = h('input', { type: 'text', placeholder: 'https://… (Bildadresse einer Webseite)' });

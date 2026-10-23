@@ -440,8 +440,17 @@ def cockpit(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
         if n:
             tasks.append({"n": n, "text": text, "view": view, "scene": scene})
     add(0 if srcs else 1, "Referenz-Episode importieren", "sources")
+    from . import dialog as dialog_mod
+    pr_ = ep.project()
+    ref_id = pr_.reference_source
+    todo = {"proxy": bool(ref_id) and not ep.proxy_path(ref_id).exists(),
+            "dialog": bool(ref_id) and not dialog_mod.load(ep).get("words"),
+            "board": bool(ref_id) and not (store.read_json(ep.p.cache() / "board.json", {}).get("scenes") or scs)}
+    add(int(todo["proxy"]), "Vorschau-Video (Proxy) der Episode erzeugen", "home")
+    add(int(todo["dialog"]), "Dialog der Episode transkribieren (zum Markieren von Dialogstellen)", "home")
+    add(int(todo["board"]), "Szenen der Episode erkennen und nach Strängen sortieren", "home")
     no_seg = [s for s in scs if not s.segmente]
-    add(len(no_seg), "Szene(n) ohne Serienmaterial (Segment)", "editor", no_seg[0].id if no_seg else None)
+    add(len(no_seg), "Szene(n) ohne markiertes Segment (nur markierte Stellen kommen ins Video)", "editor", no_seg[0].id if no_seg else None)
     no_strand = [s for s in scs if not s.strang]
     add(len(no_strand), "Szene(n) ohne Strang", "editor", no_strand[0].id if no_strand else None)
     no_text = [s for s in scs if not any((b.text.strip() or b.stichpunkte) for b in s.kommentar)]
@@ -461,4 +470,4 @@ def cockpit(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
         "einsprechen": bool(al["recordings"]) and bool(scs) and all(s.status == "abgeglichen" for s in scs if any(b.text.strip() or b.stichpunkte for b in s.kommentar)),
         "rohschnitt": (ep.p.gl / "schnitt").exists() and any((ep.p.gl / "schnitt").glob("schnitt_v*.json")),
     }
-    return {"tasks": tasks, "phases": phases, "stale": [s.id for s in stale]}
+    return {"tasks": tasks, "phases": phases, "stale": [s.id for s in stale], "process": todo}

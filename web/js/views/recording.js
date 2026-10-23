@@ -1,4 +1,4 @@
-import { h, btn, empty, runJob, toast, pickPath, fmtTC, parseTC, icon, field } from '../ui.js';
+import { h, btn, empty, runJob, toast, pickPath, fmtTC, parseTC, icon, field, remember } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S } from '../state.js';
 
@@ -32,7 +32,8 @@ export async function render(main, ctx) {
     try { peaksCache = await api.get(epUrl(ep, `/recording/${r.id}/waveform`)); marks = Object.values(data.scenes || {}).flat().filter((b) => b.rec === r.id && b.in != null); drawWave(); } catch (e) { toast(e.message, 'err'); }
   };
   wave.addEventListener('click', (e) => { if (!peaksCache) return; const r = wave.getBoundingClientRect(); audio.currentTime = (e.clientX - r.left) / r.width * peaksCache.duration; audio.play(); });
-  let onlyUnsure = false;
+  const ui = remember(`${ep.season}-${ep.episode}:recording`, { onlyUnsure: false });
+  let onlyUnsure = !!ui.onlyUnsure;
   const isUnsure = (e) => !e || e.missing || e.uncertain || (e.confidence != null && e.confidence < 0.8);
   const unsureCount = S.data.scenes.reduce((n, sc) => n + sc.kommentar.filter((b, i) => (b.text.trim() || b.stichpunkte.length) && isUnsure(((data.scenes || {})[sc.id] || []).find((x) => x.block === i))).length, 0);
   const sceneHost = h('div');
@@ -61,7 +62,7 @@ export async function render(main, ctx) {
       btn('Philipp', { icon: 'mic', onClick: () => add('philipp') }), btn('Danny', { icon: 'mic', onClick: () => add('danny') }), btn('Abgleich starten', { kind: 'primary', icon: 'wand', disabled: !recs.length, onClick: align })),
     recs.length ? h('div', { class: 'card col', style: { marginBottom: '16px' } }, h('div', { class: 'row wrap' }, recs.map((r) => h('button', { class: 'chip accent', style: { cursor: 'pointer' }, onClick: () => showRec(r) }, icon('mic'), `${r.speaker} · ${fmtTC(r.duration)} · ${r.path.split('/').pop()}`))), waveBox, audio)
       : h('div', { class: 'card', style: { marginBottom: '16px' } }, empty('mic', 'Noch keine Aufnahme', 'Füge die eingesprochene Tonspur von Philipp und/oder Danny hinzu.')),
-    S.data.scenes.length ? h('div', { class: 'row', style: { margin: '4px 0 12px' } }, h('label', { class: 'check' }, h('input', { type: 'checkbox', onChange: (e) => { onlyUnsure = e.target.checked; drawRows(); } }), `Nur unsichere Stellen (${unsureCount})`),
+    S.data.scenes.length ? h('div', { class: 'row', style: { margin: '4px 0 12px' } }, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: onlyUnsure, onChange: (e) => { onlyUnsure = e.target.checked; ui.onlyUnsure = onlyUnsure; drawRows(); } }), `Nur unsichere Stellen (${unsureCount})`),
       btn('Nächste unsichere', { size: 'sm', icon: 'chevron', disabled: !unsureCount, onClick: () => { const all = [...document.querySelectorAll('[id^=rs_]')]; const first = all.find((el) => el.getBoundingClientRect().top > 120 && el.querySelector('.pill.bad, .pill.warn, .faint')) || all[0]; first?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } })) : null,
     sceneHost));
   const drawRows = () => sceneHost.replaceChildren(...buildRows().filter(Boolean));

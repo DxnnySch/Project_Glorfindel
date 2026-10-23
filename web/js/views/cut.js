@@ -1,4 +1,4 @@
-import { h, btn, runJob, toast, fmtDur, icon, empty } from '../ui.js';
+import { h, btn, runJob, toast, fmtDur, icon, empty, remember } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S } from '../state.js';
 
@@ -7,7 +7,9 @@ export async function render(main, ctx) {
   let versions = await api.get(epUrl(ep, '/rough-cut'));
   const sources = d.sources;
   const stillSel = h('select', {}, h('option', { value: '' }, 'Standbilder aus Referenz'), sources.map((s) => h('option', { value: s.id }, `${s.role}: ${s.path.split('/').pop()}`)));
-  const strand = h('input', { type: 'checkbox', checked: true }), stills = h('input', { type: 'checkbox', checked: true });
+  const ui = remember(`${S.ep.season}-${S.ep.episode}:cut`, { strand: true, stills: true, still: '' });
+  const strand = h('input', { type: 'checkbox', checked: ui.strand, onChange: (e) => { ui.strand = e.target.checked; } }), stills = h('input', { type: 'checkbox', checked: ui.stills, onChange: (e) => { ui.stills = e.target.checked; } });
+  stillSel.value = ui.still || ''; stillSel.addEventListener('change', () => { ui.still = stillSel.value; });
   const out = h('div', { class: 'col' });
   const draw = () => out.replaceChildren(...(versions.length ? [...versions].reverse().map((v) => h('div', { class: 'card tight row' }, h('b', {}, `Version ${v.version}`), h('span', { class: 'muted grow' }, new Date(v.modified * 1000).toLocaleString('de-DE')),
     btn('Ansehen', { size: 'sm', onClick: () => showPkg(v) }),

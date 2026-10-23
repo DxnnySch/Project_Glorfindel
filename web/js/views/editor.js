@@ -150,7 +150,7 @@ export async function render(main, ctx) {
   function drawPills() {
     pills.replaceChildren();
     const r = sel?.report; if (!r) return;
-    pills.append(h('span', { class: `pill ${r.light === 'gruen' ? 'ok' : r.light === 'gelb' ? 'warn' : r.light === 'rot' ? 'bad' : ''}` }, `Serie ${fmtDur(r.series_s)}`), h('span', { class: 'chip' }, `Kommentar ${fmtDur(r.comment_s)}`), r.montage ? h('span', { class: 'chip accent' }, 'Montage') : null);
+    pills.append(h('span', { class: `pill ${r.light === 'gruen' ? 'ok' : r.light === 'gelb' ? 'warn' : r.light === 'rot' ? 'bad' : ''}` }, `Serie ${fmtDur(r.series_s)}`), h('span', { class: 'chip' }, `Kommentar ${fmtDur(r.comment_s)}`), ...(r.montage ? [h('span', { class: 'chip accent' }, 'Montage')] : []));
   }
   const head = h('div', { class: 'scene-head' });
   function drawHead() {

@@ -1,10 +1,10 @@
-import { h, btn, toast, modal, icon, runJob } from '../ui.js';
+import { h, btn, toast, modal, icon, runJob, remember } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S } from '../state.js';
 
 export async function render(main, ctx) {
   const ep = S.ep;
-  const opt = { markers: true, by_strand: true };
+  const opt = remember(`${ep.season}-${ep.episode}:script`, { markers: true, by_strand: true }), spk = remember(`${ep.season}-${ep.episode}:script-spk`, { regie: true });
   const dl = (q) => { location.href = epUrl(ep, `/script.docx?${q}${q ? '&' : ''}markers=${opt.markers}&by_strand=${opt.by_strand}`); };
   const pick = (cb, accept = '.docx') => { const i = h('input', { type: 'file', accept, style: { display: 'none' } }); i.onchange = () => i.files[0] && cb(i.files[0]); document.body.append(i); i.click(); i.remove(); };
   const importWord = (f) => api.upload(epUrl(ep, '/script/import-preview'), f).then((pv) => {
@@ -28,10 +28,14 @@ export async function render(main, ctx) {
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Word-Skript'), h('p', {}, 'Zum Mitlesen, Aufnehmen und Gegenlesen: Skript als Word exportieren, dort ändern und zurückspielen.'))),
     h('div', { class: 'grid g2' },
-      h('div', { class: 'card col' }, h('h2', {}, 'Exportieren'),
+      h('div', { class: 'card col' }, h('h2', {}, 'Arbeitsskript (zum Zurückspielen)'),
         h('div', { class: 'row wrap' }, btn('Gesamtes Skript', { kind: 'primary', icon: 'download', onClick: () => dl('') }), btn('Nur Philipp', { icon: 'download', onClick: () => dl('speaker=philipp') }), btn('Nur Danny', { icon: 'download', onClick: () => dl('speaker=danny') })),
-        h('div', { class: 'row wrap gap-l' }, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true, onChange: (e) => { opt.markers = e.target.checked; } }), 'Bild-/Kartenmarken zeigen'), h('label', { class: 'check', title: 'Aus: Reihenfolge wie im Szenen-Editor' }, h('input', { type: 'checkbox', checked: true, onChange: (e) => { opt.by_strand = e.target.checked; } }), 'Nach Strängen sortieren')),
+        h('div', { class: 'row wrap gap-l' }, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: opt.markers, onChange: (e) => { opt.markers = e.target.checked; } }), 'Bild-/Kartenmarken zeigen'), h('label', { class: 'check', title: 'Aus: Reihenfolge wie im Szenen-Editor' }, h('input', { type: 'checkbox', checked: opt.by_strand, onChange: (e) => { opt.by_strand = e.target.checked; } }), 'Nach Strängen sortieren')),
         h('p', { class: 'help' }, 'Die Szenenmarken im Dokument (⟦sz:sz_01⟧) und Bildmarken (⟦+bild:…⟧) bitte nicht löschen – darüber werden Änderungen zugeordnet. Eigene Rahmenteile (Werbung, Outro) als „Überschrift 1“ anlegen.')),
+      h('div', { class: 'card col' }, h('h2', {}, 'Sprecherskript zum Vorlesen'),
+        h('p', { class: 'help' }, 'Reines Lesedokument für die Aufnahme: Regieanweisungen je Segment (Notiz und gesprochener Dialog), der Kommentartext ohne technische Marken, Bild- und Kartenhinweise als Randnotiz. Der Sprecher darf frei ändern – das hat keine Auswirkung auf das Projekt.'),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: spk.regie, onChange: (e) => { spk.regie = e.target.checked; } }), 'Regieanweisungen (Notiz und Dialog der Stelle) einfügen'),
+        h('div', { class: 'row wrap' }, btn('Für Philipp', { kind: 'primary', icon: 'download', onClick: () => { location.href = epUrl(ep, `/script-speaker.docx?speaker=philipp&regie=${spk.regie}`); } }), btn('Für Danny', { kind: 'primary', icon: 'download', onClick: () => { location.href = epUrl(ep, `/script-speaker.docx?speaker=danny&regie=${spk.regie}`); } }), btn('Für beide', { icon: 'download', onClick: () => { location.href = epUrl(ep, `/script-speaker.docx?regie=${spk.regie}`); } }))),
       h('div', { class: 'card col' }, h('h2', {}, 'Aus Word zurückübernehmen'), h('p', { class: 'help' }, 'Das bearbeitete Word-Dokument wählen. Du siehst vorab, welche Szenen sich ändern.'), btn('Word-Datei wählen …', { icon: 'upload', onClick: () => pick(importWord) })),
       h('div', { class: 'card col', style: { gridColumn: '1 / -1' } }, h('div', { class: 'card-head' }, h('h2', { class: 'grow' }, 'Rahmenteile (Intro, Werbung, Outro …)'), btn('Rahmenteil +', { size: 'sm', icon: 'plus', onClick: () => { blocks.push({ titel: '', text: '', after: null, dauer: null }); drawFb(); } }), btn('Speichern', { size: 'sm', kind: 'primary', onClick: saveFb })), fbBox),
       h('div', { class: 'card col', style: { gridColumn: '1 / -1' } }, h('h2', {}, 'Bestehendes Skript einlesen (Altformat)'), h('p', { class: 'help' }, 'Skripte mit [Szenen] und P:/D:-Zeilen werden als Szenen übernommen. Zeiten/Segmente setzt du danach im Szenen-Editor.'),

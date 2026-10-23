@@ -92,7 +92,7 @@ def test_cockpit(tmp_path, monkeypatch):
     c.post("/api/ep/2/1/scenes", json={"titel": "leer"})
     d = c.get("/api/ep/2/1/cockpit").json()
     texts = " ".join(t["text"] for t in d["tasks"])
-    assert "Referenz" in texts and "ohne Serienmaterial" in texts
+    assert "Referenz" in texts and "ohne markiertes Segment" in texts
     assert d["phases"]["vorbereiten"] is False
 
 

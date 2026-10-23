@@ -1,4 +1,4 @@
-import { h, btn, empty, fmtDur, icon } from '../ui.js';
+import { h, btn, empty, fmtDur, icon, runJob, toast } from '../ui.js';
 import { S, slug } from '../state.js';
 import { api, epUrl } from '../api.js';
 import { newEpisode } from '../main.js';
@@ -30,6 +30,16 @@ export async function render(main, ctx) {
     h('div', { class: 'grid g4', style: { marginTop: '18px' } },
       stat(fmtDur(rep.total_s), 'Gesamtlänge (geschätzt)'), stat(`${Math.round(rep.series_share * 100)} %`, `Serienanteil (Ziel ${Math.round(S.settings.thresholds.target_series_share * 100)} %)`),
       stat(rep.scenes.filter((r) => r.light === 'rot').length, 'Szenen mit zu langem Segment'), stat(sc.filter((x) => x.fixiert).length, 'Dramaturgisch fixiert')),
+    ck.process && (ck.process.proxy || ck.process.dialog || ck.process.board) ? h('div', { class: 'card', style: { marginTop: '18px', borderColor: 'var(--accent)' } }, h('div', { class: 'row' }, icon('wand'),
+      h('div', { class: 'grow' }, h('b', {}, 'Folge verarbeiten'), h('div', { class: 'help' }, `Nacheinander: ${[ck.process.proxy && 'Vorschau-Video', ck.process.dialog && 'Dialog transkribieren', ck.process.board && 'Szenen erkennen'].filter(Boolean).join(' → ')}. Jeder Schritt zeigt Fortschritt und Restzeit; du kannst währenddessen weiterarbeiten.`)),
+      btn('Jetzt verarbeiten', { kind: 'primary', icon: 'play', onClick: async () => {
+        try {
+          const rid = d.project.reference_source;
+          if (ck.process.proxy) await runJob('Vorschau-Video erzeugen', () => api.post(epUrl(S.ep, `/sources/${rid}/proxy`)));
+          if (ck.process.dialog) await runJob('Dialog der Episode transkribieren', () => api.post(epUrl(S.ep, '/dialog/transcribe?sprache=auto')));
+          if (ck.process.board) await runJob('Szenen erkennen', () => api.post(epUrl(S.ep, '/board/detect'), { source: rid }));
+          toast('Folge verarbeitet – weiter im Strang-Board.', 'ok'); ctx.go('board');
+        } catch (e) { toast(e.message, 'err'); ctx.refresh(); } } }))) : null,
     h('div', { class: 'card', style: { marginTop: '18px' } }, h('div', { class: 'card-head' }, h('h2', {}, 'Als Nächstes')),
       ck.tasks.length ? ck.tasks.map((t) => h('div', { class: 'row', style: { padding: '7px 0', borderTop: '1px solid var(--line)', cursor: 'pointer' }, onClick: () => { location.hash = `#/${S.ep.season}/${S.ep.episode}/${t.view}${t.scene ? '?id=' + t.scene : ''}`; } },
         h('span', { class: 'pill warn' }, t.n), h('span', { class: 'grow' }, t.text), icon('chevron')))
