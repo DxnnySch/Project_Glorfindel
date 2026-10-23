@@ -194,9 +194,12 @@ def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None =
     """
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".part.mp4")
-    cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-i", str(src),
+    # Ton immer Mono: Stereo-AAC macht Firefox beim Springen in langen Dateien extrem langsam (Sekunden bis Hänger),
+    # Mono springt in Millisekunden. Für ein Arbeits-Proxy reicht Mono. Datenspuren/Kapitel (Timecode) bleiben draußen.
+    cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?",
            "-vf", video_filter(height, crop, fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
-           "-g", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(tmp)]
+           "-g", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-ac", "1",
+           "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
     try:
         dur = probe(src)["duration"]
     except Exception:  # noqa: BLE001
@@ -211,6 +214,39 @@ def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None =
         raise RuntimeError(f"Proxy fehlgeschlagen: {r.stderr.strip()[:300]}")
     tmp.replace(dst)
     return dst
+
+
+def proxy_needs_fix(path: Path) -> bool:
+    """Alte Proxys mit Stereo-Ton oder Datenspuren (Firefox springt darin sehr langsam) erkennen."""
+    r = run([_bin("ffprobe"), "-v", "error", "-show_entries", "stream=codec_type,channels", "-of", "json", str(path)])
+    try:
+        streams = json.loads(r.stdout).get("streams", [])
+    except ValueError:
+        return False
+    return any((st.get("codec_type") == "audio" and st.get("channels", 1) > 1) or st.get("codec_type") == "data"
+               for st in streams)
+
+
+def fix_proxy_audio(path: Path, on_progress=None) -> Path:
+    """Ton auf Mono umstellen und Datenspuren entfernen; das Bild wird nur kopiert (Minuten statt Stunden)."""
+    tmp = path.with_suffix(".fix.mp4")
+    cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-i", str(path), "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy",
+           "-c:a", "aac", "-b:a", "96k", "-ac", "1", "-write_tmcd", "0", "-map_chapters", "-1",
+           "-movflags", "+faststart", str(tmp)]
+    try:
+        dur = probe(path)["duration"]
+    except Exception:  # noqa: BLE001
+        dur = None
+    try:
+        r = run_ffmpeg(cmd, dur, on_progress)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    if r.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(f"Proxy-Anpassung fehlgeschlagen: {r.stderr.strip()[:300]}")
+    tmp.replace(path)
+    return path
 
 
 def extract_frame(src: Path, t: float, dst: Path, width: int | None = None, fps_hint: float | None = None) -> Path:

@@ -147,6 +147,8 @@ class Episode:
             if not dst.exists():
                 s = self.source(sid)
                 media.make_proxy(self.source_path(s), dst, crop=s.crop, fps=s.normalize_fps, on_progress=on_progress)
+            elif media.proxy_needs_fix(dst):      # älterer Proxy (Stereo-Ton): einmalig auf Mono umbauen
+                media.fix_proxy_audio(dst, on_progress)
         return dst
 
     # ---- Szenen ----

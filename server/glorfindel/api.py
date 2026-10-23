@@ -60,6 +60,13 @@ def create_app(state: AppState | None = None) -> FastAPI:
             return JSONResponse({"detail": f"Ungültige Eingabe – {msg}"}, status_code=400)
         return JSONResponse({"detail": str(exc)}, status_code=400)
 
+    @app.on_event("startup")
+    def _maintenance() -> None:
+        """Ältere Proxys im Hintergrund auf das Firefox-taugliche Format umstellen (sichtbar in der Aufgabenleiste)."""
+        from . import maintenance
+        if maintenance.old_proxies():
+            state.jobs.submit("Proxys anpassen (Firefox-tauglicher Ton)", lambda progress: maintenance.fix_old_proxies(progress))
+
     from . import routes_core, routes_prod, routes_lib
     app.include_router(routes_core.router, prefix="/api")
     app.include_router(routes_prod.router, prefix="/api")

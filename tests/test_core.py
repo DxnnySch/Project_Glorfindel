@@ -143,3 +143,47 @@ def test_still_last_frame_and_fingerprint(clip, tmp_path):
 def test_waveform(clip):
     peaks = media.waveform_peaks(clip, buckets=100)
     assert 50 <= len(peaks) <= 100 and max(peaks) > 0.1
+
+
+@needs_ffmpeg
+def test_proxy_audio_is_mono_and_old_stereo_proxies_get_fixed(tmp_path):
+    """Firefox springt in Stereo-AAC-Proxys extrem langsam: Proxys haben Mono-Ton und keine Datenspuren."""
+    import subprocess
+    stereo = tmp_path / "old.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x136:rate=24:duration=4",
+                    "-f", "lavfi", "-i", "sine=frequency=440:duration=4", "-ac", "2", "-c:v", "libx264", "-g", "1",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(stereo)], check=True)
+
+    def channels(p):
+        import json
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels",
+                              "-of", "json", str(p)], capture_output=True, text=True).stdout
+        return json.loads(out)["streams"][0]["channels"]
+    assert channels(stereo) == 2 and media.proxy_needs_fix(stereo)
+    before = media.probe(stereo)
+    media.fix_proxy_audio(stereo)
+    assert channels(stereo) == 1 and not media.proxy_needs_fix(stereo)
+    after = media.probe(stereo)
+    assert after["duration"] == pytest.approx(before["duration"], abs=0.2) and after["width"] == 320
+    # frisch erzeugte Proxys sind von Anfang an in Ordnung
+    src = tmp_path / "src.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=640x272:rate=24:duration=3",
+                    "-f", "lavfi", "-i", "anoisesrc=d=3", "-ac", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-shortest", str(src)], check=True)
+    p = media.make_proxy(src, tmp_path / "p.mp4", height=136)
+    assert channels(p) == 1 and not media.proxy_needs_fix(p) and media.probe(p)["height"] == 136
+
+
+@needs_ffmpeg
+def test_startup_maintenance_converts_old_proxies(tmp_path):
+    import subprocess
+    from glorfindel import maintenance
+    from glorfindel.config import app_dir
+    d = app_dir() / "cache" / "S9_E9"
+    d.mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x136:rate=24:duration=3",
+                    "-f", "lavfi", "-i", "sine=frequency=330:duration=3", "-ac", "2", "-c:v", "libx264", "-g", "1",
+                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(d / "proxy_q1.mp4")], check=True)
+    assert [p.name for p in maintenance.old_proxies()] == ["proxy_q1.mp4"]
+    assert maintenance.fix_old_proxies() == {"fixed": 1, "skipped": 0}
+    assert maintenance.old_proxies() == [] and maintenance.fix_old_proxies() == {"fixed": 0, "skipped": 0}
