@@ -115,3 +115,10 @@ def test_new_panel_replaces_old_one(client):
             hello(b, "26.5.2")
             time.sleep(0.2)
             assert client.get("/api/bridge/status").json()["info"]["premiere"] == "26.5.2"
+
+
+def test_http_routes_reject_foreign_host_and_origin(client):
+    for path in ("/api/bridge/pairing", "/api/bridge/status"):
+        assert client.get(path, headers={"host": "evil.example"}).status_code == 403
+    bad = client.post("/api/bridge/call", json={"op": "ping"}, headers={"origin": "http://evil.example"})
+    assert bad.status_code == 403

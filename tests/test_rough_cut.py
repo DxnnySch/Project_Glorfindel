@@ -49,7 +49,7 @@ def test_basic_layout_and_order():
 
 def test_pause_and_play_offsets():
     p = pkg()
-    anims = sorted([c for c in p["tracks"]["V2"] if c["type"] == "anim"], key=lambda c: c["start"])
+    anims = sorted([c for c in p["tracks"]["V7"] if c["type"] == "anim"], key=lambda c: c["start"])
     stills = sorted([c for c in p["tracks"]["V1"] if c["type"] == "still"], key=lambda c: c["start"])
     assert anims[0]["name"] == "Pause" and anims[0]["start"] == pytest.approx(stills[0]["start"] - 0.63, abs=1 / 60)
     assert anims[1]["name"] == "Play" and anims[1]["start"] == pytest.approx(stills[0]["end"] - 0.68, abs=1 / 60)

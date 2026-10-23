@@ -264,8 +264,8 @@ def extract_frame(src: Path, t: float, dst: Path, width: int | None = None, fps_
 
 
 def extract_still_last_frame(src: Path, t_end: float, fps: float, dst: Path, size: tuple[int, int] | None = None) -> Path:
-    """Letzter Frame einer Szene = Frame ein Frame-Intervall vor `t_end`."""
-    t = max(0.0, t_end - (1.0 / fps if fps else 0.04))
+    """Letzter Frame einer Szene: Mitte des Frames direkt vor `t_end` (Schutz gegen Rundung an der Framegrenze)."""
+    t = max(0.0, t_end - (0.5 / fps if fps else 0.02))
     extract_frame(src, t, dst)
     if size:
         from PIL import Image

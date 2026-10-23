@@ -198,7 +198,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                     tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Credit für {ident} aus Dateiname vorbelegt („{artist}“)")
                 credit_track = tr["credit_artwork"][1 if a.layout == "doppel_rechts" else 0]
                 tl.add(credit_track, "credit", a_start, a_end, slot="credit_artwork",
-                       text=credit_text("© {kuenstler}", artist), scene=sc.id, over=track_a,
+                       text=credit_text("© {kuenstler}", artist), scene=sc.id, over=track_a, layout=a.layout,
                        fade=tm["artwork_fade"], anchor_to="top_center_of_image")
                 # Blur-Einstellungsebene: Gauß In, dann Rest bis Artwork-Ende
                 bin_end = min(a_start + tm["blur_in"], a_end)

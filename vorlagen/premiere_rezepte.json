@@ -1,0 +1,443 @@
+{
+ "schema": 1,
+ "quelle": "Mythen - S2 E7_1.prproj",
+ "hinweis": "Zeiten in Sekunden. anchor=start: ab Clipanfang; anchor=end: relativ zum Clipende (negativ). Farben als argb16 [a,r,g,b].",
+ "artwork_kette": [
+  {
+   "match_name": "AE.ADBE Drop Shadow",
+   "display": "Schlagschatten",
+   "params": [
+    {
+     "index": 0,
+     "name": "Schattenfarbe",
+     "value": {
+      "argb16": [
+       65280,
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    {
+     "index": 1,
+     "name": "Deckkraft",
+     "value": 204.0
+    },
+    {
+     "index": 2,
+     "name": "Richtung",
+     "value": 135.0
+    },
+    {
+     "index": 3,
+     "name": "Abstand",
+     "value": 31.0
+    },
+    {
+     "index": 4,
+     "name": "Weiche Kante",
+     "value": 38.0
+    },
+    {
+     "index": 5,
+     "name": "Nur Schatten",
+     "value": false
+    }
+   ],
+   "id": "drop_shadow",
+   "anchor": "start"
+  },
+  {
+   "match_name": "AE.ADBE Geometry",
+   "display": "Transformieren",
+   "params": [
+    {
+     "index": 0,
+     "name": "Ankerpunkt",
+     "value": {
+      "point": [
+       0.5,
+       0.5
+      ]
+     }
+    },
+    {
+     "index": 1,
+     "name": "Position",
+     "value": {
+      "point": [
+       0.5,
+       0.5
+      ]
+     }
+    },
+    {
+     "index": 3,
+     "name": "Skalierungshöhe",
+     "value": 100.0,
+     "keyframes": [
+      [
+       0.0,
+       100.0
+      ],
+      [
+       120.0,
+       240.0
+      ]
+     ]
+    },
+    {
+     "index": 4,
+     "name": "Skalierungsbreite",
+     "value": 100.0
+    },
+    {
+     "index": 5,
+     "name": "Verzerren",
+     "value": 0.0
+    },
+    {
+     "index": 6,
+     "name": "Achse der Verzerrung",
+     "value": 0.0
+    },
+    {
+     "index": 7,
+     "name": "Drehung",
+     "value": 0.0
+    },
+    {
+     "index": 8,
+     "name": "Deckkraft",
+     "value": 100.0
+    },
+    {
+     "index": 10,
+     "name": "Verschlusswinkel",
+     "value": 0.0
+    },
+    {
+     "index": 11,
+     "name": "Sampling",
+     "value": 0
+    }
+   ],
+   "id": "zoom",
+   "anchor": "start"
+  },
+  {
+   "match_name": "AE.ADBE Roughen Edges",
+   "display": "Kanten aufrauen",
+   "params": [
+    {
+     "index": 0,
+     "name": "Kantenart",
+     "value": 1
+    },
+    {
+     "index": 1,
+     "name": "Konturfarbe",
+     "value": {
+      "argb16": [
+       65280,
+       54272,
+       21248,
+       10496
+      ]
+     }
+    },
+    {
+     "index": 2,
+     "name": "Rahmen",
+     "value": 500.0,
+     "keyframes": [
+      [
+       -0.5333,
+       0.0
+      ],
+      [
+       -0.5167,
+       8.0
+      ],
+      [
+       -0.0167,
+       500.0
+      ]
+     ]
+    },
+    {
+     "index": 3,
+     "name": "Kantenschärfe",
+     "value": 0.0,
+     "keyframes": [
+      [
+       -0.5333,
+       0.0
+      ],
+      [
+       -0.5167,
+       0.20000000298
+      ],
+      [
+       -0.0167,
+       0.0
+      ]
+     ]
+    },
+    {
+     "index": 4,
+     "name": "Fraktaleinfluss",
+     "value": 1.0
+    },
+    {
+     "index": 5,
+     "name": "Skalieren",
+     "value": 204.0,
+     "keyframes": [
+      [
+       -0.5333,
+       10.0
+      ],
+      [
+       -0.5167,
+       192.0
+      ],
+      [
+       -0.0167,
+       204.0
+      ]
+     ]
+    },
+    {
+     "index": 6,
+     "name": "Breite oder Höhe dehnen",
+     "value": 0.0
+    },
+    {
+     "index": 7,
+     "name": "Offset (Turbulenz)",
+     "value": {
+      "point": [
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "index": 8,
+     "name": "Komplexität",
+     "value": 10
+    },
+    {
+     "index": 9,
+     "name": "Evolution",
+     "value": 0.0
+    },
+    {
+     "index": 10,
+     "name": "Evolutionsoptionen",
+     "value": false
+    },
+    {
+     "index": 12,
+     "name": "Zyklus (in Umdrehungen)",
+     "value": 1
+    },
+    {
+     "index": 13,
+     "name": "Zufallsparameter",
+     "value": 148
+    },
+    {
+     "index": 14,
+     "name": "Zufallsparameter",
+     "value": false
+    }
+   ],
+   "id": "fancy_out",
+   "anchor": "end",
+   "color_param": "Konturfarbe"
+  },
+  {
+   "match_name": "AE.ADBE Roughen Edges",
+   "display": "Kanten aufrauen",
+   "params": [
+    {
+     "index": 0,
+     "name": "Kantenart",
+     "value": 1
+    },
+    {
+     "index": 1,
+     "name": "Konturfarbe",
+     "value": {
+      "argb16": [
+       65280,
+       54272,
+       21248,
+       10496
+      ]
+     }
+    },
+    {
+     "index": 2,
+     "name": "Rahmen",
+     "value": 500.0,
+     "keyframes": [
+      [
+       0.0,
+       500.0
+      ],
+      [
+       0.5,
+       8.0
+      ]
+     ]
+    },
+    {
+     "index": 3,
+     "name": "Kantenschärfe",
+     "value": 0.0,
+     "keyframes": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       0.5,
+       0.20000000298
+      ]
+     ]
+    },
+    {
+     "index": 4,
+     "name": "Fraktaleinfluss",
+     "value": 1.0
+    },
+    {
+     "index": 5,
+     "name": "Skalieren",
+     "value": 204.0,
+     "keyframes": [
+      [
+       0.0,
+       204.0
+      ],
+      [
+       0.5,
+       192.0
+      ]
+     ]
+    },
+    {
+     "index": 6,
+     "name": "Breite oder Höhe dehnen",
+     "value": 0.0
+    },
+    {
+     "index": 7,
+     "name": "Offset (Turbulenz)",
+     "value": {
+      "point": [
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "index": 8,
+     "name": "Komplexität",
+     "value": 10
+    },
+    {
+     "index": 9,
+     "name": "Evolution",
+     "value": 0.0
+    },
+    {
+     "index": 10,
+     "name": "Evolutionsoptionen",
+     "value": false
+    },
+    {
+     "index": 12,
+     "name": "Zyklus (in Umdrehungen)",
+     "value": 1
+    },
+    {
+     "index": 13,
+     "name": "Zufallsparameter",
+     "value": 148
+    },
+    {
+     "index": 14,
+     "name": "Zufallsparameter",
+     "value": false
+    }
+   ],
+   "id": "fancy_in",
+   "anchor": "start",
+   "color_param": "Konturfarbe"
+  }
+ ],
+ "fancy_out_offsets_gemessen": [
+  -0.533
+ ],
+ "blur": {
+  "ein": {
+   "match_name": "AE.ADBE Gaussian Blur 2",
+   "param_index": 0,
+   "param": "Weichzeichnung",
+   "keyframes": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     15.0
+    ]
+   ]
+  },
+  "ein_aus": {
+   "match_name": "AE.ADBE Gaussian Blur 2",
+   "param_index": 0,
+   "param": "Weichzeichnung",
+   "keyframes": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.85,
+     50.0
+    ],
+    [
+     -0.6,
+     50.0
+    ],
+    [
+     0.05,
+     0.0
+    ]
+   ],
+   "anchor_end_from": 2
+  },
+  "match_name": "AE.ADBE Gaussian Blur 2"
+ },
+ "tracks_original": {
+  "V1": 233,
+  "V2": 141,
+  "V3": 82,
+  "V4": 28,
+  "V5": 9,
+  "V6": 6,
+  "V7": 11,
+  "V8": 14,
+  "V9": 90,
+  "V10": 100,
+  "V11": 12,
+  "V12": 5
+ }
+}
