@@ -1,46 +1,55 @@
-// Aufgabenleiste: zeigt laufende und letzte Hintergrundaufträge (auch nach Seitenwechsel), mit Abbrechen und Fehlerdetails.
-import { h, icon, modal, toast, btn } from './ui.js';
+// Aufgabenleiste: zeigt laufende und letzte Hintergrundaufträge (auch nach Seitenwechsel) mit Schritten, Teilzählern, Dauer und Restzeit.
+import { h, icon, modal, toast } from './ui.js';
 import { api } from './api.js';
+import { fmtSpan, jobCard } from './progressui.js';
 
-let host = null, jobs = [], seenDone = new Set(), timer = null;
+let host = null, jobs = [], seenDone = new Set(), timer = null, cards = new Map(), listEl = null;
 
-export function mountTasks(el) { host = el; poll(); }
+export function mountTasks(el) { host = el; draw(); poll(); }
 
-function summary() {
-  const run = jobs.filter((j) => j.status === 'laeuft');
-  const err = jobs.filter((j) => j.status === 'fehler' && !seenDone.has(j.id));
-  return { run, err };
-}
 function draw() {
   if (!host) return;
-  const { run, err } = summary();
-  host.replaceChildren(h('button', { class: `nav ${err.length ? 'bad' : ''}`, onClick: open, title: 'Laufende und letzte Aufgaben' },
+  const run = jobs.filter((j) => j.status === 'laeuft');
+  const err = jobs.filter((j) => j.status === 'fehler' && !seenDone.has(j.id));
+  const j0 = run[0];
+  const line1 = j0 ? (j0.step_name || j0.name).replace(/ – .*$/, '') : err.length ? `${err.length} Fehler` : 'Aufgaben';
+  const line2 = j0 ? `${Math.round(j0.progress * 100)} %${j0.eta != null ? ` · noch ${fmtSpan(j0.eta)}` : ''}${run.length > 1 ? ` · +${run.length - 1} weitere` : ''}` : '';
+  host.replaceChildren(h('button', { class: `nav tasks-nav ${err.length ? 'bad' : ''}`, onClick: open, title: j0 ? `${j0.name}: ${j0.step_name} – ${j0.detail || ''}` : 'Laufende und letzte Aufgaben mit Details' },
     run.length ? h('div', { class: 'spinner' }) : icon(err.length ? 'alert' : 'check'),
-    h('span', {}, run.length ? `${run.length} Aufgabe${run.length > 1 ? 'n' : ''} läuft${run.length ? ` (${Math.round(run[0].progress * 100)} %)` : ''}` : err.length ? `${err.length} Fehler` : 'Aufgaben')));
+    h('div', { class: 'tasks-label' }, h('div', { class: 'tl-1' }, line1), line2 ? h('small', {}, line2) : null),
+    j0 ? h('div', { class: 'pbar thin tasks-bar' }, h('i', { style: { width: `${Math.max(3, j0.progress * 100)}%` } })) : null));
 }
 async function poll() {
   try {
     const prev = new Map(jobs.map((j) => [j.id, j.status]));
     jobs = await api.get('/api/jobs');
-    for (const j of jobs) if (prev.get(j.id) === 'laeuft' && j.status === 'fehler') toast(`${j.name}: ${j.error}`, 'err');
-    draw(); refreshOpen?.();
+    for (const j of jobs) {
+      if (prev.get(j.id) === 'laeuft' && j.status === 'fehler') toast(`${j.name}: ${j.error}`, 'err');
+      if (prev.get(j.id) === 'laeuft' && j.status === 'fertig') toast(`${j.name} – fertig in ${fmtSpan(j.elapsed)}`, 'ok', 3500);
+    }
+    draw(); refresh();
   } catch { /* Server kurz weg */ }
   clearTimeout(timer);
-  timer = setTimeout(poll, jobs.some((j) => j.status === 'laeuft') ? 1500 : 5000);
+  timer = setTimeout(poll, jobs.some((j) => j.status === 'laeuft') ? 1000 : 5000);
 }
 export const pollNow = () => poll();
 
-let refreshOpen = null;
+function refresh() {
+  if (!listEl) return;
+  const keep = new Set(jobs.map((j) => j.id));
+  for (const [id, c] of cards) if (!keep.has(id)) { c.dispose(); c.remove(); cards.delete(id); }
+  jobs.forEach((j, i) => {
+    let c = cards.get(j.id);
+    if (!c) { c = jobCard(j, { onCancel: () => api.post(`/api/jobs/${j.id}/cancel`).then(poll) }); c.classList.add('jc-boxed'); cards.set(j.id, c); }
+    else c.update(j);
+    if (listEl.children[i] !== c) listEl.insertBefore(c, listEl.children[i] || null);
+  });
+  if (!jobs.length && !listEl.querySelector('.help')) listEl.append(h('p', { class: 'help' }, 'Noch keine Aufgaben seit dem Start.'));
+}
 function open() {
-  const list = h('div', { class: 'col' });
-  const fill = () => {
-    list.replaceChildren(...(jobs.length ? jobs.map((j) => h('div', { class: 'card tight col gap-s' },
-      h('div', { class: 'row' }, h('b', { class: 'grow' }, j.name), h('span', { class: `pill ${j.status === 'fertig' ? 'ok' : j.status === 'fehler' ? 'bad' : j.status === 'laeuft' ? 'warn' : ''}` }, { laeuft: 'läuft', fertig: 'fertig', fehler: 'Fehler', abgebrochen: 'abgebrochen' }[j.status] || j.status),
-        j.status === 'laeuft' ? btn('Abbrechen', { size: 'sm', onClick: async () => { await api.post(`/api/jobs/${j.id}/cancel`); poll(); } }) : null),
-      j.status === 'laeuft' ? h('div', { class: 'bar' }, h('i', { style: { width: `${Math.max(2, j.progress * 100)}%` } })) : null,
-      j.error && j.status === 'fehler' ? h('div', { class: 'row' }, h('span', { class: 'grow', style: { color: 'var(--bad)', userSelect: 'text' } }, j.error), btn('Kopieren', { size: 'sm', icon: 'copy', onClick: () => { navigator.clipboard?.writeText(`${j.name}: ${j.error}`); toast('Kopiert.', 'ok', 1500); } })) : null)) : [h('p', { class: 'help' }, 'Noch keine Aufgaben seit dem Start.')]));
-  };
-  fill(); refreshOpen = fill;
+  listEl = h('div', { class: 'col' });
+  cards = new Map();
+  refresh();
   jobs.forEach((j) => { if (j.status === 'fehler') seenDone.add(j.id); });
-  modal({ title: 'Aufgaben', body: list, onClose: () => { refreshOpen = null; draw(); } });
+  modal({ title: 'Aufgaben', wide: true, body: listEl, onClose: () => { cards.forEach((c) => c.dispose()); cards = new Map(); listEl = null; draw(); } });
 }

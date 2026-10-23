@@ -201,7 +201,7 @@ def _wrap(text: str, font, width: int) -> list[str]:
 
 
 def render_placeholder_clip(m: dict, image_path: Path, dst: Path, fps: int = 24,
-                            size: tuple[int, int] = (1280, 534)) -> Path:
+                            size: tuple[int, int] = (1280, 534), on_progress=None) -> Path:
     """Platzhalterclip in Rohschnitt-Länge: Kamerafahrt + Elemente + deutlicher „PLATZHALTER“-Schriftzug."""
     W, H = size[0] // 2 * 2, size[1] // 2 * 2  # yuv420p braucht gerade Maße
     with Image.open(image_path) as src:
@@ -216,6 +216,8 @@ def render_placeholder_clip(m: dict, image_path: Path, dst: Path, fps: int = 24,
     f = _font(max(18, H // 14))
     try:
         for i in range(n):
+            if on_progress and i % 6 == 0:
+                on_progress(i, n)
             t = i / fps
             x, y, w, h = camera_rect(m, t)
             # Ausschnitt im Seitenverhältnis des Clips halten

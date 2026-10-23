@@ -81,10 +81,12 @@ def add_recording(ep: Episode, path: str, speaker: str) -> dict:
     return data["recordings"][-1]
 
 
-def _fix_transcript_with_llm(tr: list[dict], llm, chunk: int = 120) -> list[dict]:
+def _fix_transcript_with_llm(tr: list[dict], llm, chunk: int = 120, on_chunk=None) -> list[dict]:
     """Eigennamen per LLM nachkorrigieren; nur wortweise 1:1 übernehmen, wenn die Wortzahl stimmt."""
     out = [dict(w) for w in tr]
     for i in range(0, len(out), chunk):
+        if on_chunk:
+            on_chunk(i // chunk, -(-len(out) // chunk))
         part = out[i:i + chunk]
         fixed = llm.fix_transcript(" ".join(w["w"] for w in part), align.TOLKIEN_GLOSSARY).split()
         if len(fixed) == len(part):
@@ -93,39 +95,76 @@ def _fix_transcript_with_llm(tr: list[dict], llm, chunk: int = 120) -> list[dict
     return out
 
 
-def transcribe_recording(ep: Episode, rec: dict, llm=None, progress=lambda p: None) -> list[dict]:
+def transcribe_recording(ep: Episode, rec: dict, llm=None, progress=None, names: tuple[str, str] | None = None) -> list[dict]:
+    """Transkript aus dem Cache oder neu (Whisper/ScaDS), danach optional Eigennamen per KI korrigieren.
+    `names`: Schrittnamen für „Transkribieren“ und „KI-Korrektur“, wenn der Aufrufer einen Plan hat."""
+    from .progress import as_progress
+    pg = as_progress(progress)
+    t_name, k_name = names or (None, None)
     cache = ep.p.recording / f"transkript_{rec['id']}.json"
     tr = store.read_json(cache)
-    if tr is None:
-        path = ep.p.root / rec["path"]
-        backend = stt.choose_backend(ep.settings.transcription)
-        if backend == "keins":
-            raise RuntimeError("Für die Transkription fehlt Whisper. Entweder lokal installieren (install-Skript, Option Whisper) "
-                               "oder in den Einstellungen „ScaDS.AI Whisper“ wählen (sendet die Aufnahme an ScaDS.AI).")
-        if not path.exists():
-            raise FileNotFoundError(f"Aufnahme nicht gefunden: {rec['path']}")
-        if backend == "scads":
-            if llm is None or llm.client is None:
-                raise RuntimeError("ScaDS-Transkription gewählt, aber kein API-Schlüssel (.env) gefunden")
-            tr = stt.transcribe_remote(path, llm.client, progress_cb=progress)
-        else:
-            tr = align.transcribe(path, ep.settings.whisper_model, progress_cb=progress)
-        if llm is not None and llm.enabled("transcript_fix"):
-            tr = _fix_transcript_with_llm(tr, llm)
-        store.write_json(cache, tr)
+    dur = rec.get("duration") or 0
+    if tr is not None:
+        if t_name:
+            pg.step(t_name, f"Transkript aus früherem Lauf übernommen ({len(tr)} Wörter)")
+            pg.finish_step()
+        if k_name:
+            pg.skip(k_name, "bereits korrigiert")
+        return tr
+    if t_name:
+        pg.step(t_name)
+    path = ep.p.root / rec["path"]
+    backend = stt.choose_backend(ep.settings.transcription)
+    if backend == "keins":
+        raise RuntimeError("Für die Transkription fehlt Whisper. Entweder lokal installieren (install-Skript, Option Whisper) "
+                           "oder in den Einstellungen „ScaDS.AI Whisper“ wählen (sendet die Aufnahme an ScaDS.AI).")
+    if not path.exists():
+        raise FileNotFoundError(f"Aufnahme nicht gefunden: {rec['path']}")
+    label = "Whisper (lokal)" if backend == "lokal" else "ScaDS.AI Whisper"
+    pg.detail(f"{label}: Modell laden und Audio lesen …")
+
+    def cb(f: float, detail: str | None = None) -> None:
+        pg.fraction(f, f"{label}: {media.fmt_clock(f * dur)} von {media.fmt_clock(dur)} Audio erkannt" if dur else f"{label}: {f * 100:.0f} %")
+    if backend == "scads":
+        if llm is None or llm.client is None:
+            raise RuntimeError("ScaDS-Transkription gewählt, aber kein API-Schlüssel (.env) gefunden")
+        tr = stt.transcribe_remote(path, llm.client, progress_cb=cb)
+    else:
+        tr = align.transcribe(path, ep.settings.whisper_model, progress_cb=cb)
+    if llm is not None and llm.enabled("transcript_fix"):
+        if k_name:
+            pg.step(k_name, "KI prüft Eigennamen im Transkript")
+        tr = _fix_transcript_with_llm(tr, llm, on_chunk=lambda i, n: pg.sub(i, n, f"KI-Korrektur: Abschnitt {i + 1} von {n}", "Abschnitte"))
+    elif k_name:
+        pg.skip(k_name, "KI aus oder kein Schlüssel")
+    store.write_json(cache, tr)
     return tr
 
 
-def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=lambda p: None,
+def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=None,
                   transcripts: dict[str, list[dict]] | None = None) -> dict:
     """Transkribiert (falls nötig) und gleicht alle Aufnahmen mit dem Skript ab."""
+    from .progress import as_progress
+    pg = as_progress(progress)
     data = load_alignment(ep)
     scenes = ordered_scenes(ep)
     results: dict[str, list[dict]] = {}
-    n = max(1, len(data["recordings"]))
+    n = len(data["recordings"])
+    plan = []
     for k, rec in enumerate(data["recordings"]):
-        tr = (transcripts or {}).get(rec["id"]) or transcribe_recording(
-            ep, rec, llm, lambda p, k=k: progress((k + p * 0.8) / n))
+        plan += [(f"Aufnahme {k + 1}/{n} ({rec['speaker']}): transkribieren", 12), (f"Aufnahme {k + 1}/{n}: Eigennamen per KI prüfen", 2), (f"Aufnahme {k + 1}/{n}: mit dem Skript abgleichen", 2)]
+    plan += [("Szenenstatus aktualisieren", 1), ("Ergebnis speichern", 1)]
+    pg.plan(plan)
+    for k, rec in enumerate(data["recordings"]):
+        names = (plan[3 * k][0], plan[3 * k + 1][0])
+        if (transcripts or {}).get(rec["id"]):
+            tr = transcripts[rec["id"]]
+            pg.step(names[0], "Transkript vorgegeben")
+            pg.finish_step()
+            pg.skip(names[1])
+        else:
+            tr = transcribe_recording(ep, rec, llm, pg, names)
+        pg.step(plan[3 * k + 2][0], f"{len(tr)} Wörter Transkript mit den Kommentarblöcken vergleichen")
         text_units, bullet_units = [], []
         for sc in scenes:
             for bi, blk in enumerate(sc.kommentar):
@@ -135,12 +174,12 @@ def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=lambda p
                     bullet_units.append((sc.id, bi, blk.stichpunkte))
                 elif blk.text.strip():
                     text_units.append((sc.id, bi, blk.text))
+        pg.detail(f"{len(text_units)} Textblöcke und {len(bullet_units)} Stichpunkt-Blöcke von {rec['speaker']}")
         parts = [align.align_recording(text_units, tr, rec["id"], prefer=prefer),
                  align_bullets.align_bullets(bullet_units, tr, rec["id"])]
         for part in parts:
             for sid, blocks in part.items():
                 results.setdefault(sid, []).extend(blocks)
-        progress((k + 1) / n)
     # manuelle Korrekturen aus früheren Läufen erhalten
     for sid, blocks in data.get("scenes", {}).items():
         for old in blocks:
@@ -148,13 +187,15 @@ def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=lambda p
                 new = results.setdefault(sid, [])
                 new[:] = [b for b in new if b["block"] != old["block"]] + [old]
     data["scenes"] = {sid: sorted(bl, key=lambda b: b["block"]) for sid, bl in results.items()}
-    save_alignment(ep, data)
-    # Status der Szenen
-    for sc in scenes:
+    pg.step("Szenenstatus aktualisieren")
+    for i, sc in enumerate(scenes):
+        pg.sub(i, len(scenes), f"Szene „{sc.titel or sc.id}“", "Szenen")
         bl = data["scenes"].get(sc.id, [])
         if sc.kommentar and bl and all(not b.get("missing") for b in bl) and len(bl) == len(sc.kommentar):
             sc.status = "abgeglichen"
             ep.save_scene(sc, f"Szene {sc.id} abgeglichen")
+    pg.step("Ergebnis speichern")
+    save_alignment(ep, data)
     store.log_change(ep.p.gl, ep.settings.user, "Aufnahme-Abgleich ausgeführt")
     return data
 
@@ -197,7 +238,7 @@ def still_times(scenes: list[Scene]) -> dict[str, float]:
     return out
 
 
-def render_stills(ep: Episode, scenes: list[Scene], source_id: str | None = None, progress=lambda p: None) -> dict:
+def render_stills(ep: Episode, scenes: list[Scene], source_id: str | None = None, progress=None) -> dict:
     """Standbilder aus der gewählten Quelle (Standard: Referenz). HQ-Quellen landen im Parallelordner."""
     pr = ep.project()
     sid = source_id or pr.reference_source
@@ -208,10 +249,13 @@ def render_stills(ep: Episode, scenes: list[Scene], source_id: str | None = None
     path = ep.source_path(src)
     done = {}
     fps = src.fps or pr.fps
+    from .progress import as_progress
+    pg = as_progress(progress)
     for i, (name, t) in enumerate(times.items()):
+        pg.sub(i, len(times), f"Standbild {name} bei {media.fmt_clock(t)} aus {src.path.rsplit('/', 1)[-1]}", "Standbilder")
         done[name] = str(media.extract_still_last_frame(path, tm.ref_to_src(t), fps, out_dir / name, STILL_SIZE)
                          if src.crop is None else _crop_still(path, tm.ref_to_src(t), fps, out_dir / name, src.crop))
-        progress((i + 1) / max(1, len(times)))
+    pg.sub(len(times), len(times), "alle Standbilder fertig", "Standbilder")
     return {"dir": str(out_dir), "files": done}
 
 
@@ -228,7 +272,12 @@ def _crop_still(path: Path, t: float, fps: float, dst: Path, crop: list[int]) ->
 
 # ---------- Rohschnitt ----------
 def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None = None, by_strand: bool = True,
-                    with_stills: bool = True, speakers: set[str] | None = None, progress=lambda p: None) -> dict:
+                    with_stills: bool = True, speakers: set[str] | None = None, progress=None) -> dict:
+    from .progress import as_progress
+    pg = as_progress(progress)
+    pg.plan([("Szenen ordnen und prüfen", 1), ("Schnittpaket berechnen (Spuren, Marker, Credits)", 3), ("Standbilder erzeugen", 12 if with_stills else 0.01),
+             ("Premiere-XML schreiben", 1), ("Speichern und protokollieren", 1)])
+    pg.step(0, "Reihenfolge nach Strängen" if by_strand else "Reihenfolge wie im Szenen-Editor")
     scenes = ordered_scenes(ep, by_strand)
     tpl_file = templates_dir / "rohschnitt_vorlage.json"
     template = rough_cut.load_template(tpl_file if tpl_file.exists() else None)
@@ -245,6 +294,7 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
             if ref_src.duration and g.out > ref_src.duration + 0.5:
                 raise ValueError(f"Szene „{sc.titel or sc.id}“, Segment {i + 1}: liegt hinter dem Ende der Episode "
                                  f"({g.out:.1f} s > {ref_src.duration:.1f} s). Bitte im Szenen-Editor korrigieren.")
+    pg.step(1, f"{len(scenes)} Szenen, {sum(len(s.kommentar) for s in scenes)} Kommentarblöcke")
     pkg = rough_cut.build_package(
         scenes, slug=ep.p.slug, template=template, th=ep.settings.thresholds,
         alignment=load_alignment(ep), assets=load_assets(ep), maps=load_maps(ep), free_blocks=ep.free_blocks(),
@@ -258,13 +308,17 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     pkg["episode_file"] = ref.path
     pkg["stills_dir"] = "Videoelemente"
     still_info = None
+    pg.step(2, "Letztes Bild jeder Szene als PNG")
     if with_stills:
-        still_info = render_stills(ep, scenes, still_source, lambda p: progress(p * 0.8))
+        still_info = render_stills(ep, scenes, still_source, pg)
         pkg["stills_dir"] = Path(still_info["dir"]).name
+    else:
+        pg.skip(2, "abgeschaltet")
+    pg.step(3, f"Version {version}")
     json_path = rough_cut.write_package(pkg, out_dir)
     xml_path = out_dir / f"schnitt_v{version}.xml"
     xml_path.write_text(fcpxml.to_fcpxml(pkg, ref.path, ref.duration, ep.p.root), encoding="utf-8")
+    pg.step(4)
     store.log_change(ep.p.gl, ep.settings.user, f"Rohschnitt v{version} erzeugt")
-    progress(1.0)
     return {"version": version, "json": str(json_path), "xml": str(xml_path), "duration": pkg["duration"],
             "warnings": pkg["warnings"], "stills": still_info, "markers": len(pkg["markers"])}

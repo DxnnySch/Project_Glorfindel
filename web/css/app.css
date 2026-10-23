@@ -166,3 +166,29 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .help-body code { background: var(--raised); padding: 0 5px; border-radius: 4px; }
 .help-fig { margin: 12px 0 8px; } .help-fig img { width: 100%; border: 1px solid var(--line); border-radius: 10px; cursor: zoom-in; display: block; }
 .help-fig figcaption { color: var(--faint); font-size: 12px; margin-top: 4px; }
+
+/* Detaillierte Fortschrittskarten */
+.job-card { width: min(430px, 92vw); animation: pop .2s; }
+.jc { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; box-shadow: var(--shadow); }
+.jc-boxed { box-shadow: none; }
+.jc.fertig { border-color: rgba(76,195,138,.35); } .jc.fehler { border-color: rgba(239,91,91,.5); } .jc.abgebrochen { opacity: .75; }
+.jc-head { cursor: pointer; } .jc-head b { font-size: 13.5px; }
+.pbar { position: relative; height: 16px; background: var(--raised); border-radius: 9px; overflow: hidden; }
+.pbar > i { display: block; height: 100%; border-radius: 9px; background: var(--accent); transition: width .35s ease; position: relative; overflow: hidden; }
+.jc.running .pbar > i::after, .pbar > i.indet::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 20%, rgba(255,255,255,.38) 50%, transparent 80%); background-size: 200% 100%; animation: shimmer 1.3s linear infinite; }
+.pbar > i.indet { width: 35% !important; animation: slide 1.4s ease-in-out infinite alternate; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes slide { from { margin-left: 0; } to { margin-left: 65%; } }
+.pbar-t { position: absolute; inset: 0; display: grid; place-items: center; font: 700 11px/16px var(--font); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.pbar.thin { height: 6px; border-radius: 4px; } .pbar.thin > i { border-radius: 4px; background: var(--info); }
+.jc-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; } .jc-fact { display: flex; flex-direction: column; line-height: 1.2; } .jc-fact small { color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; } .jc-fact b { font-size: 13px; font-variant-numeric: tabular-nums; } .jc-fact.faint b { color: var(--faint); font-weight: 500; }
+.jc-now { font-size: 13px; } .jc-detail { color: var(--muted); font-size: 12.5px; word-break: break-word; min-height: 0; } .jc-detail:empty, .jc-now:empty { display: none; }
+.jc-steps { display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--line); padding-top: 7px; margin-top: 2px; }
+.jc-step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--faint); } .jc-step svg { width: 14px; height: 14px; flex: none; } .jc-step small { color: var(--faint); }
+.jc-step.läuft { color: var(--text); font-weight: 600; } .jc-step.fertig { color: var(--muted); } .jc-step.fertig svg { color: var(--ok); } .jc-step.fehler { color: var(--bad); } .jc-step.übersprungen { text-decoration: line-through; opacity: .6; }
+.jc.fertig:not(.open) .jc-steps, .jc.abgebrochen:not(.open) .jc-steps { display: none; }
+.jc-err { color: var(--bad); font-size: 12.5px; user-select: text; }
+.spinner.sm { width: 12px; height: 12px; border-width: 2px; }
+.tasks-nav { flex-wrap: wrap; row-gap: 5px; } .tasks-label { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.25; text-align: left; } .tasks-bar { width: 100%; }
+#toasts { align-items: flex-end; }
+.tasks-label { display: flex; flex-direction: column; min-width: 0; } .tl-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .tasks-label small { color: var(--faint); font-size: 11.5px; }

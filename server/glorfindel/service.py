@@ -80,18 +80,24 @@ class Episode:
     def source_path(self, s: Source) -> Path:
         return to_abs(self.p.root, s.path)
 
-    def import_source(self, path: str | Path, role: str = "screener", wait: bool = False) -> Source:
+    def import_source(self, path: str | Path, role: str = "screener", wait: bool = False, progress=None) -> Source:
         """Quelle registrieren (Pfad relativ zum OneDrive-Stamm). Erste Quelle wird Referenz."""
         path = Path(path)
         if not path.is_absolute():
             path = to_abs(self.p.root, str(path))
         if not path.is_file():
             raise FileNotFoundError(f"Datei nicht gefunden: {path}")
+        from .progress import as_progress
+        pr_ = as_progress(progress)
+        pr_.plan([("Datei prüfen (vollständig synchronisiert?)", 2), ("Metadaten lesen (Länge, Bildrate, Auflösung)", 1), ("Audio-Fingerabdruck berechnen", 3), ("In das Projekt eintragen", 1)])
+        pr_.step(0, "Warte, bis die Dateigröße stabil ist")
         if wait:
-            media.wait_until_stable(path)
+            media.wait_until_stable(path, on_check=lambda n, total, size: pr_.sub(n, total, f"Dateigröße {size / 1e6:,.0f} MB unverändert".replace(",", "."), "Prüfungen"))
         if media.is_online_only(path):
             raise RuntimeError("Datei liegt nur online (OneDrive). Ordner auf „Immer auf diesem Gerät behalten“ stellen.")
+        pr_.step(1, path.name)
         info = media.probe(path)
+        pr_.step(2, f"Erste Sekunden von {path.name} auswerten")
         srcs = self.sources()
         rel = to_rel(self.p.root, path)
         existing = next((s for s in srcs if s.path == rel), None)
@@ -99,6 +105,7 @@ class Episode:
         src = Source(id=sid, path=rel, role=(existing.role if existing else "referenz" if not srcs else role),  # type: ignore[arg-type]
                      duration=info["duration"], fps=info["fps"], width=info["width"], height=info["height"],
                      fingerprint=media.fingerprint(path), anchors=existing.anchors if existing else [])
+        pr_.step(3, f"Quelle {sid} speichern")
         srcs = [s for s in srcs if s.id != sid] + [src]
         self._save_sources(sorted(srcs, key=lambda s: s.id))
         pr = self.project()
@@ -134,12 +141,12 @@ class Episode:
     def proxy_path(self, sid: str) -> Path:
         return self.p.cache() / f"proxy_{sid}.mp4"
 
-    def ensure_proxy(self, sid: str) -> Path:
+    def ensure_proxy(self, sid: str, on_progress=None) -> Path:
         dst = self.proxy_path(sid)
         with _PROXY_LOCKS.setdefault(str(dst), threading.Lock()):  # Auto-Proxy und manueller Auftrag nie gleichzeitig
             if not dst.exists():
                 s = self.source(sid)
-                media.make_proxy(self.source_path(s), dst, crop=s.crop, fps=s.normalize_fps)
+                media.make_proxy(self.source_path(s), dst, crop=s.crop, fps=s.normalize_fps, on_progress=on_progress)
         return dst
 
     # ---- Szenen ----

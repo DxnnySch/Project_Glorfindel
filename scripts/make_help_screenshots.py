@@ -192,8 +192,12 @@ with sync_playwright() as p:
     go("log")
     shot(pg, "15-protokoll", [dict(sel="table", text="Wer hat wann was geändert", at=[900, 120], w=200)])
     go("home")
-    pg.click("text=Aufgaben")
-    shot(pg, "16-aufgaben", [dict(sel=".modal-head", text="Laufende und letzte Aufträge", at=[900, 120], w=200),
-                              dict(sel=".modal .card", nth=0, text="Abbrechen oder Fehler kopieren", at=[900, 330], w=210)], wait=500)
+    pg.evaluate("fetch('/api/ep/3/1/conform', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source: 'q2', codec: 'h264', stills: true})})")
+    pg.wait_for_timeout(3500)
+    pg.locator(".tasks-nav").click()
+    shot(pg, "16-aufgaben", [dict(sel=".jc .pbar", nth=0, text="Gesamtfortschritt, Laufzeit, Restzeit und Uhrzeit der Fertigstellung", at=[300, 108], w=360),
+                              dict(sel=".jc-now", nth=0, text="Aktueller Schritt mit Teilfortschritt (z. B. Videozeit und Tempo)", at=[760, 108], w=330),
+                              dict(sel=".jc-steps", nth=0, text="Alle Schritte: fertig, läuft, wartet – mit Dauer", at=[780, 300], w=260),
+                              dict(sel="text:Abbrechen", text="Abbrechen", at=[1000, 70], w=100)], wait=500)
     print("FEHLENDE Elemente:", [m for m in msgs])
     br.close()

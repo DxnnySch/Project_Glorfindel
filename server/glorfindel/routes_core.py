@@ -213,15 +213,29 @@ class ImportSource(BaseModel):
     role: str = "screener"
 
 
+def _proxy_job(ep: Episode, sid: str, progress) -> str:
+    """Proxy mit Live-Fortschritt (ffmpeg: Videozeit, Geschwindigkeit)."""
+    s = ep.source(sid)
+    progress.plan([("Vorbereiten", 1), (f"Proxy kodieren (540p, jedes Bild ein Keyframe) – {Path(s.path).name}", 20), ("Fertigstellen", 1)])
+    progress.step(0, "Quelle öffnen")
+    if ep.proxy_path(sid).exists():
+        progress.step(2, "Proxy war schon vorhanden")
+        return str(ep.proxy_path(sid))
+    progress.step(1, "ffmpeg startet …")
+    out = ep.ensure_proxy(sid, on_progress=lambda f, info: progress.fraction(f, info["text"]))
+    progress.step(2, "Datei umbenennen")
+    return str(out)
+
+
 @router.post("/ep/{season}/{episode}/sources")
 def import_source(body: ImportSource, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     p = Path(body.path)
     if not (p if p.is_absolute() else Path(ep.p.root) / p).is_file():
         raise HTTPException(404, f"Datei nicht gefunden: {body.path}")
     def work(progress):
-        s = ep.import_source(body.path, body.role, wait=True)
+        s = ep.import_source(body.path, body.role, wait=True, progress=progress)
         if not ep.proxy_path(s.id).exists():
-            state.jobs.submit(f"Proxy {s.id} ({Path(s.path).name})", lambda progress, sid=s.id: str(ep.ensure_proxy(sid)))
+            state.jobs.submit(f"Proxy {s.id} ({Path(s.path).name})", lambda progress, sid=s.id: _proxy_job(ep, sid, progress))
         return s.model_dump()
     return {"job": state.jobs.submit("Quelle importieren", work)}
 
@@ -229,7 +243,7 @@ def import_source(body: ImportSource, ep: Episode = Depends(ep_of), state: AppSt
 @router.post("/ep/{season}/{episode}/sources/{sid}/proxy")
 def make_proxy(sid: str, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     def work(progress):
-        return str(ep.ensure_proxy(sid))
+        return _proxy_job(ep, sid, progress)
     return {"job": state.jobs.submit(f"Proxy {sid}", work)}
 
 

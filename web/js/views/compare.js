@@ -34,10 +34,9 @@ export async function render(main, ctx) {
   tc.addEventListener('change', () => { const v = parseTC(tc.value); if (v != null) { t.value = v; show(); } });
   const checkBody = h('tbody');
   const check = async () => {
-    try { const r = await runJobSync(); checkBody.replaceChildren(...r.map((x) => h('tr', {}, h('td', {}, h('b', {}, x.titel || x.scene)), h('td', {}, cell(x.A)), h('td', {}, cell(x.B)), h('td', {}, x.uncertain ? h('span', { class: 'pill bad' }, 'prüfen') : h('span', { class: 'pill ok' }, 'ok'))))); } catch (e) { toast(e.message, 'err'); }
+    try { const r = await runJob('Szenenprüfung', () => api.post(epUrl(ep, `/scene-check?source=${src.id}`))); checkBody.replaceChildren(...r.map((x) => h('tr', {}, h('td', {}, h('b', {}, x.titel || x.scene)), h('td', {}, cell(x.A)), h('td', {}, cell(x.B)), h('td', {}, x.uncertain ? h('span', { class: 'pill bad' }, 'prüfen') : h('span', { class: 'pill ok' }, 'ok'))))); } catch (e) { toast(e.message, 'err'); }
   };
   const cell = (v) => (v == null ? '–' : `${Math.round(v * 100)} %`);
-  async function runJobSync() { const box = h('span', { class: 'help' }, 'Prüfe …'); checkBody.replaceChildren(h('tr', {}, h('td', { colspan: 4 }, box))); return api.get(epUrl(ep, `/scene-check?source=${src.id}`)); }
   const codec = h('select', { title: 'Ausgabeformat' }, [['prores', 'ProRes 422 HQ'], ['dnxhr', 'DNxHR HQ'], ['h264', 'H.264 (Test)']].map(([v, l]) => h('option', { value: v }, l)));
   const conform = async () => {
     try { const r = await runJob('HQ-Conform läuft (kann lange dauern) …', () => api.post(epUrl(ep, '/conform'), { source: src.id, codec: codec.value, stills: true })); toast(`Fertig: ${r.file}`, 'ok', 9000); } catch (e) { toast(e.message, 'err'); }

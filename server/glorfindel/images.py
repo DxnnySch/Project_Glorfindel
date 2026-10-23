@@ -78,13 +78,14 @@ class ImageIndex:
             path TEXT PRIMARY KEY, mtime REAL, title TEXT, description TEXT, creator TEXT,
             keywords TEXT, haystack TEXT, animated INTEGER)""")
 
-    def index_folder(self, root: Path, folder: Path, limit: int | None = None) -> dict:
+    def index_folder(self, root: Path, folder: Path, limit: int | None = None, on_progress=None) -> dict:
         """Neue/geänderte Dateien indizieren. Online-only-Dateien nur über Dateiname/Sidecar."""
         added = skipped = 0
         known = {r[0]: r[1] for r in self.db.execute("SELECT path, mtime FROM images")}
-        for f in folder.rglob("*"):
-            if f.suffix.lower() not in IMAGE_EXT | VIDEO_EXT:
-                continue
+        files = [f for f in folder.rglob("*") if f.suffix.lower() in IMAGE_EXT | VIDEO_EXT]
+        for n_, f in enumerate(files):
+            if on_progress:
+                on_progress(n_, len(files), f.name)
             rel = f.relative_to(root).as_posix() if root in f.parents else f.as_posix()
             mt = f.stat().st_mtime
             if known.get(rel) == mt:

@@ -42,11 +42,16 @@ def index_images(state: AppState = Depends(st)):
     def work(progress):
         idx = _index(state)
         total = {"added": 0, "unchanged": 0}
-        for i, d in enumerate(state.settings.images_dirs):
-            r = idx.index_folder(root, root / d)
+        dirs = state.settings.images_dirs
+        progress.plan([(f"Ordner {d}", 1) for d in dirs] or ["Nichts zu tun"])
+        for i, d in enumerate(dirs):
+            progress.step(i, "Dateien zählen …")
+            if not (root / d).is_dir():
+                progress.skip(i, "Ordner nicht gefunden")
+                continue
+            r = idx.index_folder(root, root / d, on_progress=lambda k, n, name: progress.sub(k, n, name, "Dateien"))
             total["added"] += r["added"]
             total["unchanged"] += r["unchanged"]
-            progress((i + 1) / len(state.settings.images_dirs))
         return total
     return {"job": state.jobs.submit("Bilder indizieren", work)}
 
@@ -182,9 +187,13 @@ def render_map(mid: str, ep: Episode = Depends(ep_of), state: AppState = Depends
     img = _safe_under(ep.p.root, m["bild"])
 
     def work(progress):
+        progress.plan([("Kartenblatt zeichnen (Skizze + Hinweise)", 1), ("Platzhalter-Clip rendern (Kamerafahrt)", 6), ("Eintragen", 1)])
+        progress.step(0)
         sheet = maps.render_sheet(m, img, ep.p.maps / f"{mid}_blatt.png")
-        progress(0.3)
-        clip = maps.render_placeholder_clip(m, img, ep.p.maps / f"{mid}_platzhalter.mp4")
+        progress.step(1, f"{m.get('dauer', 6)} s Clip")
+        clip = maps.render_placeholder_clip(m, img, ep.p.maps / f"{mid}_platzhalter.mp4",
+                                            on_progress=lambda i, n: progress.sub(i, n, f"Bild {i} von {n}", "Bilder"))
+        progress.step(2)
         from .paths import to_rel
         m["placeholder_clip"] = to_rel(ep.p.root, clip)
         m["sheet"] = to_rel(ep.p.root, sheet)

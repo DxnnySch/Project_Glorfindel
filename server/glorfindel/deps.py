@@ -11,15 +11,13 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from .config import Settings, load_settings, save_settings
+from .progress import Abgebrochen, Progress
+from .progress import view as progress_view
 from .service import Episode
 
 
-class Abgebrochen(Exception):
-    """Auftrag wurde vom Nutzer abgebrochen."""
-
-
 class Jobs:
-    """Einfache Hintergrundjobs mit Fortschritt (Proxys, Transkription, Conform …)."""
+    """Hintergrundjobs mit detailliertem Fortschritt (siehe progress.py)."""
 
     def __init__(self, workers: int = 2):
         self.pool = ThreadPoolExecutor(max_workers=workers)
@@ -28,26 +26,32 @@ class Jobs:
 
     def submit(self, name: str, fn, *args, **kw) -> str:
         jid = uuid.uuid4().hex[:10]
-        job = {"id": jid, "name": name, "status": "laeuft", "progress": 0.0, "result": None, "error": "",
-               "started": time.time()}
+        job = {"id": jid, "name": name, "status": "laeuft", "result": None, "error": "", "started": time.time(), "finished": None}
         with self.lock:
             self.jobs[jid] = job
-
-        def progress(p: float) -> None:
-            if job.get("cancel"):
-                raise Abgebrochen("Abgebrochen")
-            job["progress"] = round(min(1.0, max(0.0, p)), 3)
+        progress = Progress(job)
 
         def run():
             try:
                 job["result"] = fn(*args, progress=progress, **kw)
-                job["status"], job["progress"] = "fertig", 1.0
+                for s in job.get("steps", []):
+                    if s["status"] in ("läuft", "wartet"):
+                        s.update(status="fertig" if s["status"] == "läuft" else "übersprungen", frac=1.0, finished=time.time())
+                job["status"], job["detail"], job["sub"] = "fertig", "", None
             except Abgebrochen:
                 job["status"], job["error"] = "abgebrochen", "Abgebrochen"
+                for s in job.get("steps", []):
+                    if s["status"] == "läuft":
+                        s.update(status="abgebrochen", finished=time.time())
             except Exception as e:  # noqa: BLE001
                 msg = str(e) or type(e).__name__
                 job["status"], job["error"] = "fehler", msg if isinstance(e, (ValueError, FileNotFoundError, RuntimeError)) else f"{type(e).__name__}: {msg}"
                 job["trace"] = traceback.format_exc()[-1500:]
+                for s in job.get("steps", []):
+                    if s["status"] == "läuft":
+                        s.update(status="fehler", finished=time.time())
+            finally:
+                job["finished"] = time.time()
 
         self.pool.submit(run)
         return jid
@@ -62,13 +66,13 @@ class Jobs:
 
     def list(self, limit: int = 30) -> list[dict]:
         items = sorted(self.jobs.values(), key=lambda j: j["started"], reverse=True)[:limit]
-        return [{k: v for k, v in j.items() if k != "trace"} for j in items]
+        return [progress_view(j) for j in items]
 
     def get(self, jid: str) -> dict:
         job = self.jobs.get(jid)
         if not job:
             raise HTTPException(404, "Job unbekannt")
-        return {k: v for k, v in job.items() if k != "trace"}
+        return progress_view(job)
 
 
 class AppState:

@@ -200,13 +200,23 @@ Ansicht **Protokoll**: wer hat wann was geändert. Haben zwei gleichzeitig diese
 
 **Im Bild:** 1 wer hat wann was geändert.
 
-## 14. Aufgabenleiste
+## 14. Aufgabenleiste und Fortschrittsanzeigen
 
-Links unten **Aufgaben**: alle laufenden und letzten Hintergrundaufträge (Proxy, Abgleich, Rohschnitt …) mit Fortschritt, **Abbrechen** und Fehlerdetails zum Kopieren. Sie bleibt auch nach Seitenwechsel erhalten.
+Alles, was länger dauert, läuft im Hintergrund und zeigt genau, was gerade passiert:
+
+- **Gesamtbalken** mit Prozent, **Laufzeit**, geschätzter **Restzeit** und der Uhrzeit, zu der die Aufgabe voraussichtlich fertig ist.
+- **Schritt x von y** mit Namen, z. B. „Bildschnitte erkennen“, „Standbilder erzeugen“ oder „Aufnahme 2/2: transkribieren“.
+- **Teilfortschritt** im aktuellen Schritt: „3 von 12 Standbildern“, bei Videos die verarbeitete Videozeit und das Tempo („1:19 von 1:20 · 3,4× Echtzeit“), beim Transkribieren die erkannte Audiozeit.
+- **Schrittliste** mit Häkchen, laufendem Schritt, wartenden Schritten und der Dauer jedes erledigten Schritts.
+- Bei Fehlern steht die Ursache direkt dabei (zum Kopieren), bei Erfolg die Gesamtdauer.
+
+Links unten in der Seitenleiste zeigt **Aufgaben** immer den aktuellen Schritt, Prozent und Restzeit. Ein Klick öffnet alle laufenden und letzten Aufträge; ein Klick auf eine abgeschlossene Aufgabe klappt ihre Schritte auf. **Abbrechen** stoppt auch ffmpeg-Aufgaben sofort.
+
+Auch kürzere Wartezeiten sind sichtbar: Seiten zeigen beim Laden, was sie gerade abrufen, und KI-Anfragen zählen die Wartezeit mit.
 
 ![Aufgabenleiste](img/16-aufgaben.png)
 
-**Im Bild:** 1 laufende und letzte Aufträge, 2 Abbrechen oder Fehler kopieren.
+**Im Bild:** 1 Gesamtbalken mit Laufzeit, Restzeit und Fertig-Uhrzeit, 2 aktueller Schritt mit Teilfortschritt, 3 alle Schritte mit Dauer, 4 Abbrechen.
 
 ## 15. Tastenkürzel
 

@@ -86,7 +86,7 @@ def build_filtergraph(segs: list[Seg], size: tuple[int, int], fps: float, has_au
 
 
 def conform(hq: Path, tm: TimeMap, out_dur: float, dst: Path, fps: float = 24000 / 1001,
-            codec: str = "prores", size: tuple[int, int] | None = None, progress_cb=None) -> Path:
+            codec: str = "prores", size: tuple[int, int] | None = None, progress_cb=None) -> Path:  # progress_cb(frac, info)
     """Erzeugt `dst` (Dauer == out_dur), zeitlich deckungsgleich mit der Schnittquelle."""
     info = media.probe(hq)
     size = size or (info["width"], info["height"])
@@ -101,7 +101,11 @@ def conform(hq: Path, tm: TimeMap, out_dur: float, dst: Path, fps: float = 24000
     if info["has_audio"]:
         cmd += ["-map", "[aout]"]
     cmd += CODECS[codec] + ["-t", f"{out_dur:.6f}", str(tmp)]
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        r = media.run_ffmpeg(cmd, out_dur, progress_cb)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     if r.returncode != 0:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(f"Conform fehlgeschlagen: {r.stderr.strip()[-600:]}")

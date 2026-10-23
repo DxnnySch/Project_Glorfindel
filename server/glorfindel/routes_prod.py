@@ -103,16 +103,25 @@ class DetectBody(BaseModel):
 def board_detect(body: DetectBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     def work(progress):
         sid = body.source or ep.project().reference_source
-        proxy = ep.ensure_proxy(sid)
-        progress(0.2)
-        shots = detect.detect_shots(proxy, body.threshold)
-        progress(0.6)
-        sil = detect.detect_silences(proxy)
+        progress.plan([("Proxy bereitstellen", 3), ("Bildschnitte erkennen", 10), ("Tonpausen erkennen", 3), ("Szenen vorschlagen", 1), ("Vorschaubilder erzeugen", 3), ("Speichern", 1)])
+        progress.step(0, "Vorschauvideo (Proxy) prüfen")
+        if ep.proxy_path(sid).exists():
+            proxy = ep.proxy_path(sid)
+        else:
+            progress.detail("Proxy fehlt, wird zuerst erzeugt")
+            proxy = ep.ensure_proxy(sid, on_progress=lambda f, info: progress.fraction(f, "Proxy: " + info["text"]))
+        progress.step(1, "Inhaltsbasierte Schnitterkennung")
+        shots = detect.detect_shots(proxy, body.threshold, on_progress=progress.fraction)
+        progress.step(2, "Stille im Ton suchen")
+        sil = detect.detect_silences(proxy, on_progress=progress.fraction)
+        progress.step(3, f"{len(shots)} Schnitte und {len(sil)} Tonpausen zu Szenen bündeln")
         scenes = detect.propose_scenes(shots, sil, min_len=body.min_scene_s)
-        progress(0.8)
-        ths = detect.thumbnails(proxy, [s["start"] for s in scenes], ep.p.cache() / "thumbs")
+        progress.step(4, f"{len(scenes)} Vorschläge")
+        ths = detect.thumbnails(proxy, [s["start"] for s in scenes], ep.p.cache() / "thumbs",
+                                on_progress=lambda k, n: progress.sub(k, n, f"Vorschaubild {k + 1} von {n}", "Vorschaubilder"))
         for s, t in zip(scenes, ths):
             s["thumb"] = t.name
+        progress.step(5)
         out = {"source": sid, "scenes": scenes, "shots": len(shots)}
         store.write_json(ep.p.cache() / "board.json", out)
         return out
@@ -317,17 +326,20 @@ def compare_img(name: str, ep: Episode = Depends(ep_of)):
     return FileResponse(f, headers={"Cache-Control": "no-store"})
 
 
-@router.get("/ep/{season}/{episode}/scene-check")
-def scene_check(source: str, ep: Episode = Depends(ep_of)):
+def _scene_check(ep: Episode, source: str, progress=None) -> list[dict]:
     """Pro Szene Freeze Frame A/B (erster/letzter Segment-Frame) mit Korrelation Referenz vs. Quelle."""
+    from .progress import as_progress
+    pg = as_progress(progress)
     ref = ep.source(ep.project().reference_source)
     src = ep.source(source)
     tm = TimeMap(src.anchors)
     out = []
     pr, ps = ep.proxy_path(ref.id), ep.proxy_path(src.id)
-    for sc in pipeline.ordered_scenes(ep):
-        if not sc.segmente:
-            continue
+    scenes = [s for s in pipeline.ordered_scenes(ep) if s.segmente]
+    pg.plan([("Szenen vergleichen (Anfang und Ende je Segment)", 1)])
+    pg.step(0)
+    for k, sc in enumerate(scenes):
+        pg.sub(k, len(scenes), f"Szene „{sc.titel or sc.id}“", "Szenen")
         pts = {"A": sc.segmente[0].in_ + 0.1, "B": sc.segmente[-1].out - 0.1}
         row = {"scene": sc.id, "titel": sc.titel}
         for name, t in pts.items():
@@ -336,9 +348,21 @@ def scene_check(source: str, ep: Episode = Depends(ep_of)):
                                            ep.p.cache() / "check" / f"{sc.id}{name}",
                                            None if pr.exists() else ref.crop, None if ps.exists() else src.crop)
             row[name] = round(r["correlation"], 3) if r.get("correlation") is not None else None
-        row["uncertain"] = any(row[k] is None or row[k] < 0.8 for k in ("A", "B"))
+        row["uncertain"] = any(row[k2] is None or row[k2] < 0.8 for k2 in ("A", "B"))
         out.append(row)
+    pg.sub(len(scenes), len(scenes), "fertig", "Szenen")
     return out
+
+
+@router.get("/ep/{season}/{episode}/scene-check")
+def scene_check(source: str, ep: Episode = Depends(ep_of)):
+    return _scene_check(ep, source)
+
+
+@router.post("/ep/{season}/{episode}/scene-check")
+def scene_check_job(source: str, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    """Wie GET, aber als Hintergrundauftrag mit Fortschritt (Szene n von m)."""
+    return {"job": state.jobs.submit("Szenenprüfung", lambda progress: _scene_check(ep, source, progress))}
 
 
 class ConformBody(BaseModel):
@@ -354,14 +378,19 @@ def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState
     def work(progress):
         pr = ep.project()
         src, ref = ep.source(body.source), ep.source(pr.reference_source)
+        progress.plan([("Zeitabbildung berechnen", 1), (f"HQ-Datei rendern ({body.codec})", 40), ("Standbilder aus der HQ-Datei", 6 if body.stills else 0.01)])
+        progress.step(0, f"{len(src.anchors)} Ankerpunkte, Ziel-Länge {ref.duration:.0f} s")
         tm = TimeMap(src.anchors)
         base = (ep.p.base if state.settings.keep_hq_in_onedrive else ep.p.cache()) / "conform"
+        progress.step(1, "ffmpeg startet …")
         dst = conform_mod.conform(ep.source_path(src), tm, ref.duration, base / f"{ep.p.slug.replace(' ', '_')}_HQ_conform",
-                                  fps=ref.fps or pr.fps, codec=body.codec)
-        progress(0.9)
+                                  fps=ref.fps or pr.fps, codec=body.codec, progress_cb=lambda f, info: progress.fraction(f, info["text"]))
         info = {"file": str(dst)}
+        progress.step(2, "Letztes Bild jeder Szene")
         if body.stills:
-            info["stills"] = pipeline.render_stills(ep, pipeline.ordered_scenes(ep), body.source)
+            info["stills"] = pipeline.render_stills(ep, pipeline.ordered_scenes(ep), body.source, progress)
+        else:
+            progress.skip(2, "abgeschaltet")
         return info
     return {"job": state.jobs.submit("HQ-Conform", work)}
 

@@ -21,6 +21,47 @@ def run(cmd: list[str], timeout: float | None = None) -> subprocess.CompletedPro
                           encoding="utf-8", errors="replace")
 
 
+def fmt_clock(seconds: float) -> str:
+    s = int(max(0, seconds))
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}" if s >= 3600 else f"{s // 60}:{s % 60:02d}"
+
+
+def run_ffmpeg(cmd: list[str], duration: float | None = None, on_progress=None) -> subprocess.CompletedProcess:
+    """ffmpeg mit Live-Fortschritt. `on_progress(fraction, info)`; info: {"t": s, "speed": x-fach, "fps": f, "text": "…"}.
+    Eine Ausnahme im Callback (z. B. Abbruch) beendet ffmpeg."""
+    import tempfile
+    full = [cmd[0], "-progress", "pipe:1", "-nostats"] + cmd[1:]
+    with tempfile.TemporaryFile("w+", encoding="utf-8", errors="replace") as err:
+        p = subprocess.Popen(full, stdout=subprocess.PIPE, stderr=err, text=True, encoding="utf-8", errors="replace")
+        t, speed, fps = 0.0, None, None
+        try:
+            for line in p.stdout:  # type: ignore[union-attr]
+                k, _, v = line.strip().partition("=")
+                if k in ("out_time_us", "out_time_ms") and v.lstrip("-").isdigit():
+                    t = max(0.0, int(v) / 1_000_000)
+                elif k == "speed" and v.endswith("x"):
+                    try:
+                        speed = float(v[:-1])
+                    except ValueError:
+                        pass
+                elif k == "fps":
+                    try:
+                        fps = float(v)
+                    except ValueError:
+                        pass
+                elif k == "progress" and on_progress:
+                    frac = min(1.0, t / duration) if duration else 0.0
+                    txt = f"{fmt_clock(t)}" + (f" von {fmt_clock(duration)}" if duration else "") + (f" · {speed:.1f}× Echtzeit" if speed else "")
+                    on_progress(frac, {"t": t, "speed": speed, "fps": fps, "text": txt})
+            p.wait()
+        except BaseException:
+            p.kill()
+            p.wait()
+            raise
+        err.seek(0)
+        return subprocess.CompletedProcess(full, p.returncode, "", err.read())
+
+
 def run_bytes(cmd: list[str], timeout: float | None = None) -> bytes:
     r = subprocess.run(cmd, capture_output=True, timeout=timeout)
     if r.returncode != 0:
@@ -53,7 +94,7 @@ def probe(path: Path | str) -> dict:
     }
 
 
-def wait_until_stable(path: Path, checks: int = 3, interval: float = 1.0, timeout: float = 600.0) -> bool:
+def wait_until_stable(path: Path, checks: int = 3, interval: float = 1.0, timeout: float = 600.0, on_check=None) -> bool:
     """Wartet, bis eine OneDrive-Datei vollständig synchronisiert ist (Größe stabil, lesbar)."""
     end = time.time() + timeout
     last, same = -1, 0
@@ -68,6 +109,8 @@ def wait_until_stable(path: Path, checks: int = 3, interval: float = 1.0, timeou
             continue
         same = same + 1 if size == last else 0
         last = size
+        if on_check:
+            on_check(min(same, checks), checks, size)
         if same >= checks:
             return True
         time.sleep(interval)
@@ -144,7 +187,7 @@ def video_filter(height: int | None = None, crop: list[int] | None = None, fps: 
 
 
 def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None = None,
-               fps: float | None = None) -> Path:
+               fps: float | None = None, on_progress=None) -> Path:
     """540p H.264, jeder Frame ein Keyframe (-g 1) für exaktes Scrubben/Frame-Stepping.
 
     `crop` und `fps` normalisieren Bildschirmaufnahmen (variable Bildrate, Letterbox) auf die Folge.
@@ -154,7 +197,15 @@ def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None =
     cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-i", str(src),
            "-vf", video_filter(height, crop, fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
            "-g", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(tmp)]
-    r = run(cmd)
+    try:
+        dur = probe(src)["duration"]
+    except Exception:  # noqa: BLE001
+        dur = None
+    try:
+        r = run_ffmpeg(cmd, dur, on_progress)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     if r.returncode != 0:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(f"Proxy fehlgeschlagen: {r.stderr.strip()[:300]}")

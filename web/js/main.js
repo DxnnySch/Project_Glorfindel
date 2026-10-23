@@ -74,20 +74,29 @@ async function route() {
   const def = VIEWS[view] || VIEWS.home;
   cleanup?.(); cleanup = null;
   const main = clear($('#main'));
+  const step = h('span', {}, 'Einstellungen laden …'), t0 = Date.now(), secs = h('small', { class: 'faint' });
+  const loader = h('div', { class: 'page' }, h('div', { class: 'card', style: { maxWidth: '420px', margin: '60px auto' } }, h('div', { class: 'row' }, h('div', { class: 'spinner' }), h('b', {}, 'Wird geladen'), h('span', { class: 'grow' }), secs), h('div', { class: 'pbar', style: { margin: '12px 0 8px' } }, h('i', { class: 'indet' })), h('div', { class: 'jc-detail', style: { display: 'block' } }, step)));
+  const tick = setInterval(() => { secs.textContent = `${Math.round((Date.now() - t0) / 1000)} s`; }, 500);
+  const loaderTimer = setTimeout(() => main.append(loader), 250); // erst bei spürbarer Wartezeit zeigen
+  const stopLoader = () => { clearTimeout(loaderTimer); clearInterval(tick); loader.remove(); };
   try {
     if (!S.settings) await loadGlobal();
-    if (ep) await loadEpisode(ep.season, ep.episode); else { S.ep = null; S.data = null; }
+    if (ep) { step.textContent = `Folge S${ep.season} E${ep.episode} laden (Szenen, Quellen, Stränge) …`; await loadEpisode(ep.season, ep.episode); } else { S.ep = null; S.data = null; }
   } catch (e) {
     toast(e.message, 'err');
-    if (ep) { location.hash = '#/home'; return; }
+    if (ep) { stopLoader(); location.hash = '#/home'; return; }
   }
-  if (!S.settings.onedrive_root && view !== 'settings' && view !== 'help') { location.hash = '#/settings'; return; }
+  if (!S.settings.onedrive_root && view !== 'settings' && view !== 'help') { stopLoader(); location.hash = '#/settings'; return; }
   renderSide(VIEWS[view] ? view : 'home');
   current = view;
   try {
+    step.textContent = `Ansicht „${def.label}“ laden …`;
     const mod = await import(def.mod);
+    step.textContent = `Ansicht „${def.label}“ aufbauen (Daten abrufen) …`;
     cleanup = (await mod.render(main, { go, refresh: () => route() })) || null;
+    stopLoader();
   } catch (e) {
+    stopLoader();
     console.error(e);
     main.append(h('div', { class: 'page' }, h('div', { class: 'banner bad' }, `Ansicht konnte nicht geladen werden: ${e.message}`)));
   }

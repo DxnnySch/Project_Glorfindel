@@ -1,5 +1,5 @@
 // UI-Bausteine: h(), Icons, Toasts, Dialoge, Dateiauswahl, Jobs, Formatierung.
-import { api, waitJob } from './api.js';
+import { api } from './api.js';
 
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -107,16 +107,37 @@ export function pickPath({ title = 'Auswählen', start = '', files = false, acce
   });
 }
 
-// Hintergrundjob mit Fortschrittsanzeige
+// Hintergrundjob mit detaillierter Fortschrittskarte (Schritte, Teilzähler, Dauer, Restzeit)
 export async function runJob(label, startFn, host) {
-  const bar = h('i', { style: { width: '2%' } });
-  const box = h('div', { class: 'job' }, h('div', { class: 'spinner' }), h('span', {}, label), h('div', { class: 'bar' }, bar));
+  const { jobCard } = await import('./progressui.js');
+  const box = h('div', { class: 'job-card' });
   (host || $('#toasts')).append(box);
+  let card = null, jid = null;
   try {
     const { job } = await startFn();
-    const result = await waitJob(job, (j) => { bar.style.width = `${Math.max(2, j.progress * 100)}%`; });
-    return result;
-  } finally { box.remove(); }
+    jid = job;
+    for (;;) {
+      const j = await api.get(`/api/jobs/${job}`);
+      if (!card) { card = jobCard(j, { onCancel: () => api.post(`/api/jobs/${job}/cancel`).catch(() => {}) }); box.append(card); }
+      card.update(j);
+      if (j.status === 'fertig') { await new Promise((r) => setTimeout(r, 700)); return j.result; }
+      if (j.status === 'fehler') throw new Error(j.error || 'Aufgabe fehlgeschlagen');
+      if (j.status === 'abgebrochen') throw new Error('Abgebrochen');
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  } finally { card?.dispose(); box.remove(); }
+}
+
+// Wartezeit ohne Job (z. B. KI-Anfrage): Karte mit laufender Uhr
+export async function busy(label, promise, hint = '') {
+  const t0 = Date.now();
+  const clock = h('b', {}, '0 s');
+  const box = h('div', { class: 'job-card' }, h('div', { class: 'jc running' },
+    h('div', { class: 'row jc-head' }, h('div', { class: 'spinner' }), h('b', { class: 'grow' }, label), clock),
+    h('div', { class: 'pbar' }, h('i', { class: 'indet' })), hint ? h('div', { class: 'jc-detail' }, hint) : null));
+  $('#toasts').append(box);
+  const tick = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); clock.textContent = s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min`; }, 250);
+  try { return await (typeof promise === 'function' ? promise() : promise); } finally { clearInterval(tick); box.remove(); }
 }
 
 export const fmtTC = (s, fps = 24) => {

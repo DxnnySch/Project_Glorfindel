@@ -1,5 +1,5 @@
 // Szenen-Editor: Liste mit Längenampel, Player mit I/O-Tasten, Segmente, Kommentarblöcke, Autosave.
-import { h, $, clear, btn, icon, toast, modal, field, confirmBox, fmtTC, parseTC, fmtDur, debounce, empty, lightLabel } from '../ui.js';
+import { h, $, clear, btn, icon, toast, modal, field, confirmBox, busy, fmtTC, parseTC, fmtDur, debounce, empty, lightLabel } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S, refSource, strandOf } from '../state.js';
 
@@ -117,7 +117,7 @@ export async function render(main, ctx) {
   const blockText = (b) => (b.modus === 'stichpunkte' ? b.stichpunkte.join('\n') : b.text);
   async function aiNames(b) {
     try {
-      const r = await api.post('/api/llm/check-names', { text: blockText(b) });
+      const r = await busy('KI prüft Namen …', api.post('/api/llm/check-names', { text: blockText(b) }), 'ScaDS.AI antwortet meist in 5–20 Sekunden');
       if (!r.length) { toast('Keine auffälligen Namen gefunden.', 'ok'); return; }
       const picked = new Set(r.map((_, i) => i));
       modal({ title: 'Namensprüfung', body: h('div', { class: 'col' }, r.map((x, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true, onChange: (e) => (e.target.checked ? picked.add(i) : picked.delete(i)) }), h('span', {}, `„${x.falsch}“ → „${x.richtig}“`)))),
@@ -129,7 +129,7 @@ export async function render(main, ctx) {
   }
   async function aiImages(b) {
     try {
-      const terms = await api.post('/api/llm/search-terms', { text: blockText(b) });
+      const terms = await busy('KI sucht Bild-Ideen …', api.post('/api/llm/search-terms', { text: blockText(b) }), 'ScaDS.AI antwortet meist in 5–20 Sekunden');
       if (!terms.length) { toast('Keine Vorschläge erhalten.', 'info'); return; }
       const res = h('div', { class: 'thumbs' });
       const search = async (q) => { const r = await api.get(`/api/images/search?q=${encodeURIComponent(q)}&limit=24`); res.replaceChildren(...(r.length ? r.map((i) => h('div', { class: 'thumb', style: { cursor: 'pointer' }, title: 'Hinzufügen und an den Anfang des Blocks setzen', onClick: async () => {
@@ -141,12 +141,12 @@ export async function render(main, ctx) {
     } catch (e) { toast(e.message, 'err'); }
   }
   async function aiMap(b) {
-    try { const r = await api.post('/api/llm/suggest-map', { text: blockText(b) });
+    try { const r = await busy('KI sucht eine passende Karte …', api.post('/api/llm/suggest-map', { text: blockText(b) }));
       modal({ title: 'Kartenvorschlag', body: r.karte ? h('div', { class: 'col' }, h('p', {}, h('b', {}, r.karte)), h('p', { class: 'help' }, `Zu markierende Orte: ${(r.orte || []).join(', ') || '–'}`)) : h('p', {}, 'Keine passende Karte gefunden.') });
     } catch (e) { toast(e.message, 'err'); }
   }
   async function aiTitle(s) {
-    try { const r = await api.post('/api/llm/scene-title', { text: s.kommentar.map(blockText).join(' ') });
+    try { const r = await busy('KI formuliert einen Titel …', api.post('/api/llm/scene-title', { text: s.kommentar.map(blockText).join(' ') }));
       if (r.titel) { s.titel = r.titel; touch(); drawScene(); } else toast('Kein Titelvorschlag erhalten.', 'info'); } catch (e) { toast(e.message, 'err'); }
   }
 
