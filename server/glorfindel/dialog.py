@@ -50,6 +50,9 @@ def transcribe(ep: Episode, llm=None, sprache: str = "auto", progress=None) -> d
         words = stt.transcribe_remote(audio, llm.client, language=lang, glossary="", progress_cb=cb)
     else:
         words = align.transcribe(audio, ep.settings.whisper_model, language=lang, glossary="", progress_cb=cb)
+    if not words and dur > 30:
+        raise RuntimeError(f"{label} hat keinen gesprochenen Text erkannt. Prüfe die Sprache der Episode oder wähle in den "
+                           "Einstellungen ein anderes Transkriptions-Verfahren.")
     pg.step(2, f"{len(words)} Wörter")
     data = {"sprache": sprache, "quelle": src.id, "words": words}
     store.write_json(path(ep), data)

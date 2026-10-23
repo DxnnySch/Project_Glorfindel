@@ -65,3 +65,19 @@ def test_align_recording_collects_missing_and_scenes():
 
 def test_whisper_model_choice_explicit():
     assert pick_whisper_model("medium")[0] == "medium"
+
+
+def test_remote_stt_falls_back_to_segment_times():
+    """ScaDS-Whisper liefert Segmente, aber keine Wort-Zeitstempel (words == [])."""
+    from glorfindel.stt import parse_verbose
+    resp = {"words": [], "segments": [
+        {"start": 1.0, "end": 3.0, "text": " We stand with you.", "no_speech_prob": 0.01, "avg_logprob": -0.2},
+        {"start": 5.0, "end": 6.0, "text": " (Musik)", "no_speech_prob": 0.95, "avg_logprob": -1.8},
+        {"start": 8.0, "end": 9.0, "text": " Down", "no_speech_prob": 0.01, "avg_logprob": -0.3}]}
+    w = parse_verbose(resp, offset=600.0)
+    assert [x["w"] for x in w] == ["We", "stand", "with", "you.", "Down"]
+    assert w[0]["start"] == 601.0 and abs(w[3]["end"] - 603.0) < 1e-6 and w[4]["start"] == 608.0
+    assert all(a["end"] <= b["start"] + 1e-6 for a, b in zip(w, w[1:]))
+    # Mit echten Wort-Zeitstempeln bleibt alles beim Alten
+    real = parse_verbose({"words": [{"word": " Hi", "start": 0.5, "end": 0.9}], "segments": [{"start": 0, "end": 1, "text": "x"}]}, 0)
+    assert real == [{"w": "Hi", "start": 0.5, "end": 0.9, "p": 1.0}]

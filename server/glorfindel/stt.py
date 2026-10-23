@@ -31,18 +31,45 @@ def split_audio(src: Path, dst_dir: Path, chunk_s: float = CHUNK_S) -> list[tupl
     return out
 
 
-def parse_verbose(resp, offset: float) -> list[dict]:
-    """Wörter aus einer verbose_json-Antwort (Objekt oder dict) mit Zeitversatz des Stücks."""
-    get = (lambda o, k: o.get(k)) if isinstance(resp, dict) else (lambda o, k: getattr(o, k, None))
-    words = get(resp, "words") or []
+def words_from_segments(segments, offset: float) -> list[dict]:
+    """Ersatz, wenn der Dienst keine Wort-Zeitstempel liefert (ScaDS-Whisper tut das nicht): Die Wörter eines
+    Segments werden nach Zeichenlänge auf dessen Zeitspanne verteilt. Für Anzeige und Abgleich genau genug."""
+    get = (lambda o, k: o.get(k)) if isinstance(segments[0], dict) else (lambda o, k: getattr(o, k, None))
     out = []
-    for w in words:
+    for sg in segments:
+        text, start, end = (get(sg, "text") or "").strip(), get(sg, "start"), get(sg, "end")
+        if not text or start is None or end is None:
+            continue
+        if (get(sg, "no_speech_prob") or 0) > 0.8 and (get(sg, "avg_logprob") or 0) < -1.0:
+            continue  # Musik/Geräusche, vom Modell selbst als „keine Sprache“ eingestuft
+        toks = text.split()
+        weights = [len(t) + 1 for t in toks]
+        total, t = float(sum(weights)), float(start)
+        span = max(float(end) - float(start), 0.05)
+        for tok, wgt in zip(toks, weights):
+            d = span * wgt / total
+            out.append({"w": tok, "start": round(t + offset, 3), "end": round(t + d + offset, 3), "p": 0.5})
+            t += d
+    return out
+
+
+def parse_verbose(resp, offset: float) -> list[dict]:
+    """Wörter aus einer verbose_json-Antwort (Objekt oder dict) mit Zeitversatz des Stücks.
+    Fehlen Wort-Zeitstempel, werden sie aus den Segment-Zeiten abgeleitet."""
+    get = (lambda o, k: o.get(k)) if isinstance(resp, dict) else (lambda o, k: getattr(o, k, None))
+    out = []
+    for w in get(resp, "words") or []:
         word, start, end = get(w, "word"), get(w, "start"), get(w, "end")
         if word is None or start is None:
             continue
         out.append({"w": str(word).strip(), "start": round(float(start) + offset, 3),
                     "end": round(float(end if end is not None else start) + offset, 3), "p": 1.0})
-    return [w for w in out if w["w"]]
+    out = [w for w in out if w["w"]]
+    if not out:
+        segs = get(resp, "segments") or []
+        if segs:
+            out = words_from_segments(segs, offset)
+    return out
 
 
 def transcribe_remote(path: Path, client, model: str = REMOTE_MODEL, language: str | None = "de",
