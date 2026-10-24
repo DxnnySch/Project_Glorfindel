@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -256,10 +257,17 @@ def extract_frame(src: Path, t: float, dst: Path, width: int | None = None, fps_
     cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-ss", f"{max(0.0, t):.4f}", "-i", str(src), "-frames:v", "1"]
     if width:
         cmd += ["-vf", f"scale={width}:-2"]
-    cmd += [str(dst)]
+    tmp = dst.with_name(dst.stem + ".part" + dst.suffix)
+    cmd += [str(tmp)]
     r = run(cmd)
-    if r.returncode != 0 or not dst.exists():
+    if r.returncode != 0 or not tmp.exists():
+        tmp.unlink(missing_ok=True)
         raise RuntimeError(f"Frame-Export fehlgeschlagen: {r.stderr.strip()[:300]}")
+    try:
+        os.replace(tmp, dst)
+    except PermissionError as e:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(f"Die Datei {dst.name} ist gesperrt (von Premiere oder OneDrive verwendet): {dst}") from e
     return dst
 
 

@@ -5,7 +5,6 @@ Zustand dieser Maschine (Pfade lokaler Dateien) liegt im lokalen Cache der Folge
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 from . import media, pipeline, rough_cut, store
@@ -89,12 +88,12 @@ def _image_size(p: Path):
         return None
 
 
-def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path) -> PlanEnv:
+def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path) -> PlanEnv:
     tpl = rough_cut.load_template(templates_dir / "rohschnitt_vorlage.json" if (templates_dir / "rohschnitt_vorlage.json").exists() else None)
     s = ep.settings.premiere
     recipes_file = templates_dir / "premiere_rezepte.json"
     return PlanEnv(
-        root=ep.p.root, episode_media=reference, stills_dir=ep.p.stills,
+        root=ep.p.root, episode_media=reference, stills_dir=stills_dir,
         credit=lambda text, art, x: credit_png(text, art, pdir(ep) / "credits", x_override=x),
         image_size=_image_size, recipes=load_recipes(recipes_file if recipes_file.exists() else None), doppel=tpl["doppelbild"],
         premiere={"aep": str(ep.p.root / s.aep), "comp": s.comp, "pause_in": s.pause_in, "play_in": s.play_in,
@@ -116,11 +115,12 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     pkg = json.loads(Path(res["json"]).read_text(encoding="utf-8"))
     scenes = pipeline.scenes_in_video(pipeline.ordered_scenes(ep, by_strand))
     pg.step(3)
-    times = stills_from_file(scenes, ref, ep.p.stills, pg=pg)
+    stills_dir = ep.p.stills / f"Bridge_v{res['version']}"     # eigener Ordner je Bau: Premiere sperrt Dateien aus früheren Importen
+    times = stills_from_file(scenes, ref, stills_dir, pg=pg)
     pg.step(4)
     preset = make_sequence_preset(pdir(ep) / "Glorfindel-Rohschnitt.sqpreset", video_tracks=ep.settings.premiere.video_tracks,
                                   audio_tracks=ep.settings.premiere.audio_tracks)
-    plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset))
+    plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset, stills_dir))
     plan["calibration"] = calibration()
     plan["save"] = True
     store.write_json(pdir(ep) / f"bauplan_v{res['version']}.json", plan)
@@ -135,7 +135,7 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     report = hub.call("plan.run", {"plan": plan}, timeout=3600, on_event=on_event)
     pg.step(6)
     st = load_state(ep)
-    st.update({"ref_cfr": str(ref), "stills": times, "stills_dir": str(ep.p.stills), "active": "proxy", "version": res["version"],
+    st.update({"ref_cfr": str(ref), "stills": times, "stills_dir": str(stills_dir), "active": "proxy", "version": res["version"],
                "sequence": plan["name"]})
     save_state(ep, st)
     store.write_json(pdir(ep) / f"bericht_v{res['version']}.json", report)
@@ -155,33 +155,26 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
         raise ValueError("Die konforme HQ-Datei fehlt. Zuerst unter „Kontrolle“ Anker setzen und „HQ-Conform“ ausführen.")
     if st.get("active") == to:
         raise ValueError(f"Premiere arbeitet bereits mit der {'HQ-' if to == 'hq' else 'Proxy-'}Fassung.")
-    pg.plan([("Verbindung prüfen", 0.5), ("Standbilder ersetzen", 8), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
+    pg.plan([("Verbindung prüfen", 0.5), ("HQ-Standbilder erzeugen" if to == "hq" else "Standbilder vorbereiten", 8), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
     pg.step(0)
     if not hub.connected:
         raise BridgeError("Premiere ist nicht verbunden. Panel „Glorfindel Bridge“ in Premiere öffnen.")
-    stills_dir, backup = Path(st["stills_dir"]), Path(st["stills_dir"]).parent / "Videoelemente_Proxy"
+    stills_dir = Path(st["stills_dir"])
+    hq_dir = stills_dir.with_name(stills_dir.name + "_HQ")          # Parallelordner: nichts wird überschrieben, Premiere kann nichts sperren
     pg.step(1)
     if to == "hq":
-        if not backup.exists():                           # Proxy-Stand einmalig sichern, damit der Rückweg verlustfrei ist
-            backup.mkdir(parents=True)
-            for name in st["stills"]:
-                if (stills_dir / name).exists():
-                    shutil.copy2(stills_dir / name, backup / name)
-        stills_from_file(None, Path(st["hq"]), stills_dir, times=st["stills"], pg=pg)
-        swaps = [{"from": st["ref_cfr"], "to": st["hq"]}]
+        stills_from_file(None, Path(st["hq"]), hq_dir, times=st["stills"], pg=pg)
+        swaps = [{"from": st["ref_cfr"], "to": st["hq"]}] + [{"from": str(stills_dir / n), "to": str(hq_dir / n)} for n in st["stills"]]
     else:
-        for name in st["stills"]:
-            if (backup / name).exists():
-                shutil.copy2(backup / name, stills_dir / name)
-        swaps = [{"from": st["hq"], "to": st["ref_cfr"]}]
+        swaps = [{"from": st["hq"], "to": st["ref_cfr"]}] + [{"from": str(hq_dir / n), "to": str(stills_dir / n)} for n in st["stills"]]
     pg.step(2)
-    report = hub.call("media.swap", {"swaps": swaps, "refresh": [str(stills_dir)]}, timeout=600)
+    report = hub.call("media.swap", {"swaps": swaps, "refresh": []}, timeout=600)
     if report.get("fehler"):
         raise BridgeError("Tausch in Premiere unvollständig: " + "; ".join(f"{f.get('von') or f.get('datei')}: {f['fehler']}" for f in report["fehler"]))
     pg.step(3)
     st["active"] = to
     save_state(ep, st)
-    store.log_change(ep.p.gl, ep.settings.user, f"Premiere auf {'HQ' if to == 'hq' else 'Proxy'} umgestellt ({report.get('neu_geladen', 0)} Standbilder neu geladen)")
+    store.log_change(ep.p.gl, ep.settings.user, f"Premiere auf {'HQ' if to == 'hq' else 'Proxy'} umgestellt ({len(st['stills'])} Standbilder, Episode)")
     return {"active": to, "report": report}
 
 

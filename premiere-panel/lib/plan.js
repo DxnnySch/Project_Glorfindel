@@ -1,8 +1,9 @@
 // Bauplan ausführen: Medien importieren, Episoden-Sequenz und Hauptsequenz anlegen, Clips setzen, Effekte/Credits/Marker.
 // Jeder Schritt ist abgesichert: Fehler landen im Bericht, der Bau läuft weiter.
+// Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, norm, guarded, errText, walkItems, asClip, sleep } = require('./core');
+const { tt, tx, norm, guarded, errText, walkItems, asClip, retryStale } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 
@@ -19,8 +20,14 @@ async function trackItemAt(ppro, seq, kind, index, startSec) {
   return best;
 }
 
-async function findSequenceItem(ppro, root, name) {
-  for (const it of await walkItems(ppro, root)) {
+async function sequenceByGuid(ppro, project, guid) {
+  const seq = (await project.getSequences()).find((s) => String(s.guid) === guid);
+  if (!seq) throw new Error('Sequenz nicht mehr im Projekt');
+  return seq;
+}
+
+async function findSequenceItem(ppro, folder, name) {
+  for (const it of await walkItems(ppro, folder)) {
     if (it.name !== name) continue;
     const clip = asClip(ppro, it);
     if (clip && (await clip.isSequence())) return clip;
@@ -33,56 +40,87 @@ async function runPlan(ppro, plan, emit = () => {}) {
   const report = { errors: [], warnings: [...(plan.warnings || [])], placed: {}, effects: {}, sequence: plan.name, started: Date.now() };
   const ctx = { colorMode: (plan.calibration && plan.calibration.colorMode) || 'unit', offset: 0 };
   const kfBase = (plan.calibration && plan.calibration.keyframeBase) || 'clip';   // 'clip' | 'sequence' | 'source'
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error('In Premiere ist kein Projekt geöffnet.');
   const say = (text, done, of) => emit('progress', { text, done, of });
+  const getProject = async () => {
+    const p = await ppro.Project.getActiveProject();
+    if (!p) throw new Error('In Premiere ist kein Projekt geöffnet.');
+    return p;
+  };
+  const project0 = await getProject();
 
   // ---- 1. Medien ----
   say('Fach und Medien vorbereiten …');
-  const bin = await media.ensureBin(ppro, project, plan.bin);
-  const paths = plan.media.map((m) => m.path);
-  const byPath = await media.importFiles(ppro, project, paths, bin, emit);
-  const item = {};
-  for (const m of plan.media) {
-    const it = byPath.get(norm(m.path));
-    if (it) item[m.id] = it; else report.errors.push({ was: 'Import ' + m.path, fehler: 'nach dem Import nicht im Projekt gefunden' });
-  }
+  await media.importFiles(ppro, project0, plan.media.map((m) => m.path), plan.bin, emit);
+
+  // Plan-Medium -> Name des Projektelements. Elemente selbst werden vor jeder Verwendung frisch per Namen geholt
+  // (alte Objekte sind nach jeder Änderung ungültig; ein Aufruf `getItems()` genügt, kein kompletter Neuaufbau).
+  const names = {};
+  const refresh = async () => {
+    const project = await getProject();
+    const bin = await media.getBin(ppro, project, plan.bin);
+    const byPath = await media.mediaByPath(ppro, bin);
+    for (const m of plan.media) { const it = byPath.get(norm(m.path)); if (it) names[m.id] = it.name; else delete names[m.id]; }
+    const epSeq = await findSequenceItem(ppro, bin, plan.episode_sequence);
+    names.epSeq = epSeq ? epSeq.name : undefined;
+    names.comp = undefined;
+    if (plan.anim_source && plan.anim_source.comp) {
+      for (const it of await walkItems(ppro, bin)) {
+        if (String(it.name).includes(plan.anim_source.comp) && !(await asClip(ppro, it).isSequence())) { names.comp = it.name; break; }
+      }
+    }
+  };
+  const fresh = async (key) => {
+    if (!names[key]) return null;
+    const project = await getProject();
+    const bin = await media.getBin(ppro, project, plan.bin);
+    const it = (await bin.getItems()).find((i) => i.name === names[key]);
+    return it ? asClip(ppro, it) : null;
+  };
 
   // ---- 2. Pause/Play aus der After-Effects-Komposition ----
-  let compItem = null;
   if (plan.clips.some((c) => c.kind === 'anim') && plan.anim_source && plan.anim_source.aep) {
     await guarded(report, 'After-Effects-Komposition', async () => {
+      const project = await getProject();
+      const bin = await media.getBin(ppro, project, plan.bin);
       const ok = await project.importAEComps(plan.anim_source.aep, [plan.anim_source.comp], bin);
       if (ok === false) throw new Error('Import der Komposition „' + plan.anim_source.comp + '“ abgelehnt');
-      for (const it of await walkItems(ppro, bin)) {
-        if (String(it.name).includes(plan.anim_source.comp)) { compItem = asClip(ppro, it); break; }
-      }
-      if (!compItem) throw new Error('Komposition nach dem Import nicht gefunden');
     });
   }
 
   // ---- 3. Episoden-Sequenz (verschachtelt: hier wird später das HQ-Medium getauscht) ----
   say('Episoden-Sequenz anlegen …');
   const epMedia = plan.media.find((m) => m.kind === 'episode');
-  let epSeqItem = null;
+  await refresh();
   await guarded(report, 'Episoden-Sequenz', async () => {
-    const epClip = item[epMedia.id];
+    const epClip = await fresh(epMedia.id);
     if (!epClip) throw new Error('Episoden-Medium fehlt');
-    const epSeq = await project.createSequenceFromMedia(plan.episode_sequence, [epClip], bin);
-    epSeqItem = asClip(ppro, await epSeq.getProjectItem());
+    const project = await getProject();
+    const bin = await media.getBin(ppro, project, plan.bin);
+    await project.createSequenceFromMedia(plan.episode_sequence, [epClip], bin);
   });
-  if (!epSeqItem) throw new Error('Ohne Episoden-Sequenz kann kein Rohschnitt entstehen: ' + (report.errors.at(-1) || {}).fehler);
+  await refresh();
+  if (!names.epSeq) throw new Error('Ohne Episoden-Sequenz kann kein Rohschnitt entstehen: ' + ((report.errors.at(-1) || {}).fehler || 'nicht gefunden'));
 
   // ---- 4. Hauptsequenz mit allen Spuren ----
   say('Hauptsequenz anlegen …');
-  const main = await project.createSequenceWithPresetPath(plan.name, plan.preset.path);
-  await guarded(report, 'Sequenz aktivieren', async () => { await project.setActiveSequence(main); await project.openSequence(main); });
-  const editor = ppro.SequenceEditor.getEditor(main);
-  const nV = await main.getVideoTrackCount();
-  const nA = await main.getAudioTrackCount();
+  let mainGuid, nV, nA;
+  {
+    const project = await getProject();
+    const main = await project.createSequenceWithPresetPath(plan.name, plan.preset.path);
+    mainGuid = String(main.guid);
+    nV = await main.getVideoTrackCount();
+    nA = await main.getAudioTrackCount();
+  }
+  await guarded(report, 'Sequenz aktivieren', async () => {
+    const project = await getProject();
+    const main = await sequenceByGuid(ppro, project, mainGuid);
+    await project.setActiveSequence(main);
+    await (await getProject()).openSequence(await sequenceByGuid(ppro, await getProject(), mainGuid));
+  });
   if (nV < plan.preset.video_tracks || nA < plan.preset.audio_tracks) {
     report.warnings.push('Hauptsequenz hat nur ' + nV + ' Video-/' + nA + ' Audiospuren (geplant ' + plan.preset.video_tracks + '/' + plan.preset.audio_tracks + '). Die Sequenz-Vorgabe wurde nicht übernommen – Clips auf höheren Spuren fehlen.');
   }
+  await refresh();
 
   // ---- 5. Clips ----
   const total = plan.clips.length;
@@ -93,54 +131,73 @@ async function runPlan(ppro, plan, emit = () => {}) {
     if (done % 10 === 0 || done === total) say('Clips setzen: ' + done + ' von ' + total, done, total);
     await guarded(report, c.kind + ' ' + (c.name || '') + ' @' + c.start.toFixed(2), async () => {
       const dur = c.end - c.start;
-      let src = null, audioIdx = -1, videoIdx = c.track;
-      let inOut = null;
-      if (c.kind === 'episode') { src = epSeqItem; audioIdx = c.audio; inOut = [c.src_in, c.src_out]; }
-      else if (c.kind === 'voice') { src = item[c.media]; audioIdx = c.track; videoIdx = 0; inOut = [c.src_in, c.src_out]; }
-      else if (c.kind === 'anim') { src = compItem; inOut = [c.comp_in, c.comp_in + dur]; }
-      else { src = item[c.media]; }
-      if (!src) throw new Error('Quelle fehlt');
-      if (inOut) tx(project, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
-      tx(project, 'Clip setzen', (add) => add(editor.createOverwriteItemAction(src, tt(ppro, c.start), videoIdx, audioIdx)));
       const isAudio = c.kind === 'voice';
-      const ti = await trackItemAt(ppro, main, isAudio ? 'audio' : 'video', c.track, c.start);
-      if (!ti) throw new Error('gesetzter Clip nicht auf der Spur gefunden');
-      const end = (await ti.getEndTime()).seconds;
-      if (Math.abs(end - c.end) > TOL) tx(project, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
-      if (c.name) await guarded(report, 'Name ' + c.name, async () => tx(project, 'Name', (add) => add(ti.createSetNameAction(c.name))));
+      const kind = isAudio ? 'audio' : 'video';
+      // Clip immer frisch holen: nach jeder Änderung sind alte Objekte ungültig
+      const locate = async () => {
+        const project = await getProject();
+        const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, project, mainGuid), kind, c.track, c.start);
+        if (!ti) throw new Error('gesetzter Clip nicht auf der Spur gefunden');
+        return ti;
+      };
+      await retryStale(async () => {
+        const project = await getProject();
+        let key, audioIdx = -1, videoIdx = c.track, inOut = null;
+        if (c.kind === 'episode') { key = 'epSeq'; audioIdx = c.audio; inOut = [c.src_in, c.src_out]; }
+        else if (c.kind === 'voice') { key = c.media; audioIdx = c.track; videoIdx = 0; inOut = [c.src_in, c.src_out]; }
+        else if (c.kind === 'anim') { key = 'comp'; inOut = [c.comp_in, c.comp_in + dur]; }
+        else { key = c.media; }
+        const src = await fresh(key);
+        if (!src) throw new Error('Quelle fehlt');
+        if (inOut) tx(project, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
+        const p2 = await getProject();
+        const main = await sequenceByGuid(ppro, p2, mainGuid);
+        const editor = ppro.SequenceEditor.getEditor(main);
+        const src2 = await fresh(key);                       // nach der Änderung (In/Out) ist `src` ungültig
+        tx(p2, 'Clip setzen', (add) => add(editor.createOverwriteItemAction(src2, tt(ppro, c.start), videoIdx, audioIdx)));
+      }, refresh);
+      const ti = await locate();
+      if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) tx(await getProject(), 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
+      if (c.name) await guarded(report, 'Name ' + c.name, async () => { const t2 = await locate(); tx(await getProject(), 'Name', (add) => add(t2.createSetNameAction(c.name))); });
       countOk(c.kind);
       if (isAudio) return;
 
-      ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? (await ti.getInPoint()).seconds : 0;
       // Effekte je nach Art des Clips
       if (c.kind === 'artwork') {
-        const r1 = await fx.addCrop(ppro, project, ti, c.crop, ctx);
-        if (r1.fehlend.length) report.warnings.push('Zuschneiden: Parameter nicht gefunden: ' + r1.fehlend.join(', '));
-        await fx.setMotion(ppro, project, ti, { position: c.position, scale: c.scale }, ctx);
+        const r1 = await fx.addCrop(ppro, await getProject(), locate, c.crop, ctx);
+        if (r1.fehlend.length) report.warnings.push('Zuschneiden: nicht gesetzt: ' + r1.fehlend.join(', '));
+        await fx.setMotion(ppro, await getProject(), locate, { position: c.position, scale: c.scale }, ctx);
       }
       for (const e of c.effects || []) {
-        const r = await fx.addEffect(ppro, project, ti, e, ctx);
+        ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? (await (await locate()).getInPoint()).seconds : 0;
+        const r = await fx.addEffect(ppro, await getProject(), locate, e, ctx);
         report.effects[e.id] = (report.effects[e.id] || 0) + 1;
         if (r.fehlend.length) report.warnings.push(e.id + ': Parameter nicht gesetzt: ' + r.fehlend.join(', '));
       }
-      if (c.kind === 'credit' && c.fade) await fx.setFade(ppro, project, ti, dur, c.fade, ctx);
+      ctx.offset = 0;
+      if (c.kind === 'credit' && c.fade) await fx.setFade(ppro, await getProject(), locate, dur, c.fade, ctx);
     });
   }
 
   // ---- 6. Marker ----
   say('Marker setzen …');
   await guarded(report, 'Marker', async () => {
-    const markers = await ppro.Markers.getMarkers(main);
     for (const m of plan.markers || []) {
-      tx(project, 'Marker', (add) => add(markers.createAddMarkerAction(m.name, ppro.Marker.MARKER_TYPE_COMMENT, tt(ppro, m.time), tt(ppro, 0), m.comment || '')));
+      await retryStale(async () => {
+        const project = await getProject();
+        const main = await sequenceByGuid(ppro, project, mainGuid);
+        const markers = await ppro.Markers.getMarkers(main);
+        tx(project, 'Marker', (add) => add(markers.createAddMarkerAction(m.name, ppro.Marker.MARKER_TYPE_COMMENT, tt(ppro, m.time), tt(ppro, 0), m.comment || '')));
+      });
     }
     report.placed.marker = (plan.markers || []).length;
   });
 
   // ---- 7. Speichern ----
-  if (plan.save !== false) await guarded(report, 'Speichern', async () => { await project.save(); });
+  if (plan.save !== false) await guarded(report, 'Speichern', async () => { await (await getProject()).save(); });
   report.seconds = (Date.now() - report.started) / 1000;
   return report;
+
 }
 
-module.exports = { runPlan, trackItemAt, findSequenceItem };
+module.exports = { runPlan, trackItemAt, findSequenceItem, sequenceByGuid };

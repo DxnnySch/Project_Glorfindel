@@ -1,4 +1,8 @@
 // Gemeinsame Hilfen. Alle Module bekommen `ppro` (= require('premierepro')) hineingereicht, damit sie ohne Premiere testbar sind.
+//
+// WICHTIG (aus dem ersten Lauf in Premiere 26.5.2): Jedes Objekt, das die API liefert (Projekt-Elemente, Sequenzen, Spuren, Clips, Komponenten,
+// Parameter), wird UNGÜLTIG („The script object is no longer valid.“), sobald das Projekt verändert wurde (Transaktion, Import, neue Sequenz).
+// Deshalb: Objekte nie über eine Änderung hinweg festhalten. Immer frisch holen (Locator-Funktionen) und `retryStale` nutzen.
 'use strict';
 
 const TICKS_PER_SECOND = 254016000000;
@@ -6,13 +10,14 @@ const TICKS_PER_SECOND = 254016000000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
 const errText = (e) => (e && e.message) || String(e);
+const isStale = (e) => /no longer valid/i.test(errText(e));
 
 /** Sekunden -> TickTime */
 function tt(ppro, seconds) {
   return ppro.TickTime.createWithSeconds(Math.max(0, seconds));
 }
 
-/** Eine Transaktion ausführen; `build(compound)` fügt Aktionen hinzu. Wirft, wenn Premiere sie ablehnt. */
+/** Eine Transaktion ausführen; `build(add)` fügt Aktionen hinzu. Wirft, wenn Premiere sie ablehnt. Danach sind alle Objekte ungültig. */
 function tx(project, undoName, build) {
   const ok = project.executeTransaction((compound) => {
     build((action) => {
@@ -21,6 +26,16 @@ function tx(project, undoName, build) {
     });
   }, undoName);
   if (ok === false) throw new Error('Transaktion „' + undoName + '“ wurde von Premiere abgelehnt');
+}
+
+/** `fn` ausführen; bei ungültigen Objekten `refresh` (holt Caches neu) und noch einmal versuchen. */
+async function retryStale(fn, refresh, tries = 2) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); } catch (e) {
+      if (!isStale(e) || i >= tries) throw e;
+      if (refresh) await refresh();
+    }
+  }
 }
 
 /** Schritt ausführen und Fehler sammeln statt abzubrechen: Der Bau läuft weiter, der Bericht nennt, was nicht ging. */
@@ -53,4 +68,4 @@ function asClip(ppro, item) {
   try { return ppro.ClipProjectItem.cast(item); } catch (e) { return null; }
 }
 
-module.exports = { TICKS_PER_SECOND, sleep, norm, errText, tt, tx, guarded, walkItems, asClip };
+module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, retryStale, guarded, walkItems, asClip };

@@ -1,15 +1,21 @@
-// Effekte an Clips: Komponente anhängen, Parameter setzen (statisch oder mit Keyframes), Zugriff auf eingebaute Effekte.
+// Effekte an Clips: Komponente anhängen, Parameter setzen (statisch oder mit Keyframes), eingebaute Effekte.
+// `locate()` ist eine Funktion, die den Clip FRISCH liefert (Objekte werden bei jeder Projektänderung ungültig, siehe core.js).
 'use strict';
 
-const { tt, tx, errText } = require('./core');
+const { tt, tx, errText, retryStale } = require('./core');
 
-// Anzeigenamen eingebauter Effekte/Parameter in beiden Oberflächensprachen (Premiere benennt je nach Sprache).
+// Anzeigenamen eingebauter Effekte/Parameter in beiden Oberflächensprachen.
 const NAMES = {
   motion: ['Motion', 'Bewegung'],
   opacity: ['Opacity', 'Deckkraft'],
   position: ['Position'],
   scale: ['Scale', 'Skalierung'],
   crop: { left: ['Left', 'Links'], top: ['Top', 'Oben'], right: ['Right', 'Rechts'], bottom: ['Bottom', 'Unten'] },
+};
+
+// Mögliche interne Namen je Effekt; der echte wird zur Laufzeit über die Liste der installierten Effekte bestimmt.
+const FILTER_HINTS = {
+  'AE.ADBE Crop': { alt: ['ADBE Crop', 'AE.ADBE Crop'], display: ['Crop', 'Zuschneiden'] },
 };
 
 async function listComponents(chain) {
@@ -22,12 +28,6 @@ async function listComponents(chain) {
     out.push({ index: i, name, comp: c });
   }
   return out;
-}
-
-async function findComponent(chain, names) {
-  const want = names.map((n) => n.toLowerCase());
-  for (const c of await listComponents(chain)) if (want.includes(String(c.name).toLowerCase())) return c.comp;
-  return null;
 }
 
 function paramList(comp) {
@@ -62,12 +62,35 @@ function toPproValue(ppro, v, ctx) {
   return v;
 }
 
-/** Parameter setzen. `spec`: {value, keyframes: [[Sekunden, Wert], ...]}. Zeiten sind Clip-Zeit (ab Clipanfang). */
-async function setParam(ppro, project, param, spec, ctx) {
+/** Interner Effektname in der installierten Premiere-Version bestimmen (zuerst genau, dann ohne „AE.“-Präfix, dann per Anzeigename). */
+async function resolveMatchName(ppro, wanted, ctx) {
+  const cands = Array.isArray(wanted) ? [...wanted] : [wanted];
+  const hint = FILTER_HINTS[cands[0]];
+  if (hint) cands.push(...hint.alt);
+  if (!ctx.filters) ctx.filters = { m: await ppro.VideoFilterFactory.getMatchNames(), d: await ppro.VideoFilterFactory.getDisplayNames() };
+  const { m, d } = ctx.filters;
+  for (const c of cands) if (m.includes(c)) return c;
+  for (const c of cands) {
+    const base = c.replace(/^AE\./, '');
+    const hit = m.find((x) => x === base || x === 'AE.' + base);
+    if (hit) return hit;
+  }
+  const names = [...((hint && hint.display) || []), ...(ctx.displayHints || [])].map((x) => x.toLowerCase());
+  for (const n of names) {
+    const i = d.findIndex((x) => String(x).toLowerCase() === n);
+    if (i >= 0) return m[i];
+  }
+  const base = cands[0].replace(/^AE\./, '').replace(/^ADBE\s*/, '').toLowerCase();
+  const similar = m.filter((x) => x.toLowerCase().includes(base.split(' ')[0])).slice(0, 8);
+  throw new Error('Effekt „' + cands[0] + '“ gibt es in dieser Premiere-Version nicht' + (similar.length ? ' (ähnlich: ' + similar.join(', ') + ')' : ''));
+}
+
+/** Alle Aktionen für einen Parameter in EINER Transaktion (Keyframes brauchen vorher „zeitabhängig“). */
+function setParam(ppro, project, param, spec, ctx) {
   const kfs = spec.keyframes;
   if (kfs && kfs.length) {
-    tx(project, 'Keyframes', (add) => add(param.createSetTimeVaryingAction(true)));
     tx(project, 'Keyframes', (add) => {
+      add(param.createSetTimeVaryingAction(true));
       for (const [t, val] of kfs) {
         const k = param.createKeyframe(toPproValue(ppro, val, ctx));
         k.position = tt(ppro, t + ((ctx && ctx.offset) || 0));
@@ -81,73 +104,81 @@ async function setParam(ppro, project, param, spec, ctx) {
   return 'wert';
 }
 
-/** Effekt (Rezept aus dem Plan) an einen Clip hängen und seine Parameter setzen. Gibt {angewendet, fehlend} zurück. */
-async function addEffect(ppro, project, trackItem, effect, ctx) {
-  const res = { id: effect.id, angewendet: [], fehlend: [] };
-  const chain = await trackItem.getComponentChain();
-  const comp = await ppro.VideoFilterFactory.createComponent(effect.match_name);
+/** Komponente `index` des Clips frisch holen. */
+async function componentAt(locate, index) {
+  const chain = await (await locate()).getComponentChain();
+  return chain.getComponentAtIndex(index);
+}
+
+/** Position einer eingebauten Komponente (Bewegung/Deckkraft) in der Kette bestimmen. */
+async function builtinIndex(locate, kind) {
+  const chain = await (await locate()).getComponentChain();
+  const want = NAMES[kind].map((n) => n.toLowerCase());
+  const hit = (await listComponents(chain)).find((c) => want.includes(String(c.name).toLowerCase()));
+  return hit ? hit.index : -1;
+}
+
+/**
+ * Effekt (Rezept aus dem Plan) an einen Clip hängen und seine Parameter setzen.
+ * `effect.params[]`: {name | names[], index, value, keyframes}. Rückgabe: {angewendet, fehlend, match}.
+ */
+async function addEffect(ppro, project, locate, effect, ctx) {
+  const res = { id: effect.id, angewendet: [], fehlend: [], match: null };
+  ctx.displayHints = [effect.display].filter(Boolean);
+  res.match = await resolveMatchName(ppro, effect.match_name, ctx);
+  const comp = await ppro.VideoFilterFactory.createComponent(res.match);
+  const chain = await (await locate()).getComponentChain();
+  const index = chain.getComponentCount();
   tx(project, 'Effekt ' + effect.id, (add) => add(chain.createAppendComponentAction(comp)));
-  const installed = chain.getComponentAtIndex(chain.getComponentCount() - 1);
   for (const p of effect.params || []) {
     if (p.value === undefined && !(p.keyframes && p.keyframes.length)) continue;
-    const param = findParam(installed, [p.name], p.index);
-    if (!param) { res.fehlend.push(p.name); continue; }
+    const label = p.name || (p.names && p.names[0]) || '#' + p.index;
     try {
-      await setParam(ppro, project, param, p, ctx);
-      res.angewendet.push(p.name);
+      await retryStale(async () => {
+        const param = findParam(await componentAt(locate, index), p.names || [p.name], p.index);
+        if (!param) throw new Error('Parameter nicht gefunden');
+        setParam(ppro, project, param, p, ctx);
+      });
+      res.angewendet.push(label);
     } catch (e) {
-      res.fehlend.push(p.name + ' (' + errText(e) + ')');
+      res.fehlend.push(label + ' (' + errText(e) + ')');
     }
   }
   return res;
 }
 
-/** Eingebauten Effekt (Bewegung/Deckkraft) eines Clips holen. */
-async function builtin(trackItem, kind) {
-  const chain = await trackItem.getComponentChain();
-  return findComponent(chain, NAMES[kind]);
-}
-
 /** Position/Skalierung (Bewegung). Position als normierte Werte 0..1. */
-async function setMotion(ppro, project, trackItem, { position, scale }, ctx) {
-  const motion = await builtin(trackItem, 'motion');
-  if (!motion) throw new Error('Bewegung-Effekt nicht gefunden');
+async function setMotion(ppro, project, locate, { position, scale }, ctx) {
+  const idx = await builtinIndex(locate, 'motion');
+  if (idx < 0) throw new Error('Bewegung-Effekt nicht gefunden');
   const done = [];
-  if (position) {
-    const p = findParam(motion, NAMES.position, 1);
-    if (p) { await setParam(ppro, project, p, { value: { point: position } }, ctx); done.push('Position'); }
-  }
-  if (scale != null) {
-    const p = findParam(motion, NAMES.scale, 2);
-    if (p) { await setParam(ppro, project, p, { value: scale }, ctx); done.push('Skalierung'); }
+  for (const [label, names, pidx, spec] of [['Position', NAMES.position, 1, position ? { value: { point: position } } : null], ['Skalierung', NAMES.scale, 2, scale != null ? { value: scale } : null]]) {
+    if (!spec) continue;
+    const param = findParam(await componentAt(locate, idx), names, pidx);
+    if (!param) continue;
+    setParam(ppro, project, param, spec, ctx);
+    done.push(label);
   }
   return done;
 }
 
 /** Ein-/Ausblenden über die Deckkraft: 0 → 100 in `fade` s, am Ende 100 → 0. */
-async function setFade(ppro, project, trackItem, dur, fade, ctx) {
-  const op = await builtin(trackItem, 'opacity');
-  if (!op) throw new Error('Deckkraft-Effekt nicht gefunden');
-  const p = findParam(op, NAMES.opacity, 0);
-  if (!p) throw new Error('Deckkraft-Parameter nicht gefunden');
+async function setFade(ppro, project, locate, dur, fade, ctx) {
+  const idx = await builtinIndex(locate, 'opacity');
+  if (idx < 0) throw new Error('Deckkraft-Effekt nicht gefunden');
+  const param = findParam(await componentAt(locate, idx), NAMES.opacity, 0);
+  if (!param) throw new Error('Deckkraft-Parameter nicht gefunden');
   const f = Math.min(fade, dur / 2);
-  await setParam(ppro, project, p, { keyframes: [[0, 0], [f, 100], [Math.max(f, dur - f), 100], [dur, 0]] }, ctx);
+  setParam(ppro, project, param, { keyframes: [[0, 0], [f, 100], [Math.max(f, dur - f), 100], [dur, 0]] }, ctx);
 }
 
 /** Quadratischer Zuschnitt (Effekt „Zuschneiden“), Werte in Prozent. */
-async function addCrop(ppro, project, trackItem, crop, ctx) {
-  const comp = await ppro.VideoFilterFactory.createComponent('AE.ADBE Crop');
-  const chain = await trackItem.getComponentChain();
-  tx(project, 'Zuschneiden', (add) => add(chain.createAppendComponentAction(comp)));
-  const installed = chain.getComponentAtIndex(chain.getComponentCount() - 1);
-  const res = { angewendet: [], fehlend: [] };
-  for (const [k, names, idx] of [['links', NAMES.crop.left, 0], ['oben', NAMES.crop.top, 1], ['rechts', NAMES.crop.right, 2], ['unten', NAMES.crop.bottom, 3]]) {
-    const param = findParam(installed, names, idx);
-    if (!param) { res.fehlend.push(k); continue; }
-    await setParam(ppro, project, param, { value: crop[k] }, ctx);
-    res.angewendet.push(k);
-  }
-  return res;
+async function addCrop(ppro, project, locate, crop, ctx) {
+  return addEffect(ppro, project, locate, {
+    id: 'crop', match_name: 'AE.ADBE Crop', display: 'Zuschneiden',
+    params: [{ names: NAMES.crop.left, index: 0, value: crop.links }, { names: NAMES.crop.top, index: 1, value: crop.oben },
+      { names: NAMES.crop.right, index: 2, value: crop.rechts }, { names: NAMES.crop.bottom, index: 3, value: crop.unten }],
+  }, ctx);
 }
 
-module.exports = { NAMES, listComponents, findComponent, paramList, findParam, toPproValue, setParam, addEffect, builtin, setMotion, setFade, addCrop };
+module.exports = { NAMES, listComponents, paramList, findParam, toPproValue, resolveMatchName, setParam, addEffect, builtinIndex, componentAt, setMotion, setFade, addCrop };

@@ -76,8 +76,9 @@ def test_build_creates_reference_stills_plan_and_calls_premiere(ep):
     from glorfindel import media
     info = media.probe(ref)
     assert (info["width"], info["height"]) == (1920, 800) and info["fps"] == pytest.approx(23.976, abs=0.01)   # CFR, zugeschnitten
-    stills = sorted(p.name for p in ep.p.stills.glob("*.png"))
-    assert stills == ["1.png"] and Image.open(ep.p.stills / "1.png").size == (1920, 800)
+    sdir = ep.p.stills / "Bridge_v1"                                              # eigener Ordner je Bau
+    stills = sorted(p.name for p in sdir.glob("*.png"))
+    assert stills == ["1.png"] and Image.open(sdir / "1.png").size == (1920, 800)
     op, args = hub.calls[0]
     plan = args["plan"]
     assert op == "plan.run" and plan["calibration"] == {"colorMode": "unit", "keyframeBase": "clip"}
@@ -104,30 +105,43 @@ def _gray(p):                       # RGB statt Grauwert: Rot und Grün haben fa
     return np.asarray(Image.open(p).convert("RGB"), dtype=float)
 
 
-def test_swap_to_hq_replaces_stills_in_place_and_back_restores(ep):
+def test_swap_uses_parallel_folder_and_never_overwrites(ep):
     root = Path(__file__).resolve().parents[1] / "vorlagen"
-    hub = FakeHub()
-    premiere_ops.build_in_premiere(ep, root, hub=hub)
-    proxy_still = _gray(ep.p.stills / "1.png").copy()
-    # HQ-Fassung: gleiche Zeitachse, anderes Bild (grün), schon im Episodenformat
+    premiere_ops.build_in_premiere(ep, root, hub=FakeHub())
+    sdir = Path(premiere_ops.load_state(ep)["stills_dir"])
+    proxy_still = _gray(sdir / "1.png").copy()
+    proxy_bytes = (sdir / "1.png").read_bytes()
     hq = make_video(premiere_ops.pdir(ep) / "HQ_conform.mp4", "green", seconds=30, fps=24, size="1920x800")
     premiere_ops.remember_hq(ep, str(hq))
     hub2 = FakeHub()
-    res = premiere_ops.swap(ep, "hq", hub=hub2)
+    premiere_ops.swap(ep, "hq", hub=hub2)
     op, args = hub2.calls[0]
     st = premiere_ops.load_state(ep)
-    assert op == "media.swap" and args["swaps"] == [{"from": st["ref_cfr"], "to": str(hq)}] and args["refresh"] == [str(ep.p.stills)]
-    hq_still = _gray(ep.p.stills / "1.png")
-    assert abs(hq_still - proxy_still).mean() > 20                                 # Standbild wirklich aus HQ, gleicher Dateiname/Ort
-    assert Image.open(ep.p.stills / "1.png").size == (1920, 800)
-    assert (ep.p.base / "Videoelemente_Proxy" / "1.png").exists() and st["active"] == "hq"
+    hq_dir = sdir.with_name(sdir.name + "_HQ")
+    assert op == "media.swap" and args["refresh"] == []
+    assert args["swaps"] == [{"from": st["ref_cfr"], "to": str(hq)}, {"from": str(sdir / "1.png"), "to": str(hq_dir / "1.png")}]
+    assert (sdir / "1.png").read_bytes() == proxy_bytes                              # Proxy-Standbild unberührt (Premiere könnte es sperren)
+    assert abs(_gray(hq_dir / "1.png") - proxy_still).mean() > 20 and Image.open(hq_dir / "1.png").size == (1920, 800)
+    assert st["active"] == "hq"
     with pytest.raises(ValueError, match="bereits"):
         premiere_ops.swap(ep, "hq", hub=hub2)
     hub3 = FakeHub()
     premiere_ops.swap(ep, "proxy", hub=hub3)
-    assert hub3.calls[0][1]["swaps"] == [{"from": str(hq), "to": st["ref_cfr"]}]
-    assert abs(_gray(ep.p.stills / "1.png") - proxy_still).max() == 0               # Rückweg bit-genau
-    assert premiere_ops.load_state(ep)["active"] == "proxy"
+    assert hub3.calls[0][1]["swaps"] == [{"from": str(hq), "to": st["ref_cfr"]}, {"from": str(hq_dir / "1.png"), "to": str(sdir / "1.png")}]
+    assert (sdir / "1.png").read_bytes() == proxy_bytes and premiere_ops.load_state(ep)["active"] == "proxy"
+
+
+def test_second_build_does_not_touch_stills_locked_by_premiere(ep, monkeypatch):
+    """Premiere hält Standbilder früherer Importe offen: ein neuer Bau darf sie nie überschreiben wollen."""
+    root = Path(__file__).resolve().parents[1] / "vorlagen"
+    premiere_ops.build_in_premiere(ep, root, hub=FakeHub())
+    first = ep.p.stills / "Bridge_v1" / "1.png"
+    locked = first.read_bytes()
+    import os
+    real = os.replace
+    monkeypatch.setattr(os, "replace", lambda a, b: (_ for _ in ()).throw(PermissionError("gesperrt")) if Path(b) == first else real(a, b))
+    premiere_ops.build_in_premiere(ep, root, hub=FakeHub())
+    assert (ep.p.stills / "Bridge_v2" / "1.png").exists() and first.read_bytes() == locked
 
 
 def test_swap_errors_are_clear(ep):

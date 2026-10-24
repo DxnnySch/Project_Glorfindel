@@ -5,6 +5,35 @@
 
 const TPS = 254016000000;
 
+// Wie in Premiere 26.5: Nach JEDER Projektänderung sind alle zuvor gelieferten Objekte ungültig.
+let EPOCH = 0;
+const bump = () => { EPOCH++; };
+const RAW = new WeakMap();
+const unwrap = (o) => (o && typeof o === 'object' && RAW.get(o)) || o;
+function wrap(o) {
+  if (Array.isArray(o)) return o.map(wrap);
+  if (!o || typeof o !== 'object' || o instanceof Action || o instanceof TickTime) return o;
+  const born = EPOCH;
+  const px = new Proxy(o, {
+    get(t, k, r) {
+      if (typeof k !== 'symbol' && born !== EPOCH) throw new Error('The script object is no longer valid.');
+      const v = Reflect.get(t, k, r);
+      return v;
+    },
+  });
+  RAW.set(px, o);
+  return px;
+}
+function guardReturns(cls, names) {
+  for (const n of names) {
+    const orig = cls.prototype[n];
+    cls.prototype[n] = function (...a) {
+      const r = orig.apply(this, a);
+      return r && typeof r.then === 'function' ? r.then(wrap) : wrap(r);
+    };
+  }
+}
+
 class TickTime { constructor(s) { this.seconds = s; this.ticks = String(Math.round(s * TPS)); } get ticksNumber() { return +this.ticks; } }
 class PointF { constructor(x = 0, y = 0) { this.x = x; this.y = y; } }
 class Color {
@@ -15,8 +44,9 @@ class Color {
 }
 class Action { constructor(run, label) { this.run = run; this.label = label; } }
 
+const DISPLAY = { 'ADBE Crop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner' };
 const PARAMS = {
-  'AE.ADBE Crop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
+  'ADBE Crop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
   'AE.ADBE Roughen Edges': [['Kantenart', 'num', 1], ['Konturfarbe', 'color', null], ['Rahmen', 'num', 8], ['Kantenschärfe', 'num', 0], ['Fraktaleinfluss', 'num', 1], ['Skalieren', 'num', 100],
     ['Breite oder Höhe dehnen', 'num', 0], ['Offset (Turbulenz)', 'point', null], ['Komplexität', 'num', 10], ['Evolution', 'num', 0]],
   'AE.ADBE Drop Shadow': [['Schattenfarbe', 'color', null], ['Deckkraft', 'num', 50], ['Richtung', 'num', 135], ['Abstand', 'num', 10], ['Weiche Kante', 'num', 5], ['Nur Schatten', 'bool', false]],
@@ -102,7 +132,7 @@ class FolderItem extends ProjectItem {
   constructor(project, name, type) { super(project, name, type); this.children = []; }
   async getItems() { return [...this.children]; }
   createBinAction(name) { return new Action(() => { this.children.push(new FolderItem(this.project, name, 2)); }, 'bin'); }
-  createRemoveItemAction(item) { return new Action(() => { this.children = this.children.filter((c) => c !== item); }, 'rm'); }
+  createRemoveItemAction(item) { const raw = unwrap(item); return new Action(() => { this.children = this.children.filter((c) => c !== raw); }, 'rm'); }
 }
 class ClipItem extends ProjectItem {
   constructor(project, name, path, opts = {}) {
@@ -112,13 +142,20 @@ class ClipItem extends ProjectItem {
   async isSequence() { return !!this.seq; }
   async isOffline() { return this.offline; }
   async canChangeMediaPath() { return true; }
-  async changeMediaFilePath(p, override) { if (/nichtda/.test(p)) throw new Error('Datei nicht gefunden'); this.path = p; return true; }
-  async refreshMedia() { this.refreshed++; return true; }
+  async changeMediaFilePath(p, override) { if (/nichtda/.test(p)) throw new Error('Datei nicht gefunden'); this.path = p; bump(); return true; }
+  async refreshMedia() { this.refreshed++; bump(); return true; }
   createSetInOutPointsAction(i, o) {
     if (!(i instanceof TickTime) || !(o instanceof TickTime)) throw new Error('TickTime erwartet');
     return new Action(() => { this.inPt = i.seconds; this.outPt = o.seconds; }, 'inout');
   }
 }
+
+guardReturns(Chain, ['getComponentAtIndex']);
+guardReturns(Component, ['getParam']);
+guardReturns(TrackItem, ['getComponentChain']);
+guardReturns(Track, ['getTrackItems']);
+guardReturns(Sequence, ['getVideoTrack', 'getAudioTrack', 'getProjectItem']);
+guardReturns(FolderItem, ['getItems']);
 
 function trim(track, a, b) {   // Überschreiben: Teile alter Clips im Bereich [a, b) fallen weg
   const keep = [];
@@ -174,10 +211,11 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
       return s;
     },
     async createSequence() { throw new Error('createSequence mit Vorgabe ist veraltet – createSequenceWithPresetPath verwenden'); },
-    async deleteSequence(s) { project.sequences = project.sequences.filter((x) => x !== s); root.children = root.children.filter((c) => c.seq !== s); return true; },
+    async deleteSequence(s) {
+      project.sequences = project.sequences.filter((x) => x !== s); root.children = root.children.filter((c) => c.seq !== s); return true; },
     async getSequences() { return [...project.sequences]; },
     async getActiveSequence() { return project.active || project.sequences.at(-1); },
-    async setActiveSequence(s) { project.active = s; return true; },
+    async setActiveSequence(s) { project.active = unwrap(s); return true; },
     async openSequence() { return true; },
     async save() { project.saved++; return true; },
     executeTransaction(cb, undo) {
@@ -185,9 +223,18 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
       cb({ addAction(a) { if (!(a instanceof Action)) throw new Error('keine Aktion'); actions.push(a); return true; } });
       calls.push(['tx', undo, actions.length]);
       for (const a of actions) a.run();
+      bump();
       return true;
     },
   });
+  for (const n of ['getRootItem', 'getSequences', 'getActiveSequence']) {
+    const orig = project[n];
+    project[n] = async (...a) => wrap(await orig(...a));
+  }
+  for (const n of ['importFiles', 'importAEComps', 'createSequenceFromMedia', 'createSequenceWithPresetPath', 'deleteSequence']) {
+    const orig = project[n];
+    project[n] = async (...a) => { const r = await orig(...a.map(unwrap)); bump(); return wrap(r); };
+  }
   root.createBinAction = FolderItem.prototype.createBinAction.bind(root);
   root.createRemoveItemAction = FolderItem.prototype.createRemoveItemAction.bind(root);
   project.sequences.push();
@@ -204,12 +251,14 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
     VideoFilterFactory: {
       async createComponent(match) { if (!PARAMS[match]) throw new Error('Unbekannter Effekt ' + match); return new Component(match, PARAMS[match]); },
       async getMatchNames() { return Object.keys(PARAMS); },
+      async getDisplayNames() { return Object.keys(PARAMS).map((k) => DISPLAY[k]); },
     },
     Project: { async getActiveProject() { return project; } },
     SequenceEditor: {
       getEditor(seq) {
         return {
           createOverwriteItemAction(item, time, v, a) {
+            item = unwrap(item);
             if (!(time instanceof TickTime)) throw new Error('TickTime erwartet');
             return new Action(() => {
               const len = (item.inPt != null ? item.outPt - item.inPt : item.length);

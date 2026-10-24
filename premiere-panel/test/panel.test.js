@@ -64,7 +64,7 @@ test('Artwork: Zuschnitt, Skalierung, Effektkette wie im Ursprungsschnitt, Farbe
   const main = mainSeq(project);
   const art = PLAN.clips.find((c) => c.kind === 'artwork' && c.scale === 100);
   const ti = [...trackItems(main, 'video', 2), ...trackItems(main, 'video', 3)].find((t) => Math.abs(t.start - art.start) < 0.004);
-  assert.deepEqual(compNames(ti), ['Bewegung', 'Deckkraft', 'AE.ADBE Crop', 'AE.ADBE Drop Shadow', 'AE.ADBE Geometry', 'AE.ADBE Roughen Edges', 'AE.ADBE Roughen Edges']);
+  assert.deepEqual(compNames(ti), ['Bewegung', 'Deckkraft', 'ADBE Crop', 'AE.ADBE Drop Shadow', 'AE.ADBE Geometry', 'AE.ADBE Roughen Edges', 'AE.ADBE Roughen Edges']);
   const [motion, , crop, shadow, geo, out, inn] = ti.chain.comps;
   assert.equal(param(crop, 'Links').value, 25);
   assert.equal(param(crop, 'Rechts').value, 25);
@@ -165,15 +165,16 @@ test('Auslesen: Projekt und Sequenz mit Effekten, Parametern und Keyframes', asy
 
 test('Selbsttest: prüft alles, räumt vollständig auf und berührt keine vorhandene Sequenz', async () => {
   const { ppro, project } = fake.create({ presets: { 'C:/p/test.sqpreset': { video: 14, audio: 16 } } });
-  const root = await project.getRootItem();
   const rep = await selftest(ppro, { png: 'F:/x/test.png', preset: 'C:/p/test.sqpreset' });
   assert.equal(rep.ok, true, JSON.stringify(rep.steps.filter((s) => !s.ok)));
   assert.equal(rep.findings.colorMode, 'unit');
   assert.deepEqual(rep.findings.keyframeTimes, [0, 0.5]);
   assert.equal(rep.findings.keyframeOrigin, 'clipanfang');
+  assert.equal(rep.findings.cropMatch, 'ADBE Crop', 'Zuschneiden-Name zur Laufzeit gefunden');
+  assert.ok(rep.findings.filters.some((f) => f.match === 'ADBE Crop' && f.display === 'Zuschneiden'));
   assert.ok(rep.findings.cropParams.includes('Links') && rep.findings.roughParams.includes('Rahmen'));
   assert.equal(project.sequences.length, 0, 'Test-Sequenz entfernt');
-  assert.equal((await root.getItems()).length, 0, 'Test-Fach entfernt');
+  assert.equal((await (await project.getRootItem()).getItems()).length, 0, 'Test-Fach entfernt');
 });
 
 test('Effekte: Parameter nach Namen, sonst nach Position; Farbe im dokumentierten Bereich', async () => {

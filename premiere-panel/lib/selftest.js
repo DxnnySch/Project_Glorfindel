@@ -1,13 +1,16 @@
 // Gesicherter Selbsttest: legt ein Test-Fach, eine Test-Sequenz und einen Test-Clip an, prüft Effekte/Parameter/Keyframes/Farbe und
 // räumt wieder auf. Ergebnis (Kalibrierung) steuert den Bau: Farbformat, Parameternamen, Zeitbezug der Keyframes.
 // Läuft NUR auf ausdrückliche Anforderung und berührt keine vorhandenen Sequenzen.
+// Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): alles wird per Locator frisch geholt.
 'use strict';
 
 const { tt, tx, errText, norm } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
+const { trackItemAt, sequenceByGuid } = require('./plan');
 
 const BIN = 'Glorfindel-Selbsttest';
+const FILTER_RE = /Crop|Zuschn|Roughen|Kanten|Shadow|Schatten|Geometry|Transform|Gaussian|Blur|Weichz|Opacity|Motion/i;
 
 async function selftest(ppro, { png, preset }, emit = () => {}) {
   const res = { steps: [], findings: {}, ok: true };
@@ -15,76 +18,112 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     try { const detail = await fn(); res.steps.push({ name, ok: true, detail }); emit('progress', { text: 'Selbsttest: ' + name }); return detail; }
     catch (e) { res.steps.push({ name, ok: false, detail: errText(e) }); res.ok = false; return undefined; }
   };
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error('In Premiere ist kein Projekt geöffnet.');
-  let bin = null, seq = null, item = null, ti = null;
+  const getProject = async () => {
+    const p = await ppro.Project.getActiveProject();
+    if (!p) throw new Error('In Premiere ist kein Projekt geöffnet.');
+    return p;
+  };
+  await getProject();
+  let seqGuid = null, haveItem = false, haveClip = false;
+  const ctx = {};
+  const locate = async () => {
+    const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), seqGuid), 'video', 12, 2);
+    if (!ti) throw new Error('Test-Clip nicht gefunden');
+    return ti;
+  };
 
-  await step('Test-Fach anlegen', async () => { bin = await media.ensureBin(ppro, project, BIN); return bin.name; });
-  await step('Test-Bild importieren', async () => { const m = await media.importFiles(ppro, project, [png], bin); item = m.get(norm(png)); if (!item) throw new Error('nicht gefunden'); return 'ok'; });
+  // Welche Effekte kennt diese Premiere-Version? (unabhängig von allen anderen Schritten)
+  await step('Verfügbare Effekte', async () => {
+    const m = await ppro.VideoFilterFactory.getMatchNames();
+    const d = await ppro.VideoFilterFactory.getDisplayNames().catch(() => []);
+    res.findings.filters = m.map((x, i) => ({ match: x, display: d[i] })).filter((f) => FILTER_RE.test(f.match) || FILTER_RE.test(String(f.display)));
+    return res.findings.filters.length + ' Treffer';
+  });
+
+  await step('Test-Fach anlegen', async () => { await media.ensureBin(ppro, await getProject(), BIN); return BIN; });
+  await step('Test-Bild importieren', async () => {
+    const m = await media.importFiles(ppro, await getProject(), [png], BIN);
+    haveItem = m.has(norm(png));
+    if (!haveItem) throw new Error('nicht gefunden');
+    return 'ok';
+  });
   await step('Sequenz aus Vorgabe (Spuranzahl)', async () => {
-    seq = await project.createSequenceWithPresetPath('GL-Selbsttest', preset);
+    const seq = await (await getProject()).createSequenceWithPresetPath('GL-Selbsttest', preset);
+    seqGuid = String(seq.guid);
     return { video: await seq.getVideoTrackCount(), audio: await seq.getAudioTrackCount() };
   });
-  const editor = seq ? ppro.SequenceEditor.getEditor(seq) : null;
   await step('Clip setzen und Länge ändern', async () => {
+    if (!haveItem) throw new Error('kein Test-Bild');
+    const project = await getProject();
+    const bin = await media.getBin(ppro, project, BIN);
+    const item = (await media.mediaByPath(ppro, bin)).get(norm(png));
+    const editor = ppro.SequenceEditor.getEditor(await sequenceByGuid(ppro, project, seqGuid));
     tx(project, 'Test', (add) => add(editor.createOverwriteItemAction(item, tt(ppro, 2), 12, -1)));
-    const track = await seq.getVideoTrack(12);
-    ti = track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false)[0];
-    tx(project, 'Test', (add) => add(ti.createSetEndAction(tt(ppro, 7))));
-    return { start: (await ti.getStartTime()).seconds, end: (await ti.getEndTime()).seconds };
+    haveClip = true;
+    const ti = await locate();
+    tx(await getProject(), 'Test', (add) => add(ti.createSetEndAction(tt(ppro, 7))));
+    const t2 = await locate();
+    return { start: (await t2.getStartTime()).seconds, end: (await t2.getEndTime()).seconds };
   });
   await step('Eingebaute Effekte (Namen)', async () => {
-    const chain = await ti.getComponentChain();
+    const chain = await (await locate()).getComponentChain();
     const comps = await fx.listComponents(chain);
     res.findings.components = comps.map((c) => c.name);
-    const motion = await fx.builtin(ti, 'motion');
-    res.findings.motionParams = motion ? fx.paramList(motion).map((p) => p.name) : null;
+    const idx = await fx.builtinIndex(locate, 'motion');
+    res.findings.motionParams = idx >= 0 ? fx.paramList(await fx.componentAt(locate, idx)).map((p) => p.name) : null;
     return res.findings.components;
   });
   await step('Zuschneiden anwenden', async () => {
-    const r = await fx.addCrop(ppro, project, ti, { links: 25, rechts: 25, oben: 0, unten: 0 }, {});
-    const chain = await ti.getComponentChain();
-    const comp = chain.getComponentAtIndex(chain.getComponentCount() - 1);
-    res.findings.cropParams = fx.paramList(comp).map((p) => p.name);
+    const r = await fx.addCrop(ppro, await getProject(), locate, { links: 25, rechts: 25, oben: 0, unten: 0 }, ctx);
+    res.findings.cropMatch = r.match;
+    const chain = await (await locate()).getComponentChain();
+    res.findings.cropParams = fx.paramList(chain.getComponentAtIndex(chain.getComponentCount() - 1)).map((p) => p.name);
+    if (r.fehlend.length) throw new Error('Parameter nicht gesetzt: ' + r.fehlend.join(', '));
     return r;
   });
-  let rough = null;
+  let roughIdx = -1;
   await step('Kanten aufrauen + Keyframes', async () => {
-    const eff = { id: 'test', match_name: 'AE.ADBE Roughen Edges', params: [{ index: 2, name: 'Rahmen', value: 500, keyframes: [[0, 500], [0.5, 8]] }] };
-    const r = await fx.addEffect(ppro, project, ti, eff, {});
-    const chain = await ti.getComponentChain();
-    rough = chain.getComponentAtIndex(chain.getComponentCount() - 1);
-    res.findings.roughParams = fx.paramList(rough).map((p) => p.name);
-    const p = fx.findParam(rough, ['Rahmen', 'Border'], 2);
+    roughIdx = (await (await locate()).getComponentChain()).getComponentCount();
+    const eff = { id: 'test', match_name: 'AE.ADBE Roughen Edges', display: 'Kanten aufrauen', params: [{ index: 2, names: ['Rahmen', 'Border'], value: 500, keyframes: [[0, 500], [0.5, 8]] }] };
+    const r = await fx.addEffect(ppro, await getProject(), locate, eff, ctx);
+    res.findings.roughMatch = r.match;
+    const comp = await fx.componentAt(locate, roughIdx);
+    res.findings.roughParams = fx.paramList(comp).map((p) => p.name);
+    const p = fx.findParam(comp, ['Rahmen', 'Border'], 2);
     const times = p ? p.getKeyframeListAsTickTimes().map((t) => +t.seconds.toFixed(4)) : null;
     res.findings.keyframeTimes = times;
     res.findings.keyframeOrigin = times && times.length ? (Math.abs(times[0]) < 0.01 ? 'clipanfang' : 'andere:' + times[0]) : 'unbekannt';
+    if (r.fehlend.length) throw new Error('Parameter nicht gesetzt: ' + r.fehlend.join(', '));
     return { r, times };
   });
   await step('Farbformat prüfen', async () => {
-    const p = fx.findParam(rough, ['Konturfarbe', 'Edge Color', 'Border Color'], 1);
-    if (!p) throw new Error('Farbparameter nicht gefunden');
     const want = { argb16: [0xFF00, 0xD400, 0x5300, 0x2900] };
     const tried = {};
-    for (const mode of ['unit']) {                         // dokumentiert: 0.0-1.0; die Rückgabe wird nur zur Kontrolle protokolliert
-      try {
-        tx(project, 'Farbe', (add) => add(p.createSetValueAction(p.createKeyframe(fx.toPproValue(ppro, want, { colorMode: mode })), true)));
-        const v = await p.getStartValue();
-        tried[mode] = JSON.stringify(v && v.value);
-      } catch (e) { tried[mode] = 'Fehler: ' + errText(e); }
-    }
+    const p = fx.findParam(await fx.componentAt(locate, roughIdx), ['Konturfarbe', 'Edge Color', 'Border Color'], 1);
+    if (!p) throw new Error('Farbparameter nicht gefunden');
+    try {                                                    // dokumentiert: 0.0-1.0; die Rückgabe wird nur zur Kontrolle protokolliert
+      tx(await getProject(), 'Farbe', (add) => add(p.createSetValueAction(p.createKeyframe(fx.toPproValue(ppro, want, { colorMode: 'unit' })), true)));
+      const p2 = fx.findParam(await fx.componentAt(locate, roughIdx), ['Konturfarbe', 'Edge Color', 'Border Color'], 1);
+      const v = await p2.getStartValue();
+      tried.unit = JSON.stringify(v && v.value);
+    } catch (e) { tried.unit = 'Fehler: ' + errText(e); }
     res.findings.colorTried = tried;
     res.findings.colorMode = 'unit';
     return tried;
   });
-  await step('Deckkraft-Einblendung', async () => { await fx.setFade(ppro, project, ti, 5, 0.42, {}); return 'ok'; });
+  await step('Deckkraft-Einblendung', async () => { await fx.setFade(ppro, await getProject(), locate, 5, 0.42, ctx); return 'ok'; });
 
   // Aufräumen – immer
   await step('Aufräumen', async () => {
-    if (seq) await project.deleteSequence(seq);
-    const root = await project.getRootItem();
+    const project = await getProject();
+    if (seqGuid) {
+      const seq = (await project.getSequences()).find((s) => String(s.guid) === seqGuid);
+      if (seq) await project.deleteSequence(seq);
+    }
+    const p2 = await getProject();
+    const root = await p2.getRootItem();
     const b = (await root.getItems()).find((i) => i.name === BIN);
-    if (b) tx(project, 'Aufräumen', (add) => add(root.createRemoveItemAction(b)));
+    if (b) tx(p2, 'Aufräumen', (add) => add(root.createRemoveItemAction(b)));
     return 'entfernt';
   });
   return res;

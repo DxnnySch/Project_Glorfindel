@@ -12,7 +12,7 @@ OWN = {
     "paramList", "findParam", "toPproValue", "setParam", "addEffect", "builtin", "setMotion", "setFade", "addCrop", "plainValue", "projectDump",
     "readComponents", "sequenceDump", "methodsOf", "introspect", "selftest", "makeHandlers", "findServer", "projectInfo", "session", "onMessage",
     "run", "stop", "safe", "fn", "addAction", "ensureBin", "handlers", "log", "onStatus", "send", "start", "setStatus", "show", "setup",
-    "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
+    "getBin", "builtinIndex", "componentAt", "retryStale", "isStale", "fresh", "locate", "getProject", "refresh", "resolveMatchName", "sequenceByGuid", "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
 }
 JS = {
     "map", "filter", "find", "findIndex", "includes", "push", "slice", "join", "split", "replace", "startsWith", "endsWith", "toLowerCase", "toFixed",
