@@ -19,3 +19,11 @@ Siehe `Projektheft Teil 3 - Segment-Workflow.md`. Kommentare gehören zu Segment
 ## Offen
 - Review 2, noch nicht umgesetzt: Rohschnitt warnt nicht bei „veraltet“; Papierkorb ohne Übersicht in der UI; Aufnahme-Grenzen nur tippbar (Wellenform-Ziehen); `@`-Autovervollständigung für Bilder im Text; ffmpeg-Jobs nicht abbrechbar; Zeitfelder ohne Bereichsprüfung; ScaDS-Netzfehler beim Abgleich noch technisch formuliert.
 - Premiere-UXP-Panel und AE-Skript sind nur Skelette (nicht testbar ohne Premiere), End-to-End mit echter S2-E7-Konformierung.
+
+
+## Premiere-Bridge (Stand 2026-10-24)
+Fertig und getestet (Python + Node, strenge API-Nachbildung): Hub/WebSocket mit Token- und Origin-Schutz, Plan-Builder (Rezepte aus dem echten S2-E7-Schnitt),
+konforme Referenz, Standbilder aus derselben Datei auf dem Episodenraster, Credit-PNGs, Sequenz-Vorgabe mit 14 V/16 A, Panel (Bau, Effekte, Marker, Tausch,
+Auslesen, Selbsttest), Premiere-Ansicht in der Oberfläche, HQ-Tausch mit Rückweg, Projektleser für .prproj.
+**Nicht in echtem Premiere gelaufen** (siehe FRAGEN F10): Parameternamen/Farbformat/Keyframe-Zeitbezug sind per Selbsttest zu bestätigen.
+Offen: MOGRT-Credits, Audio-Blenden, optional verschachtelte Artwork-Sequenzen, Auto-Anker für HQ.

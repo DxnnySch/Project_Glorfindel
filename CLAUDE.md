@@ -21,3 +21,10 @@ Lokales Web-Tool (Python/FastAPI + statische Weboberfläche), das aus Episode, S
 
 ## Testdaten (nur auf Dannys Rechner)
 `F:\OneDrive\Mythen-Archiv\Videos\S2 E7\…` (Skript-docx, Aufnahmen), `F:\OneDrive\Videomaterial\Filme\Ringe der Macht\Staffel 2\…` (HQ deutsch, englische Bildschirmaufnahme), `…\Programm-Vorgaben\PremierePro\*.prfpset`. Tests, die diese Pfade brauchen, werden ohne sie übersprungen.
+
+## Premiere-Bridge
+Module: `bridge` (Hub), `routes_bridge`, `premiere_plan` (Plan), `premiere_media` (Referenz, Credit-PNGs), `premiere_preset` (.sqpreset), `premiere_ops` (Bau/Tausch),
+`prproj_reader` (liest .prproj), `panel_package`. Panel: `premiere-panel/` (CommonJS, `lib/`, Tests mit `node --test premiere-panel/test/panel.test.js`, laufen auch in pytest).
+API-Referenz: `docs/bridge/premierepro-26.5.d.ts`, Entwurf `docs/bridge/DESIGN.md`. Nach Änderungen am Plan-Builder: `python scripts/make_plan_fixture.py`.
+Rezepte aus einem fertigen Projekt: `python scripts/extract_premiere_recipes.py <projekt.prproj>` → `vorlagen/premiere_rezepte.json`.
+Regel: Premiere-API nur laut Doku verwenden (z. B. `Color` 0..1, `createSequenceWithPresetPath`); Annahmen über Zeitbezug/Parameternamen stehen im Selbsttest.

@@ -88,7 +88,7 @@ def test_build_creates_reference_stills_plan_and_calls_premiere(ep):
     cred = [x for x in plan["media"] if x["kind"] == "credit"]
     assert cred and all(Path(x["path"]).exists() for x in cred)                  # Credit-PNGs wirklich erzeugt
     st = premiere_ops.load_state(ep)
-    assert st["stills"] == {"1.png": 17.0}      # nur nach dem Segment mit Kommentar (Segment 1 läuft als Montage durch) and st["active"] == "proxy" and st["sequence"].startswith("Rohschnitt S3 E1")
+    assert list(st["stills"]) == ["1.png"] and st["stills"]["1.png"] == pytest.approx(17.0, abs=0.03)   # nur nach dem Segment mit Kommentar and st["active"] == "proxy" and st["sequence"].startswith("Rohschnitt S3 E1")
     assert res["report"]["warnings"] == ["Test-Warnung"] and (premiere_ops.pdir(ep) / f"bericht_v{res['version']}.json").exists()
     assert prog                                                                   # Fortschritt gemeldet
 

@@ -45,7 +45,7 @@ def test_rough_cut_places_still_after_commented_segment():
     class E:  # noqa: D401
         pass
     assert list(pipeline.still_times([sc])) == ["1.png", "2.png"]
-    assert pipeline.still_times([sc])["1.png"] == 5 and pipeline.still_times([sc])["2.png"] == 26
+    assert pipeline.still_times([sc])["1.png"] == pytest.approx(5, abs=0.03) and pipeline.still_times([sc])["2.png"] == pytest.approx(26, abs=0.03)
     comments = [c for c in pkg["tracks"]["A2"]]
     assert len(comments) == 2 and comments[0]["start"] >= stills[0]["start"] and comments[1]["start"] >= stills[1]["start"]
 

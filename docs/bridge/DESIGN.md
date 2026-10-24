@@ -41,14 +41,23 @@ Hauptsequenz „MythenAusMittelerdeVideo“: 14 Video- / 16 Audiospuren.
 | A10 | Musik |
 Artwork-Sequenz: Bild + „Maske Quadrat.png“ als Track-Matte (Legacy Key Track Matte).
 
-## Grenzen der Premiere-API (26.5) und Umgang damit
-| Fehlt in der API | Umgang |
-| --- | --- |
-| Spuren hinzufügen | Hauptsequenz kommt aus einer **Vorlagen-Sequenz** mit allen Spuren (Klon) |
-| Textgrafik/Titel erzeugen | Credits als **PNG mit Alpha** (immer) oder **MOGRT** (wenn konfiguriert, `insertMogrtFromPath`) |
-| Audio-Überblendungen „Konstante Leistung“ | wird im Bericht gemeldet; Standard-Blenden von Hand/Vorgabe |
-| Einstellungsebene erzeugen | aus der Vorlage übernommen (Projektelement „Einstellungsebene“) |
-| Effekt-Vorgaben (.prfpset) anwenden | Rezepte: Effekt per `VideoFilterFactory.createComponent`, Parameter/Keyframes per `ComponentParam` |
+## Umgesetzte Entscheidungen (Stand: Bridge v0.2)
+Die Premiere-API (26.5) kann keine Spuren hinzufügen, keine Titel/Grafiken, keine Einstellungsebenen, keine Audio-Überblendungen und keine
+Effektvorgaben (.prfpset) anwenden. Statt Vorlagen-Projekt wurde deshalb so gelöst:
+
+| Baustein | Lösung | Warum |
+| --- | --- | --- |
+| Hauptsequenz mit 14 V / 16 A Spuren | Die App erzeugt eine **Sequenz-Vorgabe** (.sqpreset) aus Adobes „AVCHD 1080p60“ mit der Spuranzahl; `createSequenceWithPresetPath` | keine Vorlage nötig, Spuren garantiert da |
+| Episode (tauschbar) | **Konforme Referenz** (CFR, zugeschnitten) in einer **verschachtelten Episoden-Sequenz** (`createSequenceFromMedia`) | Tausch Proxy → HQ = ein `changeMediaFilePath` |
+| Standbilder | aus **derselben Datei** wie die Sequenz, Segmentgrenzen auf dem Episodenraster; gleiche Dateinamen → Austausch in place + `refreshMedia()` | Bild und Standbild stimmen exakt überein |
+| Pause/Play | `importAEComps` aus `Play-Pause.aep` (Komposition ab 28,7 s bzw. 0 s, je 1,32 s) auf V7 | wie im Original (Dynamic Link) |
+| Artwork | Bild/Wallpaper direkt auf V3/V4 mit **Zuschneiden (quadratisch)**, Bewegung (Skalierung/Position), Schlagschatten, Transformieren-Zoom, 2× Kanten aufrauen (Fancy Out/In) – Werte aus dem echten Schnitt | Track-Matte-Sequenzen sind per API nicht zuverlässig reproduzierbar; gleiches Ergebnis |
+| Blur | Gaußscher Weichzeichner **am Standbild** (0 → 15, Rampen 0,5 s) statt Einstellungsebene | sichtbar ist Blur nur auf dem Standbild darunter; keine Vorlage |
+| Credits | **PNG mit Alpha** (GrandCentral-Light, weiß, Schatten) an den Originalpositionen, Ein-/Ausblendung über Deckkraft; gleichzeitige Artworks → Spur V10/V13 | Text-Grafiken sind per API nicht erzeugbar |
+| Marker | `Markers.createAddMarkerAction` | – |
+| Zeitraster | Hauptsequenz 60 fps, Segmentgrenzen auf 24000/1001 | keine Teilbild-Überlappungen |
+
+Nicht möglich / offen: Audio-Überblendung „Konstante Leistung“ (API bietet nur Video-Übergänge), Credits als editierbarer Text (nur über ein MOGRT mit Textfeld).
 
 ## Sicherheit
 WebSocket nur auf 127.0.0.1; Token (Datei im lokalen App-Ordner) wird vom Panel per HTTP beim App-Server geholt (Browser-Seiten können die

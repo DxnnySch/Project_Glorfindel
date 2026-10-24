@@ -92,4 +92,5 @@ def test_still_times_modes(ep):
     from glorfindel.models import Scene
     sc = [Scene(id="a", segmente=[seg(1, 2), seg(5, 6)]), Scene(id="b", segmente=[seg(9, 10)], standbild="start"),
           Scene(id="c", segmente=[seg(20, 30)], standbild="aus")]
-    assert pipeline.still_times(sc) == {"1.png": 6, "2.png": 9}
+    st = pipeline.still_times(sc)                       # auf das Bildraster der Episode gerundet (23,976 fps)
+    assert list(st) == ["1.png", "2.png"] and st["1.png"] == pytest.approx(6, abs=0.03) and st["2.png"] == pytest.approx(9, abs=0.03)

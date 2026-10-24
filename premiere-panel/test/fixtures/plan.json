@@ -83,31 +83,31 @@
   {
    "kind": "episode",
    "start": 0.0,
-   "end": 6.0,
+   "end": 5.966666666666667,
    "track": 0,
    "scene": "sz_01",
    "media": "m1",
-   "src_in": 100.0,
-   "src_out": 106.0,
+   "src_in": 100.01658333333333,
+   "src_out": 105.980875,
    "audio": 3,
    "name": "sz_01 Segment"
   },
   {
    "kind": "episode",
-   "start": 6.0,
-   "end": 11.0,
+   "start": 5.966666666666667,
+   "end": 10.966666666666667,
    "track": 0,
    "scene": "sz_01",
    "media": "m1",
-   "src_in": 120.0,
-   "src_out": 125.0,
+   "src_in": 119.994875,
+   "src_out": 124.99987499999999,
    "audio": 3,
    "name": "sz_01 Segment"
   },
   {
    "kind": "still",
-   "start": 11.0,
-   "end": 27.183333333333334,
+   "start": 10.966666666666667,
+   "end": 27.15,
    "track": 0,
    "scene": "sz_01",
    "media": "m3",
@@ -146,20 +146,20 @@
   },
   {
    "kind": "episode",
-   "start": 27.183333333333334,
-   "end": 31.183333333333334,
+   "start": 27.15,
+   "end": 31.15,
    "track": 0,
    "scene": "sz_02",
    "media": "m1",
-   "src_in": 300.0,
-   "src_out": 304.0,
+   "src_in": 300.00804166666666,
+   "src_out": 304.0120416666666,
    "audio": 3,
    "name": "sz_02 Segment"
   },
   {
    "kind": "still",
-   "start": 31.183333333333334,
-   "end": 34.18333333333333,
+   "start": 31.15,
+   "end": 34.15,
    "track": 0,
    "scene": "sz_02",
    "media": "m4",
@@ -198,8 +198,8 @@
   },
   {
    "kind": "artwork",
-   "start": 12.066666666666666,
-   "end": 16.683333333333334,
+   "start": 12.033333333333333,
+   "end": 16.65,
    "track": 2,
    "scene": "sz_01",
    "media": "m6",
@@ -591,8 +591,8 @@
   },
   {
    "kind": "artwork",
-   "start": 31.483333333333334,
-   "end": 32.983333333333334,
+   "start": 31.45,
+   "end": 32.95,
    "track": 2,
    "scene": "sz_02",
    "media": "m6",
@@ -984,8 +984,8 @@
   },
   {
    "kind": "artwork",
-   "start": 14.383333333333333,
-   "end": 21.3,
+   "start": 14.35,
+   "end": 21.266666666666666,
    "track": 3,
    "scene": "sz_01",
    "media": "m9",
@@ -1377,8 +1377,8 @@
   },
   {
    "kind": "artwork",
-   "start": 31.483333333333334,
-   "end": 32.983333333333334,
+   "start": 31.45,
+   "end": 32.95,
    "track": 3,
    "scene": "sz_02",
    "media": "m9",
@@ -1770,8 +1770,8 @@
   },
   {
    "kind": "anim",
-   "start": 10.366666666666667,
-   "end": 11.683333333333334,
+   "start": 10.333333333333334,
+   "end": 11.666666666666666,
    "track": 6,
    "scene": "sz_01",
    "template": "Pause",
@@ -1781,8 +1781,8 @@
   },
   {
    "kind": "anim",
-   "start": 26.5,
-   "end": 27.816666666666666,
+   "start": 26.466666666666665,
+   "end": 27.8,
    "track": 6,
    "scene": "sz_01",
    "template": "Play",
@@ -1792,8 +1792,8 @@
   },
   {
    "kind": "anim",
-   "start": 30.55,
-   "end": 31.866666666666667,
+   "start": 30.533333333333335,
+   "end": 31.85,
    "track": 6,
    "scene": "sz_02",
    "template": "Pause",
@@ -1804,7 +1804,7 @@
   {
    "kind": "credit",
    "start": 0.0,
-   "end": 27.183333333333334,
+   "end": 27.15,
    "track": 8,
    "scene": "sz_01",
    "media": "m2",
@@ -1813,8 +1813,8 @@
   },
   {
    "kind": "credit",
-   "start": 27.183333333333334,
-   "end": 34.18333333333333,
+   "start": 27.15,
+   "end": 34.15,
    "track": 8,
    "scene": "sz_02",
    "media": "m2",
@@ -1823,8 +1823,8 @@
   },
   {
    "kind": "credit",
-   "start": 12.066666666666666,
-   "end": 16.683333333333334,
+   "start": 12.033333333333333,
+   "end": 16.65,
    "track": 9,
    "scene": "sz_01",
    "media": "m7",
@@ -1833,8 +1833,8 @@
   },
   {
    "kind": "credit",
-   "start": 31.483333333333334,
-   "end": 32.983333333333334,
+   "start": 31.45,
+   "end": 32.95,
    "track": 9,
    "scene": "sz_02",
    "media": "m8",
@@ -1843,8 +1843,8 @@
   },
   {
    "kind": "credit",
-   "start": 14.383333333333333,
-   "end": 21.3,
+   "start": 14.35,
+   "end": 21.266666666666666,
    "track": 12,
    "scene": "sz_01",
    "media": "m10",
@@ -1853,8 +1853,8 @@
   },
   {
    "kind": "credit",
-   "start": 31.483333333333334,
-   "end": 32.983333333333334,
+   "start": 31.45,
+   "end": 32.95,
    "track": 12,
    "scene": "sz_02",
    "media": "m11",
@@ -1863,8 +1863,8 @@
   },
   {
    "kind": "voice",
-   "start": 11.3,
-   "end": 26.683333333333334,
+   "start": 11.266666666666667,
+   "end": 26.65,
    "track": 1,
    "scene": "sz_01",
    "media": "m5",
@@ -1881,31 +1881,31 @@
    "kind": "scene"
   },
   {
-   "time": 12.066666666666666,
+   "time": 12.033333333333333,
    "name": "Bild: a1",
    "comment": "Bild: a1",
    "kind": "asset"
   },
   {
-   "time": 14.383333333333333,
+   "time": 14.35,
    "name": "Bild: a2",
    "comment": "Bild: a2",
    "kind": "asset"
   },
   {
-   "time": 27.183333333333334,
+   "time": 27.15,
    "name": "Szene 02: Hafen",
    "comment": "Szene 02: Hafen",
    "kind": "scene"
   },
   {
-   "time": 31.483333333333334,
+   "time": 31.45,
    "name": "Bild: a1",
    "comment": "Bild: a1",
    "kind": "asset"
   },
   {
-   "time": 31.483333333333334,
+   "time": 31.45,
    "name": "Bild: a2",
    "comment": "Bild: a2",
    "kind": "asset"
@@ -1919,7 +1919,7 @@
  "stats": {
   "clips": 19,
   "media": 11,
-  "duration": 34.184615384615384,
+  "duration": 34.15,
   "by_kind": {
    "anim": 3,
    "artwork": 4,

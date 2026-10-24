@@ -21,6 +21,15 @@ def load_template(path: Path | None = None) -> dict:
     return json.loads((path or DEFAULT_TEMPLATE_PATH).read_text(encoding="utf-8"))
 
 
+EPISODE_FPS = 24000 / 1001
+
+
+def snap_ep(t: float, fps: float = EPISODE_FPS) -> float:
+    """Zeit auf das Bildraster der Episode runden (23,976 fps = 24000/1001). Schnitt in Premiere und Standbild nutzen dasselbe Bild."""
+    f = EPISODE_FPS if abs(fps - 23.976) < 0.01 else fps
+    return round(t * f) / f
+
+
 def credit_text(rule: str, artist: str, lowercase: bool = True) -> str:
     text = rule.replace("{kuenstler}", artist)
     return text.lower() if lowercase else text
@@ -231,11 +240,12 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         for i, seg in enumerate(sc.segmente):
             if segment_light(seg.duration, th) == "rot":
                 tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Segment {i + 1} ist {seg.duration:.1f} s lang (> {th.max_segment_s} s)")
-            dur = seg.duration
+            s_in, s_out = snap_ep(seg.in_, episode_fps), snap_ep(seg.out, episode_fps)
+            dur = s_out - s_in
             tl.add(tr["series_video"], "scene_segment", t, t + dur, scene=sc.id, src="episode",
-                   src_in=seg.in_, src_out=seg.out, **({"note": seg.notiz} if seg.notiz else {}))
+                   src_in=s_in, src_out=s_out, **({"note": seg.notiz} if seg.notiz else {}))
             tl.add(tr["series_audio"], "scene_audio", t, t + dur, scene=sc.id, src="episode",
-                   src_in=seg.in_, src_out=seg.out,
+                   src_in=s_in, src_out=s_out,
                    effects=[{"recipe": "const_power", "edge": "both", "duration": tm["audio_crossfade"]}])
             t += dur
             amazon_clip["end"] = t
@@ -260,7 +270,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         "media": media,
         "tracks": tl.tracks,
         "markers": sorted(tl.markers, key=lambda m: m["time"]),
-        "duration": t,
+        "duration": tl.snap(t),
         "warnings": tl.warnings,
     }
 

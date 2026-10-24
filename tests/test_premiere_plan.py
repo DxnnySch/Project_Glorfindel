@@ -64,7 +64,9 @@ def test_plan_structure_media_and_stills(env):
     assert kinds["episode"] == 3 and kinds["still"] == 2 and kinds["anim"] >= 3 and kinds["artwork"] == 2
     assert "blur" not in kinds and kinds["credit"] >= 3                      # Blur sitzt als Effekt am Standbild; Credits je Artwork + © amazon
     eps = [c for c in plan["clips"] if c["kind"] == "episode"]
-    assert eps[0]["src_in"] == 100 and eps[0]["src_out"] == 106 and eps[0]["audio"] == 3 and eps[0]["track"] == 0
+    assert eps[0]["src_in"] == pytest.approx(100, abs=0.03) and eps[0]["src_out"] == pytest.approx(106, abs=0.03)
+    assert eps[0]["audio"] == 3 and eps[0]["track"] == 0
+    assert round(eps[0]["src_in"] * 24000 / 1001, 6) == round(eps[0]["src_in"] * 24000 / 1001)       # exakt auf einem Episodenbild
     still = next(c for c in plan["clips"] if c["kind"] == "still")
     m = {x["id"]: x for x in plan["media"]}
     assert Path(m[still["media"]]["path"]).parent == env.stills_dir and m[eps[0]["media"]]["kind"] == "episode"

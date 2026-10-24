@@ -43,9 +43,32 @@ Offene Feinjustierung: Zeitschätzung ohne Aufnahme = **12 s pro Stichpunkt** (e
 Heft nennt „zwei Credit-Spuren“, V11 (Musik-Credit) und V12 (Bauchbinden) sind belegt. Standard: V10 (links/einzeln) und **V13** (rechts).
 **Antwort:** top
 
+## F9 – Premiere-Bridge: abweichende Umsetzung einzelner Teile  🟡
+Die Premiere-API (UXP 26.5) kann keine Spuren hinzufügen, keine Textgrafiken, keine Einstellungsebenen, keine Audio-Blenden „Konstante Leistung“
+und keine Effektvorgaben anwenden. Umgesetzt habe ich deshalb (Details `docs/bridge/DESIGN.md`):
+* Artwork: Zuschneiden (quadratisch) + dieselbe Effektkette wie im Original (Schlagschatten, Zoom, Fancy Out/In), **keine** verschachtelte Matte-Sequenz.
+* Blur: Weichzeichner **am Standbild** statt auf einer Einstellungsebene (sieht gleich aus, keine Vorlage nötig).
+* Credits: **PNG mit Transparenz** (GrandCentral-Light, an den Originalpositionen), nicht als editierbarer Text. Alternative später: ein MOGRT mit Textfeld.
+* Audio-Überblendungen am Originalton: nicht über die API möglich → von Hand oder per Premiere-Standardübergang.
+**Standard:** so lassen. Wenn dir eine Abweichung nicht passt, sag welche – dann baue ich die Alternative.
+**Antwort:**
+
+## F10 – Erster Test in Premiere  🟡
+Ich konnte die Bridge nicht in Premiere ausführen (bei dir war ein ungespeichertes Projekt „Test.prproj“ offen, das wollte ich nicht gefährden).
+Die Logik ist gegen eine strenge Nachbildung der API getestet, aber der erste echte Lauf steht aus. Bitte nach dem Einrichten des Panels
+(App → Premiere → „Panel einrichten“) in **einem Test-Projekt** zuerst **„Selbsttest“** ausführen. Er legt ein Test-Fach an und räumt wieder auf.
+Der Bericht liegt danach in `%LOCALAPPDATA%\Glorfindel\bridge\selbsttest_bericht.json`. Mit dem Bericht kann ich Abweichungen (Parameternamen, Farbformat,
+Keyframe-Zeitbezug) gezielt nachziehen.
+**Antwort:**
+
+## F11 – Premiere nur auf Dannys Rechner  ⚙️
+Die Bridge verbindet sich nur mit der App auf demselben Rechner. Premiere-Funktionen sind damit für Danny (Windows) gedacht; Maurice und Philipp arbeiten weiter
+mit Szenen, Skript und Aufnahme und brauchen kein Panel.
+
 ---
 ## Log (von mir)
 - 2026-10-22: Datei angelegt.
+- 2026-10-24: Premiere-Bridge gebaut (Panel, Plan, Tausch Proxy↔HQ, Standbild-Genauigkeit). Fragen F9–F11 offen.
 - Antworten erhalten (15:20): F1 → Fokus auf Profi-Optik + einfache Installation/Bedienung (wird umgesetzt). F4 → ScaDS-Whisper wird als wählbares Transkriptions-Backend ergänzt (Heft: „nie Audio senden“ → nur auf deine Anweisung, in den Einstellungen gekennzeichnet). F6 → keine Co-Author-Zeilen in Commits.
 - 2026-10-22 15:10: Kern (Store, Zeitmodell, Conform, Word, Rohschnitt, Abgleich inkl. Stichpunkte) fertig, 54 Tests grün.
 - 2026-10-22: Weboberfläche, Installer und README ergänzt. Der ScaDS-Schlüssel liegt nur in der lokalen `.env` (gitignored). Da er im Chat stand, rotiere ihn bitte bei Gelegenheit.

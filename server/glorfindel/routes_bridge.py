@@ -4,10 +4,12 @@ from __future__ import annotations
 import hmac
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.requests import HTTPConnection
 
-from . import premiere_ops
+from . import panel_package, premiere_ops
+from .config import app_dir
 from .bridge import HUB, PROTOCOL, BridgeError, get_token
 from .deps import AppState
 from .routes_core import ep_of
@@ -113,3 +115,22 @@ def premiere_swap(body: SwapBody, ep: Episode = Depends(ep_of), state: AppState 
 @router.post("/bridge/selftest")
 def premiere_selftest(state: AppState = Depends(st)):
     return {"job": state.jobs.submit("Premiere-Selbsttest", lambda progress: premiere_ops.run_selftest(None, progress))}
+
+
+# ---------- Panel einrichten ----------
+@router.get("/bridge/panel-info")
+def panel_info():
+    return {"installer": panel_package.installer_available(), "ordner": str(panel_package.PANEL_DIR)}
+
+
+@router.get("/bridge/panel.ccx")
+def panel_download():
+    ccx = panel_package.build_ccx(app_dir() / "bridge" / "Glorfindel-Bridge.ccx")
+    return FileResponse(ccx, filename=ccx.name, media_type="application/octet-stream")
+
+
+@router.post("/bridge/install-panel")
+def panel_install():
+    """Paket bauen und den Creative-Cloud-Installer starten (nur auf Klick des Nutzers)."""
+    ccx = panel_package.build_ccx(app_dir() / "bridge" / "Glorfindel-Bridge.ccx")
+    return {**panel_package.install(ccx), "datei": str(ccx)}

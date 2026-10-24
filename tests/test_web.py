@@ -26,7 +26,7 @@ def test_panel_skeleton_is_valid_json():
     root = Path(__file__).resolve().parents[1] / "premiere-panel"
     m = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     assert m["manifestVersion"] == 5 and m["host"]["app"] == "premierepro"
-    assert "Rohschnitt" in (root / "main.js").read_text(encoding="utf-8")
+    assert "Bridge" in (root / "main.js").read_text(encoding="utf-8") and (root / "lib" / "plan.js").exists()
 
 
 def test_help_guide_served_and_complete(tmp_path, monkeypatch):

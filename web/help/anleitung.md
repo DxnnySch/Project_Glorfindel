@@ -212,6 +212,8 @@ Setze einen Anker am Anfang und einen am Ende, bei Werbepausen o. ä. weitere da
 
 ## 13. Rohschnitt erzeugen
 
+> Empfohlen ist der direkte Weg über Premiere (Abschnitt 13b). Das Paket und die XML hier sind die Notlösung ohne Premiere-Verbindung.
+
 Ansicht **Rohschnitt** → **Rohschnitt erzeugen**. Optionen: nach Strängen sortieren, Standbilder erzeugen, Quelle für Standbilder.
 
 - **Aufbau:** je markiertem Segment der Ausschnitt der Episode; hat das Segment einen Kommentar, folgt das **Standbild** mit Sprechertext, Bildern und Karten – Segmente ohne Kommentar laufen als Montage weiter. Nur markierte Segmente kommen vor.
@@ -223,6 +225,25 @@ Ansicht **Rohschnitt** → **Rohschnitt erzeugen**. Optionen: nach Strängen sor
 ![Rohschnitt mit Vorschau und Warnungen](img/14-rohschnitt.png)
 
 **Im Bild:** 1 Rohschnitt erzeugen, 2 Vorschau aller Spuren, 3 Warnungen mit Sprung zur Szene.
+
+## 13b. Premiere: direkte Verbindung (Bridge)
+
+Seit Version 0.2 kann die App **direkt in Premiere arbeiten**, statt eine XML-Datei zu liefern. Der XML-Export bleibt als Notlösung (keine Effekte, keine Credits, keine Animationen).
+
+**Einrichten (einmalig):** Ansicht **Premiere** → „Panel einrichten“, die Rückfrage bestätigen, Premiere neu starten, **Fenster → Erweiterungen → „Glorfindel Bridge“** öffnen. In der App steht dann „Mit Premiere verbunden“. Das Panel muss geöffnet bleiben.
+
+**Rohschnitt bauen:** „In Premiere bauen“. Die App
+1. macht aus der Referenz eine **konforme Fassung** (konstante Bildrate, ohne Balken) – dieselbe Datei liegt in Premiere und liefert die Standbilder, deshalb passen Bild und Standbild genau,
+2. erzeugt die Standbilder, die Credit-Grafiken und eine Sequenz-Vorgabe mit allen Spuren,
+3. baut in deinem geöffneten Projekt eine **neue Sequenz „Rohschnitt … vN“**: Szenen aus einer verschachtelten Episoden-Sequenz (V1, Ton A4), Standbilder, Sprecher (A2/A3), Pause/Play (V7), Artworks mit Zuschnitt, Schatten, Zoom und Fancy In/Out (V3/V4), Credits (V9/V10/V13), Blur am Standbild und Marker.
+
+Nach dem Bau zeigt die App, was **nicht** gebaut werden konnte, und Hinweise. Bestehende Sequenzen werden nie verändert.
+
+**Proxy ↔ HQ:** Nach „HQ-Conform“ (Ansicht Kontrolle) genügt **„Auf HQ umschalten“**: Die App tauscht nur die Datei der Episoden-Sequenz und ersetzt die Standbilder unter **gleichem Namen am gleichen Ort** (Sicherung des Proxy-Stands, Rückweg jederzeit). Alle Clips, Effekte, Animationen und alles, was du von Hand geändert hast, bleibt.
+
+**Diagnose:** Der **Selbsttest** prüft in einem Test-Fach, ob Effekte, Farben und Keyframes in deiner Premiere-Version so ankommen wie geplant (und räumt auf). Mit **„Aktive Sequenz auslesen“** siehst du Spuren, Clips und Effekte zum Vergleich mit dem Ursprungsschnitt.
+
+**Grenzen:** Premiere erlaubt Plugins keine zusätzlichen Spuren, Textgrafiken, Einstellungsebenen oder Audio-Blenden „Konstante Leistung“. Darum: eigene Sequenz-Vorgabe, Credits als Bild mit Transparenz (nicht als Text editierbar), Blur direkt am Standbild, Audio-Blenden von Hand.
 
 ## 14. Protokoll und Konflikte
 

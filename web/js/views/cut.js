@@ -15,6 +15,7 @@ export async function render(main, ctx) {
     btn('Ansehen', { size: 'sm', onClick: () => showPkg(v) }),
     btn('Schnittpaket (.json)', { size: 'sm', icon: 'download', onClick: () => { location.href = epUrl(ep, `/rough-cut/${v.version}/json`); } }),
     v.xml ? btn('Premiere-XML', { size: 'sm', icon: 'download', onClick: () => { location.href = epUrl(ep, `/rough-cut/${v.version}/xml`); } }) : null)) : [h('p', { class: 'help' }, 'Noch kein Rohschnitt erzeugt.')]));
+  const bridgeHint = h('div', { class: 'banner info', style: { marginBottom: '14px' } }, icon('video'), h('span', {}, 'Besser als die XML: Rohschnitt direkt in Premiere bauen (mit Effekten, Credits, Animationen) und später Proxy gegen HQ tauschen. '), btn('Zur Premiere-Ansicht', { size: 'sm', kind: 'primary', onClick: () => ctx.go('premiere') }));
   const result = h('div'), preview = h('div');
   const COLORS = { scene_segment: '#4da3e0', scene_audio: '#3b7fb0', still: '#8e97a8', comment: '#d4aa4f', artwork: '#4cc38a', map: '#b06be0', credit: '#e0524d', anim: '#e9b44c', free_block: '#5d6678', fx: '#7ee0a0' };
   const showPkg = async (v, host = preview) => {
@@ -49,6 +50,7 @@ export async function render(main, ctx) {
   const unaligned = d.scenes.filter((s) => s.status !== 'abgeglichen').length;
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Rohschnitt'), h('p', {}, 'Erzeugt das Schnittpaket für Premiere (Serien-Clips, Kommentar, Standbilder, Bildeinblendungen, Marker). Das Premiere-Panel liest die .json; als Fallback gibt es eine FCP-XML.')), btn('Rohschnitt erzeugen', { kind: 'primary', icon: 'scissors', onClick: build })),
+    bridgeHint,
     unaligned ? h('div', { class: 'banner', style: { marginBottom: '14px' } }, icon('alert'), `${unaligned} Szene(n) sind noch nicht mit einer Aufnahme abgeglichen – sie erhalten geschätzte Längen.`) : null,
     h('div', { class: 'card col', style: { marginBottom: '16px' } }, h('h2', {}, 'Optionen'), h('div', { class: 'row wrap gap-l' }, h('label', { class: 'check' }, strand, 'Nach Strängen sortieren'), h('label', { class: 'check' }, stills, 'Standbilder erzeugen'), stillSel)),
     result, preview, h('h3', { style: { margin: '18px 0 10px' } }, 'Versionen'), versions.length ? h('p', { class: 'help' }, `Ablage: ${versions.at(-1).path}`) : null, out));

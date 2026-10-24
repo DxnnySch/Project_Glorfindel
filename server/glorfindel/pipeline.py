@@ -237,7 +237,7 @@ def adopt_spoken_text(ep: Episode, scene_id: str, block: int) -> Scene:
 
 
 # ---------- Standbilder ----------
-def still_times(scenes: list[Scene]) -> dict[str, float]:
+def still_times(scenes: list[Scene], fps: float = rough_cut.EPISODE_FPS) -> dict[str, float]:
     """Dateiname -> Episodenzeit des Standbild-Frames (letzter Frame bzw. erster, je Szene)."""
     from .scenes import still_plan
     out = {}
@@ -246,7 +246,7 @@ def still_times(scenes: list[Scene]) -> dict[str, float]:
         for si in still_plan(sc):
             k += 1
             seg = sc.segmente[si]
-            out[f"{k}.png"] = seg.out if sc.standbild == "ende" else seg.in_
+            out[f"{k}.png"] = rough_cut.snap_ep(seg.out if sc.standbild == "ende" else seg.in_, fps)
     return out
 
 

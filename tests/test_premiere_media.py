@@ -28,16 +28,22 @@ def test_conform_reference_makes_cfr_cropped_and_keeps_timeline(tmp_path):
 
 
 @needs_ffmpeg
-def test_stills_use_the_frame_before_the_cut(tmp_path):
+@pytest.mark.parametrize("fps,t_end", [(24, 2.0), (24, 3.5), (23.976, 4.0), (60, 1.5)])
+def test_stills_use_exactly_the_frame_before_the_cut(tmp_path, fps, t_end):
+    """Das Standbild muss das letzte Bild VOR dem Schnitt sein – nicht das erste danach, nicht das vorletzte."""
     clip = tmp_path / "c.mp4"
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x136:rate=24:duration=4", "-c:v", "libx264",
-                    "-pix_fmt", "yuv420p", str(clip)], check=True)
-    last = media.extract_still_last_frame(clip, 2.0, 24, tmp_path / "a.png")           # letzter Frame vor 2,0 s = Frame 47
-    ref = media.extract_frame(clip, 47 / 24 + 0.005, tmp_path / "b.png")
-    nxt = media.extract_frame(clip, 48 / 24 + 0.005, tmp_path / "n.png")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"testsrc2=size=320x136:rate={fps}:duration=6", "-c:v", "libx264",
+                    "-g", "1", "-pix_fmt", "yuv420p", str(clip)], check=True)
+    last = media.extract_still_last_frame(clip, t_end, fps, tmp_path / "a.png")
+    n = round(t_end * fps) - 1                                                          # Index des letzten Bildes vor dem Schnitt
     import numpy as np
-    a, b, n = (np.asarray(Image.open(p).convert("L"), dtype=float) for p in (last, ref, nxt))
-    assert abs(a - b).mean() < 0.5 and abs(a - n).mean() > 0.5                          # exakt der Frame vor dem Schnitt
+    def frame(i):
+        out = tmp_path / f"f{i}.png"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(clip), "-vf", f"select=eq(n\,{i})", "-frames:v", "1", str(out)], check=True)
+        return np.asarray(Image.open(out).convert("RGB"), dtype=float)
+    got = np.asarray(Image.open(last).convert("RGB"), dtype=float)
+    assert abs(got - frame(n)).mean() < 0.5, "nicht das letzte Bild vor dem Schnitt"
+    assert abs(got - frame(n + 1)).mean() > 0.5 and abs(got - frame(n - 1)).mean() > 0.5
 
 
 def test_credit_png_positions_and_style(tmp_path):

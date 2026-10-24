@@ -264,8 +264,11 @@ def extract_frame(src: Path, t: float, dst: Path, width: int | None = None, fps_
 
 
 def extract_still_last_frame(src: Path, t_end: float, fps: float, dst: Path, size: tuple[int, int] | None = None) -> Path:
-    """Letzter Frame einer Szene: Mitte des Frames direkt vor `t_end` (Schutz gegen Rundung an der Framegrenze)."""
-    t = max(0.0, t_end - (0.5 / fps if fps else 0.02))
+    """Letzter Frame einer Szene = Frame direkt vor dem Schnitt `t_end`.
+
+    ffmpeg liefert bei Eingangs-Suche das erste Bild mit PTS >= Zielzeit. Das letzte Bild hat die PTS `t_end - 1/fps`; Ziel
+    ist deshalb `t_end - 1.5/fps`: genau zwischen der PTS des Vorgängers und der des gewollten Bildes (robust gegen Rundung)."""
+    t = max(0.0, t_end - (1.5 / fps if fps else 0.06))
     extract_frame(src, t, dst)
     if size:
         from PIL import Image

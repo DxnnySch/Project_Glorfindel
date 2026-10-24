@@ -27,15 +27,18 @@ def test_sequences_and_main_structure(proj):
 def test_artwork_clip_has_the_fancy_effect_chain(proj):
     main = proj.sequence("MythenAusMittelerdeVideo")
     art = next(i for i in main.video[2] if i.name.startswith("Verschachtelte") and len(i.comps) >= 4)
+    # Reihenfolge im Original: Schlagschatten, Transformieren (Zoom), Kanten aufrauen (Fancy Out), Kanten aufrauen (Fancy In)
     assert [c.match_name for c in art.comps] == ["AE.ADBE Drop Shadow", "AE.ADBE Geometry", "AE.ADBE Roughen Edges", "AE.ADBE Roughen Edges"]
-    fancy_in = art.comps[2]
-    rahmen = next(p for p in fancy_in.params if p.name == "Rahmen")
-    assert rahmen.time_varying and len(rahmen.keyframes) == 2
-    (t0, v0), (t1, v1) = rahmen.keyframes
-    assert t0 == pytest.approx(0, abs=0.05) and float(v0) == pytest.approx(500) and t1 == pytest.approx(0.5, abs=0.05) and float(v1) == pytest.approx(8)
-    rec = effect_recipe(art.comps[3], art.end - art.start, "end")       # Fancy Out: Zeiten relativ zum Ende
-    r2 = next(p for p in rec["params"] if p["name"] == "Rahmen")
-    assert r2["keyframes"][-1][0] == pytest.approx(0, abs=0.05) and r2["keyframes"][0][0] < 0
+    dur = art.end - art.start
+    out, inn = art.comps[2], art.comps[3]
+    r_in = next(p for p in inn.params if p.name == "Rahmen")
+    assert r_in.time_varying and [(round(t, 2), float(v)) for t, v in r_in.keyframes] == [(0.0, 500.0), (0.5, 8.0)]
+    r_out = next(p for p in out.params if p.name == "Rahmen")
+    assert [float(v) for _, v in r_out.keyframes] == [0.0, 8.0, 500.0]
+    assert r_out.keyframes[0][0] == pytest.approx(dur - 0.5333, abs=0.02) and r_out.keyframes[-1][0] == pytest.approx(dur - 0.0167, abs=0.02)
+    rec = effect_recipe(out, dur, "end")                                    # Zeiten relativ zum Ende
+    rr = next(p for p in rec["params"] if p["name"] == "Rahmen")
+    assert rr["keyframes"][-1][0] == pytest.approx(0, abs=0.05) and rr["keyframes"][0][0] < -0.4
 
 
 def test_kinds_and_tracks(proj):

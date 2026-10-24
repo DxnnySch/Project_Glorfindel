@@ -16,6 +16,7 @@ const VIEWS = {
   maps:     { label: 'Karten',      icon: 'map',      mod: './views/maps.js' },
   recording:{ label: 'Aufnahme',    icon: 'mic',      mod: './views/recording.js', sec: 'Produktion' },
   cut:      { label: 'Rohschnitt',  icon: 'scissors', mod: './views/cut.js' },
+  premiere: { label: 'Premiere',   icon: 'video',    mod: './views/premiere.js' },
   log:      { label: 'Protokoll',   icon: 'clock',    mod: './views/log.js' },
   help:     { label: 'Hilfe',       icon: 'info',     mod: './views/help.js', global: true },
   settings: { label: 'Einstellungen', icon: 'gear',   mod: './views/settings.js', sec: 'System', global: true },
