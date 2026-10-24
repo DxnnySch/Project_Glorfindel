@@ -1,0 +1,1932 @@
+{
+ "schema": 1,
+ "name": "Rohschnitt S3 E1 v1",
+ "slug": "",
+ "fps": 60,
+ "episode_sequence": "S3 E1 Sequenz",
+ "bin": "Glorfindel Rohschnitt S3 E1 v1",
+ "anim_source": {
+  "aep": "F:/OneDrive/Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep",
+  "comp": "Play-Pause"
+ },
+ "preset": {
+  "path": "C:/cache/rohschnitt.sqpreset",
+  "video_tracks": 14,
+  "audio_tracks": 16
+ },
+ "media": [
+  {
+   "id": "m1",
+   "path": "F:/OneDrive/cache/S3_E1_ref_cfr.mp4",
+   "kind": "episode"
+  },
+  {
+   "id": "m2",
+   "path": "F:/OneDrive/credits/credit_m2.png",
+   "kind": "credit"
+  },
+  {
+   "id": "m3",
+   "path": "F:/OneDrive/Videoelemente/1.png",
+   "kind": "still"
+  },
+  {
+   "id": "m4",
+   "path": "F:/OneDrive/Videoelemente/2.png",
+   "kind": "still"
+  },
+  {
+   "id": "m5",
+   "path": "F:/OneDrive/Aufnahmen/philipp.wav",
+   "kind": "voice"
+  },
+  {
+   "id": "m6",
+   "path": "F:/OneDrive/Bilder/alan lee - hafen.jpg",
+   "kind": "artwork",
+   "size": [
+    2000,
+    1000
+   ]
+  },
+  {
+   "id": "m7",
+   "path": "F:/OneDrive/credits/credit_m7.png",
+   "kind": "credit"
+  },
+  {
+   "id": "m8",
+   "path": "F:/OneDrive/credits/credit_m8.png",
+   "kind": "credit"
+  },
+  {
+   "id": "m9",
+   "path": "F:/OneDrive/Bilder/john howe.jpg",
+   "kind": "artwork",
+   "size": [
+    800,
+    1200
+   ]
+  },
+  {
+   "id": "m10",
+   "path": "F:/OneDrive/credits/credit_m10.png",
+   "kind": "credit"
+  },
+  {
+   "id": "m11",
+   "path": "F:/OneDrive/credits/credit_m11.png",
+   "kind": "credit"
+  }
+ ],
+ "clips": [
+  {
+   "kind": "episode",
+   "start": 0.0,
+   "end": 6.0,
+   "track": 0,
+   "scene": "sz_01",
+   "media": "m1",
+   "src_in": 100.0,
+   "src_out": 106.0,
+   "audio": 3,
+   "name": "sz_01 Segment"
+  },
+  {
+   "kind": "episode",
+   "start": 6.0,
+   "end": 11.0,
+   "track": 0,
+   "scene": "sz_01",
+   "media": "m1",
+   "src_in": 120.0,
+   "src_out": 125.0,
+   "audio": 3,
+   "name": "sz_01 Segment"
+  },
+  {
+   "kind": "still",
+   "start": 11.0,
+   "end": 27.183333333333334,
+   "track": 0,
+   "scene": "sz_01",
+   "media": "m3",
+   "name": "1",
+   "effects": [
+    {
+     "id": "blur",
+     "match_name": "AE.ADBE Gaussian Blur 2",
+     "params": [
+      {
+       "index": 0,
+       "name": "Weichzeichnung",
+       "value": 0.0,
+       "keyframes": [
+        [
+         1.0667,
+         0.0
+        ],
+        [
+         1.5667,
+         15.0
+        ],
+        [
+         9.8,
+         15.0
+        ],
+        [
+         10.3,
+         0.0
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "episode",
+   "start": 27.183333333333334,
+   "end": 31.183333333333334,
+   "track": 0,
+   "scene": "sz_02",
+   "media": "m1",
+   "src_in": 300.0,
+   "src_out": 304.0,
+   "audio": 3,
+   "name": "sz_02 Segment"
+  },
+  {
+   "kind": "still",
+   "start": 31.183333333333334,
+   "end": 34.18333333333333,
+   "track": 0,
+   "scene": "sz_02",
+   "media": "m4",
+   "name": "2",
+   "effects": [
+    {
+     "id": "blur",
+     "match_name": "AE.ADBE Gaussian Blur 2",
+     "params": [
+      {
+       "index": 0,
+       "name": "Weichzeichnung",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.3,
+         0.0
+        ],
+        [
+         0.8,
+         15.0
+        ],
+        [
+         1.3,
+         15.0
+        ],
+        [
+         1.8,
+         0.0
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "artwork",
+   "start": 12.066666666666666,
+   "end": 16.683333333333334,
+   "track": 2,
+   "scene": "sz_01",
+   "media": "m6",
+   "name": "alan lee - hafen",
+   "crop": {
+    "links": 25.0,
+    "rechts": 25.0,
+    "oben": 0.0,
+    "unten": 0.0
+   },
+   "scale": 100.0,
+   "position": [
+    0.5,
+    0.5
+   ],
+   "effects": [
+    {
+     "id": "drop_shadow",
+     "match_name": "AE.ADBE Drop Shadow",
+     "display": "Schlagschatten",
+     "params": [
+      {
+       "index": 0,
+       "name": "Schattenfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         0,
+         0,
+         0
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Deckkraft",
+       "value": 204.0
+      },
+      {
+       "index": 2,
+       "name": "Richtung",
+       "value": 135.0
+      },
+      {
+       "index": 3,
+       "name": "Abstand",
+       "value": 31.0
+      },
+      {
+       "index": 4,
+       "name": "Weiche Kante",
+       "value": 38.0
+      },
+      {
+       "index": 5,
+       "name": "Nur Schatten",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "zoom",
+     "match_name": "AE.ADBE Geometry",
+     "display": "Transformieren",
+     "params": [
+      {
+       "index": 0,
+       "name": "Ankerpunkt",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Position",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 3,
+       "name": "Skalierungshöhe",
+       "value": 100.0,
+       "keyframes": [
+        [
+         0.0,
+         100.0
+        ],
+        [
+         120.0,
+         240.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Skalierungsbreite",
+       "value": 100.0
+      },
+      {
+       "index": 5,
+       "name": "Verzerren",
+       "value": 0.0
+      },
+      {
+       "index": 6,
+       "name": "Achse der Verzerrung",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Drehung",
+       "value": 0.0
+      },
+      {
+       "index": 8,
+       "name": "Deckkraft",
+       "value": 100.0
+      },
+      {
+       "index": 10,
+       "name": "Verschlusswinkel",
+       "value": 0.0
+      },
+      {
+       "index": 11,
+       "name": "Sampling",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "id": "fancy_out",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         54272,
+         21248,
+         10496
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         4.0834,
+         0.0
+        ],
+        [
+         4.1,
+         8.0
+        ],
+        [
+         4.6,
+         500.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         4.0834,
+         0.0
+        ],
+        [
+         4.1,
+         0.20000000298
+        ],
+        [
+         4.6,
+         0.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         4.0834,
+         10.0
+        ],
+        [
+         4.1,
+         192.0
+        ],
+        [
+         4.6,
+         204.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "fancy_in",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         54272,
+         21248,
+         10496
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         0.0,
+         500.0
+        ],
+        [
+         0.5,
+         8.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.20000000298
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         0.0,
+         204.0
+        ],
+        [
+         0.5,
+         192.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "artwork",
+   "start": 31.483333333333334,
+   "end": 32.983333333333334,
+   "track": 2,
+   "scene": "sz_02",
+   "media": "m6",
+   "name": "alan lee - hafen",
+   "crop": {
+    "links": 25.0,
+    "rechts": 25.0,
+    "oben": 0.0,
+    "unten": 0.0
+   },
+   "scale": 66.96,
+   "position": [
+    0.27,
+    0.5
+   ],
+   "effects": [
+    {
+     "id": "drop_shadow",
+     "match_name": "AE.ADBE Drop Shadow",
+     "display": "Schlagschatten",
+     "params": [
+      {
+       "index": 0,
+       "name": "Schattenfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         0,
+         0,
+         0
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Deckkraft",
+       "value": 204.0
+      },
+      {
+       "index": 2,
+       "name": "Richtung",
+       "value": 135.0
+      },
+      {
+       "index": 3,
+       "name": "Abstand",
+       "value": 31.0
+      },
+      {
+       "index": 4,
+       "name": "Weiche Kante",
+       "value": 38.0
+      },
+      {
+       "index": 5,
+       "name": "Nur Schatten",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "zoom",
+     "match_name": "AE.ADBE Geometry",
+     "display": "Transformieren",
+     "params": [
+      {
+       "index": 0,
+       "name": "Ankerpunkt",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Position",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 3,
+       "name": "Skalierungshöhe",
+       "value": 100.0,
+       "keyframes": [
+        [
+         0.0,
+         100.0
+        ],
+        [
+         120.0,
+         240.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Skalierungsbreite",
+       "value": 100.0
+      },
+      {
+       "index": 5,
+       "name": "Verzerren",
+       "value": 0.0
+      },
+      {
+       "index": 6,
+       "name": "Achse der Verzerrung",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Drehung",
+       "value": 0.0
+      },
+      {
+       "index": 8,
+       "name": "Deckkraft",
+       "value": 100.0
+      },
+      {
+       "index": 10,
+       "name": "Verschlusswinkel",
+       "value": 0.0
+      },
+      {
+       "index": 11,
+       "name": "Sampling",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "id": "fancy_out",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         54272,
+         21248,
+         10496
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         0.9667,
+         0.0
+        ],
+        [
+         0.9833,
+         8.0
+        ],
+        [
+         1.4833,
+         500.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.9667,
+         0.0
+        ],
+        [
+         0.9833,
+         0.20000000298
+        ],
+        [
+         1.4833,
+         0.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         0.9667,
+         10.0
+        ],
+        [
+         0.9833,
+         192.0
+        ],
+        [
+         1.4833,
+         204.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "fancy_in",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         54272,
+         21248,
+         10496
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         0.0,
+         500.0
+        ],
+        [
+         0.5,
+         8.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.20000000298
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         0.0,
+         204.0
+        ],
+        [
+         0.5,
+         192.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "artwork",
+   "start": 14.383333333333333,
+   "end": 21.3,
+   "track": 3,
+   "scene": "sz_01",
+   "media": "m9",
+   "name": "john howe",
+   "crop": {
+    "links": 0.0,
+    "rechts": 0.0,
+    "oben": 16.666666666666664,
+    "unten": 16.666666666666664
+   },
+   "scale": 125.0,
+   "position": [
+    0.5,
+    0.5
+   ],
+   "effects": [
+    {
+     "id": "drop_shadow",
+     "match_name": "AE.ADBE Drop Shadow",
+     "display": "Schlagschatten",
+     "params": [
+      {
+       "index": 0,
+       "name": "Schattenfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         0,
+         0,
+         0
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Deckkraft",
+       "value": 204.0
+      },
+      {
+       "index": 2,
+       "name": "Richtung",
+       "value": 135.0
+      },
+      {
+       "index": 3,
+       "name": "Abstand",
+       "value": 31.0
+      },
+      {
+       "index": 4,
+       "name": "Weiche Kante",
+       "value": 38.0
+      },
+      {
+       "index": 5,
+       "name": "Nur Schatten",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "zoom",
+     "match_name": "AE.ADBE Geometry",
+     "display": "Transformieren",
+     "params": [
+      {
+       "index": 0,
+       "name": "Ankerpunkt",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Position",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 3,
+       "name": "Skalierungshöhe",
+       "value": 100.0,
+       "keyframes": [
+        [
+         0.0,
+         100.0
+        ],
+        [
+         120.0,
+         240.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Skalierungsbreite",
+       "value": 100.0
+      },
+      {
+       "index": 5,
+       "name": "Verzerren",
+       "value": 0.0
+      },
+      {
+       "index": 6,
+       "name": "Achse der Verzerrung",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Drehung",
+       "value": 0.0
+      },
+      {
+       "index": 8,
+       "name": "Deckkraft",
+       "value": 100.0
+      },
+      {
+       "index": 10,
+       "name": "Verschlusswinkel",
+       "value": 0.0
+      },
+      {
+       "index": 11,
+       "name": "Sampling",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "id": "fancy_out",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         29952,
+         9216,
+         5632
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         6.3834,
+         0.0
+        ],
+        [
+         6.4,
+         8.0
+        ],
+        [
+         6.9,
+         500.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         6.3834,
+         0.0
+        ],
+        [
+         6.4,
+         0.20000000298
+        ],
+        [
+         6.9,
+         0.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         6.3834,
+         10.0
+        ],
+        [
+         6.4,
+         192.0
+        ],
+        [
+         6.9,
+         204.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "fancy_in",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         29952,
+         9216,
+         5632
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         0.0,
+         500.0
+        ],
+        [
+         0.5,
+         8.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.20000000298
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         0.0,
+         204.0
+        ],
+        [
+         0.5,
+         192.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "artwork",
+   "start": 31.483333333333334,
+   "end": 32.983333333333334,
+   "track": 3,
+   "scene": "sz_02",
+   "media": "m9",
+   "name": "john howe",
+   "crop": {
+    "links": 0.0,
+    "rechts": 0.0,
+    "oben": 16.666666666666664,
+    "unten": 16.666666666666664
+   },
+   "scale": 83.7,
+   "position": [
+    0.73,
+    0.5
+   ],
+   "effects": [
+    {
+     "id": "drop_shadow",
+     "match_name": "AE.ADBE Drop Shadow",
+     "display": "Schlagschatten",
+     "params": [
+      {
+       "index": 0,
+       "name": "Schattenfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         0,
+         0,
+         0
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Deckkraft",
+       "value": 204.0
+      },
+      {
+       "index": 2,
+       "name": "Richtung",
+       "value": 135.0
+      },
+      {
+       "index": 3,
+       "name": "Abstand",
+       "value": 31.0
+      },
+      {
+       "index": 4,
+       "name": "Weiche Kante",
+       "value": 38.0
+      },
+      {
+       "index": 5,
+       "name": "Nur Schatten",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "zoom",
+     "match_name": "AE.ADBE Geometry",
+     "display": "Transformieren",
+     "params": [
+      {
+       "index": 0,
+       "name": "Ankerpunkt",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 1,
+       "name": "Position",
+       "value": {
+        "point": [
+         0.5,
+         0.5
+        ]
+       }
+      },
+      {
+       "index": 3,
+       "name": "Skalierungshöhe",
+       "value": 100.0,
+       "keyframes": [
+        [
+         0.0,
+         100.0
+        ],
+        [
+         120.0,
+         240.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Skalierungsbreite",
+       "value": 100.0
+      },
+      {
+       "index": 5,
+       "name": "Verzerren",
+       "value": 0.0
+      },
+      {
+       "index": 6,
+       "name": "Achse der Verzerrung",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Drehung",
+       "value": 0.0
+      },
+      {
+       "index": 8,
+       "name": "Deckkraft",
+       "value": 100.0
+      },
+      {
+       "index": 10,
+       "name": "Verschlusswinkel",
+       "value": 0.0
+      },
+      {
+       "index": 11,
+       "name": "Sampling",
+       "value": 0
+      }
+     ]
+    },
+    {
+     "id": "fancy_out",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         29952,
+         9216,
+         5632
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         0.9667,
+         0.0
+        ],
+        [
+         0.9833,
+         8.0
+        ],
+        [
+         1.4833,
+         500.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.9667,
+         0.0
+        ],
+        [
+         0.9833,
+         0.20000000298
+        ],
+        [
+         1.4833,
+         0.0
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         0.9667,
+         10.0
+        ],
+        [
+         0.9833,
+         192.0
+        ],
+        [
+         1.4833,
+         204.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": "fancy_in",
+     "match_name": "AE.ADBE Roughen Edges",
+     "display": "Kanten aufrauen",
+     "params": [
+      {
+       "index": 0,
+       "name": "Kantenart",
+       "value": 1
+      },
+      {
+       "index": 1,
+       "name": "Konturfarbe",
+       "value": {
+        "argb16": [
+         65280,
+         29952,
+         9216,
+         5632
+        ]
+       }
+      },
+      {
+       "index": 2,
+       "name": "Rahmen",
+       "value": 500.0,
+       "keyframes": [
+        [
+         0.0,
+         500.0
+        ],
+        [
+         0.5,
+         8.0
+        ]
+       ]
+      },
+      {
+       "index": 3,
+       "name": "Kantenschärfe",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         0.20000000298
+        ]
+       ]
+      },
+      {
+       "index": 4,
+       "name": "Fraktaleinfluss",
+       "value": 1.0
+      },
+      {
+       "index": 5,
+       "name": "Skalieren",
+       "value": 204.0,
+       "keyframes": [
+        [
+         0.0,
+         204.0
+        ],
+        [
+         0.5,
+         192.0
+        ]
+       ]
+      },
+      {
+       "index": 6,
+       "name": "Breite oder Höhe dehnen",
+       "value": 0.0
+      },
+      {
+       "index": 7,
+       "name": "Offset (Turbulenz)",
+       "value": {
+        "point": [
+         0.0,
+         0.0
+        ]
+       }
+      },
+      {
+       "index": 8,
+       "name": "Komplexität",
+       "value": 10
+      },
+      {
+       "index": 9,
+       "name": "Evolution",
+       "value": 0.0
+      },
+      {
+       "index": 10,
+       "name": "Evolutionsoptionen",
+       "value": false
+      },
+      {
+       "index": 12,
+       "name": "Zyklus (in Umdrehungen)",
+       "value": 1
+      },
+      {
+       "index": 13,
+       "name": "Zufallsparameter",
+       "value": 148
+      },
+      {
+       "index": 14,
+       "name": "Zufallsparameter",
+       "value": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "anim",
+   "start": 10.366666666666667,
+   "end": 11.683333333333334,
+   "track": 6,
+   "scene": "sz_01",
+   "template": "Pause",
+   "name": "Pause",
+   "comp": "Play-Pause",
+   "comp_in": 28.7
+  },
+  {
+   "kind": "anim",
+   "start": 26.5,
+   "end": 27.816666666666666,
+   "track": 6,
+   "scene": "sz_01",
+   "template": "Play",
+   "name": "Play",
+   "comp": "Play-Pause",
+   "comp_in": 0.0
+  },
+  {
+   "kind": "anim",
+   "start": 30.55,
+   "end": 31.866666666666667,
+   "track": 6,
+   "scene": "sz_02",
+   "template": "Pause",
+   "name": "Pause",
+   "comp": "Play-Pause",
+   "comp_in": 28.7
+  },
+  {
+   "kind": "credit",
+   "start": 0.0,
+   "end": 27.183333333333334,
+   "track": 8,
+   "scene": "sz_01",
+   "media": "m2",
+   "name": "© amazon studios",
+   "fade": 0.0
+  },
+  {
+   "kind": "credit",
+   "start": 27.183333333333334,
+   "end": 34.18333333333333,
+   "track": 8,
+   "scene": "sz_02",
+   "media": "m2",
+   "name": "© amazon studios",
+   "fade": 0.0
+  },
+  {
+   "kind": "credit",
+   "start": 12.066666666666666,
+   "end": 16.683333333333334,
+   "track": 9,
+   "scene": "sz_01",
+   "media": "m7",
+   "name": "© alan lee",
+   "fade": 0.42
+  },
+  {
+   "kind": "credit",
+   "start": 31.483333333333334,
+   "end": 32.983333333333334,
+   "track": 9,
+   "scene": "sz_02",
+   "media": "m8",
+   "name": "© alan lee",
+   "fade": 0.42
+  },
+  {
+   "kind": "credit",
+   "start": 14.383333333333333,
+   "end": 21.3,
+   "track": 12,
+   "scene": "sz_01",
+   "media": "m10",
+   "name": "© john howe",
+   "fade": 0.42
+  },
+  {
+   "kind": "credit",
+   "start": 31.483333333333334,
+   "end": 32.983333333333334,
+   "track": 12,
+   "scene": "sz_02",
+   "media": "m11",
+   "name": "© john howe",
+   "fade": 0.42
+  },
+  {
+   "kind": "voice",
+   "start": 11.3,
+   "end": 26.683333333333334,
+   "track": 1,
+   "scene": "sz_01",
+   "media": "m5",
+   "src_in": 10.0,
+   "src_out": 22.0,
+   "name": "philipp sz_01"
+  }
+ ],
+ "markers": [
+  {
+   "time": 0.0,
+   "name": "Szene 01: Schmiede",
+   "comment": "Szene 01: Schmiede",
+   "kind": "scene"
+  },
+  {
+   "time": 12.066666666666666,
+   "name": "Bild: a1",
+   "comment": "Bild: a1",
+   "kind": "asset"
+  },
+  {
+   "time": 14.383333333333333,
+   "name": "Bild: a2",
+   "comment": "Bild: a2",
+   "kind": "asset"
+  },
+  {
+   "time": 27.183333333333334,
+   "name": "Szene 02: Hafen",
+   "comment": "Szene 02: Hafen",
+   "kind": "scene"
+  },
+  {
+   "time": 31.483333333333334,
+   "name": "Bild: a1",
+   "comment": "Bild: a1",
+   "kind": "asset"
+  },
+  {
+   "time": 31.483333333333334,
+   "name": "Bild: a2",
+   "comment": "Bild: a2",
+   "kind": "asset"
+  }
+ ],
+ "warnings": [
+  "Schmiede [sz_01]: Credit für a2 aus Dateiname vorbelegt („john howe“)",
+  "Hafen [sz_02], Block 1: noch keine Aufnahme zugeordnet (Schätzung)",
+  "Hafen [sz_02]: Credit für a2 aus Dateiname vorbelegt („john howe“)"
+ ],
+ "stats": {
+  "clips": 19,
+  "media": 11,
+  "duration": 34.184615384615384,
+  "by_kind": {
+   "anim": 3,
+   "artwork": 4,
+   "credit": 6,
+   "episode": 3,
+   "still": 2,
+   "voice": 1
+  }
+ }
+}

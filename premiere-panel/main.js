@@ -1,53 +1,42 @@
-// Glorfindel-Panel (UXP, Premiere Pro). STATUS: ungetestetes Skelett (Meilenstein 0 des Projektheftes).
-// Liest das Schnittpaket (schnitt_vN.json) und zeigt Zusammenfassung/Warnungen. Die Funktionen, die Premiere ansprechen,
-// sind absichtlich defensiv und in `PPRO` gekapselt, damit nach dem Vorab-Test nur diese Stelle angepasst werden muss.
-const log = (m, cls = '') => { const p = document.getElementById('log'); const s = document.createElement('div'); s.className = cls; s.textContent = m; p.appendChild(s); };
-let pkg = null;
+// Glorfindel-Bridge für Premiere Pro (UXP). Verbindet sich mit der lokalen Glorfindel-App und führt deren Befehle aus.
+// Die gesamte Logik liegt in lib/ (ohne Premiere testbar); diese Datei verdrahtet nur Oberfläche und Premiere.
+'use strict';
 
-async function loadFromTool() {
-  const ep = document.getElementById('ep').value.trim();
-  const v = document.getElementById('ver').value.trim();
-  const base = 'http://localhost:8765/api/ep/' + ep + '/rough-cut';
-  if (!v) { const list = await (await fetch(base)).json(); if (!list.length) throw new Error('Noch kein Rohschnitt erzeugt'); setPkg(await (await fetch(base + '/' + list[list.length - 1].version + '/json')).json()); return; }
-  setPkg(await (await fetch(base + '/' + v + '/json')).json());
+const { Bridge } = require('./lib/bridge');
+
+const VERSION = '0.2.0';
+const $ = (id) => document.getElementById(id);
+
+function log(text, cls) {
+  const box = $('log');
+  if (!box) return;
+  const line = document.createElement('div');
+  line.className = cls || '';
+  line.textContent = new Date().toLocaleTimeString() + '  ' + text;
+  box.prepend(line);
+  while (box.childNodes.length > 200) box.removeChild(box.lastChild);
 }
 
-async function loadFromFile() {
-  const storage = require('uxp').storage;
-  const f = await storage.localFileSystem.getFileForOpening({ types: ['json'] });
-  if (f) setPkg(JSON.parse(await f.read()));
+function setStatus({ state, text }) {
+  const dot = $('dot'), label = $('status');
+  if (dot) dot.className = 'dot ' + state;
+  if (label) label.textContent = text;
 }
 
-function setPkg(p) {
-  pkg = p;
-  const n = Object.values(p.tracks).reduce((a, t) => a + t.length, 0);
-  document.getElementById('summary').textContent = 'Version ' + p.version + ': ' + n + ' Clips, ' + p.markers.length + ' Marker, ' + Math.round(p.duration) + ' s';
-  (p.warnings || []).forEach((w) => log(w, 'warn'));
-  document.getElementById('build').disabled = false;
-  document.getElementById('markers').disabled = false;
+let bridge = null;
+
+function start() {
+  const ppro = require('premierepro');
+  let hostInfo = {};
+  try { const host = require('uxp').host; hostInfo = { name: host.name, version: host.version }; } catch (e) { /* ohne */ }
+  $('version').textContent = 'Panel ' + VERSION + ' · Premiere ' + (hostInfo.version || '?');
+  bridge = new Bridge({ ppro, WebSocketImpl: WebSocket, fetchImpl: fetch.bind(globalThis), hostInfo, version: VERSION, log, onStatus: setStatus });
+  bridge.run();
 }
 
-// ---- Alles, was Premiere ansprechen muss, an einer Stelle (nach Vorab-Test anpassen) ----
-const PPRO = {
-  async project() { const ppro = require('premierepro'); return ppro.Project.getActiveProject(); },
-  async sequence() { const pr = await this.project(); return pr.getActiveSequence(); },
-  async addMarkers(markers) {
-    const seq = await this.sequence();
-    const ppro = require('premierepro');
-    const mk = await ppro.Markers.getMarkers(seq);
-    for (const m of markers) {
-      // API-Form je nach Version unterschiedlich; hier bewusst einfach gehalten und zu prüfen.
-      await mk.createMarker(m.time).catch((e) => log('Marker ' + m.text + ': ' + e.message, 'err'));
-    }
-  },
-  async buildAll(p) {
-    log('Rohschnitt-Aufbau ist noch nicht implementiert (Go/No-Go-Test offen). Nutze solange die FCP-XML aus dem Tool.', 'warn');
-    // Plan: Spuren V1/V2/V9.., A2..A4 anlegen; je Clip type: scene_segment/still/comment/artwork/credit/anim/free_block;
-    // Effekt-Rezepte (vorlagen/effekt_rezepte.json) als Keyframes setzen; Konturfarbe pro Artwork (ARGB 16 Bit).
-  },
-};
-
-document.getElementById('load').onclick = () => loadFromTool().catch((e) => log(e.message, 'err'));
-document.getElementById('file').onclick = () => loadFromFile().catch((e) => log(e.message, 'err'));
-document.getElementById('markers').onclick = () => PPRO.addMarkers(pkg.markers).then(() => log('Marker gesetzt', 'ok')).catch((e) => log(e.message, 'err'));
-document.getElementById('build').onclick = () => PPRO.buildAll(pkg).catch((e) => log(e.message, 'err'));
+try {
+  const { entrypoints } = require('uxp');
+  entrypoints.setup({ panels: { glorfindelPanel: { show() { if (!bridge) start(); } } } });
+} catch (e) {
+  document.addEventListener('DOMContentLoaded', start);
+}

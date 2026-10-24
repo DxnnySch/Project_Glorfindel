@@ -97,6 +97,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
     blur_periods: list[tuple[float, float]] = []
     fps = pkg["sequence"]["fps"]
     recipes = env.recipes
+    snap = lambda t: round(t * fps) / fps  # noqa: E731 – Raster der Hauptsequenz (60 fps): keine Teilbild-Überlappungen
 
     def abs_path(rel: str) -> Path:
         p = Path(rel)
@@ -108,6 +109,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
         kind_t, idx = track_index(tname)
         for c in sorted(items, key=lambda c: c["start"]):
             typ, start, end = c["type"], c["start"], c["end"]
+            start, end = snap(start), snap(end)
             dur = end - start
             base = {"start": start, "end": end, "track": idx, "scene": c.get("scene", "")}
             if typ == "scene_segment":
@@ -170,7 +172,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
         "preset": {"path": env.premiere.get("preset", ""), "video_tracks": env.premiere.get("video_tracks", 14),
                    "audio_tracks": env.premiere.get("audio_tracks", 16)},
         "media": list(media.values()), "clips": clips,
-        "markers": [{"time": m["time"], "name": m["text"][:60], "comment": m["text"], "kind": m.get("kind", "")} for m in pkg.get("markers", [])],
+        "markers": [{"time": snap(m["time"]), "name": m["text"][:60], "comment": m["text"], "kind": m.get("kind", "")} for m in pkg.get("markers", [])],
         "warnings": warnings,
         "stats": {"clips": len(clips), "media": len(media), "duration": pkg.get("duration", 0.0),
                   "by_kind": {k: sum(1 for c in clips if c["kind"] == k) for k in sorted({c["kind"] for c in clips})}},

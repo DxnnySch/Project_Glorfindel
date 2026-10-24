@@ -65,8 +65,10 @@ def test_artworks_alternate_tracks_credits_and_blur():
     overlap = a2["start"] < a1["end"]
     assert overlap and {t for t in ("V3", "V4") if any(c is a1 for c in p["tracks"][t])} != \
         {t for t in ("V3", "V4") if any(c is a2 for c in p["tracks"][t])}
-    credits = sorted(p["tracks"]["V10"], key=lambda c: c["start"])
+    # gleichzeitige Artworks bekommen getrennte Credit-Spuren (V10/V13), sonst würde das zweite Credit das erste abschneiden
+    credits = sorted(p["tracks"]["V10"] + p["tracks"]["V13"], key=lambda c: c["start"])
     assert [c["text"] for c in credits] == ["© alan lee", "© john howe"]
+    assert len(p["tracks"]["V10"]) == 1 and len(p["tracks"]["V13"]) == 1
     assert credits[0]["start"] == a1["start"] and credits[0]["end"] == a1["end"]
     fancy = a1["effects"][0]
     assert fancy["recipe"] == "fancy_in" and fancy["contour"] == "#112233"

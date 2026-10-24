@@ -196,7 +196,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                 artist = asset.get("credit") or credit_from_filename(asset.get("path", ident))
                 if not asset.get("credit"):
                     tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Credit für {ident} aus Dateiname vorbelegt („{artist}“)")
-                credit_track = tr["credit_artwork"][1 if a.layout == "doppel_rechts" else 0]
+                credit_track = tr["credit_artwork"][tr["art"].index(track_a)] if track_a in tr["art"] else tr["credit_artwork"][0]
                 tl.add(credit_track, "credit", a_start, a_end, slot="credit_artwork",
                        text=credit_text("© {kuenstler}", artist), scene=sc.id, over=track_a, layout=a.layout,
                        fade=tm["artwork_fade"], anchor_to="top_center_of_image")
