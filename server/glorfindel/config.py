@@ -43,6 +43,15 @@ class Thresholds(BaseModel):
     bullet_seconds: float = 12.0   # geschätzte Sprechdauer pro frei ausformuliertem Stichpunkt
 
 
+class PremiereSettings(BaseModel):
+    aep: str = "Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep"   # relativ zum OneDrive-Stamm: Pause/Play-Komposition
+    comp: str = "Play-Pause"
+    pause_in: float = 28.7                                                  # Startzeit der Pause-Animation in der Komposition (s)
+    play_in: float = 0.0
+    video_tracks: int = 14                                                  # Spuren der Hauptsequenz (wie im Ursprungsschnitt)
+    audio_tracks: int = 16
+
+
 class Settings(BaseModel):
     user: str = "danny"
     onedrive_root: str = ""
@@ -55,6 +64,7 @@ class Settings(BaseModel):
     thresholds: Thresholds = Field(default_factory=Thresholds)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     keep_hq_in_onedrive: bool = False
+    premiere: PremiereSettings = Field(default_factory=PremiereSettings)
 
 
 def settings_path() -> Path:

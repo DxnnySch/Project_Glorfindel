@@ -7,8 +7,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 from pydantic import BaseModel
 from starlette.requests import HTTPConnection
 
+from . import premiere_ops
 from .bridge import HUB, PROTOCOL, BridgeError, get_token
 from .deps import AppState
+from .routes_core import ep_of
+from .service import Episode
 
 
 def _origin_ok(origin: str | None) -> bool:
@@ -76,3 +79,37 @@ def call(body: CallBody):
         return {"data": HUB.call(body.op, body.args, timeout=min(body.timeout, 300))}
     except BridgeError as e:
         raise HTTPException(409, str(e))
+
+
+# ---------- Abläufe pro Folge ----------
+@router.get("/ep/{season}/{episode}/premiere")
+def premiere_state(ep: Episode = Depends(ep_of)):
+    st = premiere_ops.load_state(ep)
+    return {**st, "bridge": HUB.status()["connected"], "hq_vorhanden": bool(st.get("hq") and __import__("pathlib").Path(st["hq"]).exists())}
+
+
+class BuildBody(BaseModel):
+    by_strand: bool = True
+
+
+@router.post("/ep/{season}/{episode}/premiere/build")
+def premiere_build(body: BuildBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    return {"job": state.jobs.submit("Rohschnitt in Premiere bauen", lambda progress: premiere_ops.build_in_premiere(
+        ep, state.templates_dir(), progress, body.by_strand))}
+
+
+class SwapBody(BaseModel):
+    to: str   # "hq" | "proxy"
+
+
+@router.post("/ep/{season}/{episode}/premiere/swap")
+def premiere_swap(body: SwapBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    if body.to not in ("hq", "proxy"):
+        raise HTTPException(400, "to: hq oder proxy")
+    return {"job": state.jobs.submit("Premiere auf HQ umstellen" if body.to == "hq" else "Premiere auf Proxy zurückstellen",
+                                     lambda progress: premiere_ops.swap(ep, body.to, progress))}
+
+
+@router.post("/bridge/selftest")
+def premiere_selftest(state: AppState = Depends(st)):
+    return {"job": state.jobs.submit("Premiere-Selbsttest", lambda progress: premiere_ops.run_selftest(None, progress))}

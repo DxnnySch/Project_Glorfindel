@@ -397,6 +397,8 @@ def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState
         dst = conform_mod.conform(ep.source_path(src), tm, ref.duration, base / f"{ep.p.slug.replace(' ', '_')}_HQ_conform",
                                   fps=ref.fps or pr.fps, codec=body.codec, progress_cb=lambda f, info: progress.fraction(f, info["text"]))
         info = {"file": str(dst)}
+        from . import premiere_ops
+        premiere_ops.remember_hq(ep, str(dst))
         progress.step(2, "Letztes Bild jeder Szene")
         if body.stills:
             info["stills"] = pipeline.render_stills(ep, pipeline.scenes_in_video(pipeline.ordered_scenes(ep)), body.source, progress)
