@@ -4,7 +4,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): alles wird per Locator frisch geholt.
 'use strict';
 
-const { tt, tx, errText, norm } = require('./core');
+const { tt, tx, txp, errText, norm } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const { trackItemAt, sequenceByGuid } = require('./plan');
@@ -58,10 +58,10 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     const bin = await media.getBin(ppro, project, BIN);
     const item = (await media.mediaByPath(ppro, bin)).get(norm(png));
     const editor = ppro.SequenceEditor.getEditor(await sequenceByGuid(ppro, project, seqGuid));
-    tx(project, 'Test', (add) => add(editor.createOverwriteItemAction(item, tt(ppro, 2), 12, -1)));
+    await txp(ppro, 'Test', (add) => add(editor.createOverwriteItemAction(item, tt(ppro, 2), 12, -1)));
     haveClip = true;
     const ti = await locate();
-    tx(await getProject(), 'Test', (add) => add(ti.createSetEndAction(tt(ppro, 7))));
+    await txp(ppro, 'Test', (add) => add(ti.createSetEndAction(tt(ppro, 7))));
     const t2 = await locate();
     return { start: (await t2.getStartTime()).seconds, end: (await t2.getEndTime()).seconds };
   });
@@ -102,7 +102,7 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     const p = fx.findParam(await fx.componentAt(locate, roughIdx), ['Konturfarbe', 'Edge Color', 'Border Color'], 1);
     if (!p) throw new Error('Farbparameter nicht gefunden');
     try {                                                    // dokumentiert: 0.0-1.0; die Rückgabe wird nur zur Kontrolle protokolliert
-      tx(await getProject(), 'Farbe', (add) => add(p.createSetValueAction(p.createKeyframe(fx.toPproValue(ppro, want, { colorMode: 'unit' })), true)));
+      await txp(ppro, 'Farbe', (add) => add(p.createSetValueAction(p.createKeyframe(fx.toPproValue(ppro, want, { colorMode: 'unit' })), true)));
       const p2 = fx.findParam(await fx.componentAt(locate, roughIdx), ['Konturfarbe', 'Edge Color', 'Border Color'], 1);
       const v = await p2.getStartValue();
       tried.unit = JSON.stringify(v && v.value);
@@ -123,7 +123,7 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     const p2 = await getProject();
     const root = await p2.getRootItem();
     const b = (await root.getItems()).find((i) => i.name === BIN);
-    if (b) tx(p2, 'Aufräumen', (add) => add(root.createRemoveItemAction(b)));
+    if (b) await txp(ppro, 'Aufräumen', (add) => add(root.createRemoveItemAction(b)));
     return 'entfernt';
   });
   return res;

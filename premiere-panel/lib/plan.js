@@ -3,7 +3,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, norm, guarded, errText, walkItems, asClip, retryStale } = require('./core');
+const { tt, tx, txp, norm, guarded, errText, walkItems, asClip, retryStale } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 
@@ -149,16 +149,16 @@ async function runPlan(ppro, plan, emit = () => {}) {
         else { key = c.media; }
         const src = await fresh(key);
         if (!src) throw new Error('Quelle fehlt');
-        if (inOut) tx(project, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
+        if (inOut) await txp(ppro, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
         const p2 = await getProject();
         const main = await sequenceByGuid(ppro, p2, mainGuid);
         const editor = ppro.SequenceEditor.getEditor(main);
         const src2 = await fresh(key);                       // nach der Änderung (In/Out) ist `src` ungültig
-        tx(p2, 'Clip setzen', (add) => add(editor.createOverwriteItemAction(src2, tt(ppro, c.start), videoIdx, audioIdx)));
+        await txp(ppro, 'Clip setzen', (add) => add(editor.createOverwriteItemAction(src2, tt(ppro, c.start), videoIdx, audioIdx)));
       }, refresh);
       const ti = await locate();
-      if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) tx(await getProject(), 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
-      if (c.name) await guarded(report, 'Name ' + c.name, async () => { const t2 = await locate(); tx(await getProject(), 'Name', (add) => add(t2.createSetNameAction(c.name))); });
+      if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
+      if (c.name) await guarded(report, 'Name ' + c.name, async () => { const t2 = await locate(); await txp(ppro, 'Name', (add) => add(t2.createSetNameAction(c.name))); });
       countOk(c.kind);
       if (isAudio) return;
 
@@ -187,7 +187,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
         const project = await getProject();
         const main = await sequenceByGuid(ppro, project, mainGuid);
         const markers = await ppro.Markers.getMarkers(main);
-        tx(project, 'Marker', (add) => add(markers.createAddMarkerAction(m.name, ppro.Marker.MARKER_TYPE_COMMENT, tt(ppro, m.time), tt(ppro, 0), m.comment || '')));
+        await txp(ppro, 'Marker', (add) => add(markers.createAddMarkerAction(m.name, ppro.Marker.MARKER_TYPE_COMMENT, tt(ppro, m.time), tt(ppro, 0), m.comment || '')));
       });
     }
     report.placed.marker = (plan.markers || []).length;

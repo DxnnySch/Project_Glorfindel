@@ -253,7 +253,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
       async getMatchNames() { return Object.keys(PARAMS); },
       async getDisplayNames() { return Object.keys(PARAMS).map((k) => DISPLAY[k]); },
     },
-    Project: { async getActiveProject() { return project; } },
+    Project: { async getActiveProject() { return wrap(project); } },
     SequenceEditor: {
       getEditor(seq) {
         return {

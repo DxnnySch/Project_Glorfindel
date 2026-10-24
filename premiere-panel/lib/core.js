@@ -17,6 +17,13 @@ function tt(ppro, seconds) {
   return ppro.TickTime.createWithSeconds(Math.max(0, seconds));
 }
 
+/** Ein Versprechen mit Zeitlimit: hängt Premiere (z. B. wegen eines offenen Dialogs), kommt eine klare Meldung statt Stillstand. */
+function withTimeout(promise, ms, what) {
+  let timer;
+  const limit = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(what + ' dauert länger als ' + Math.round(ms / 1000) + ' s – hat Premiere einen Dialog offen?')), ms); });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
 /** Eine Transaktion ausführen; `build(add)` fügt Aktionen hinzu. Wirft, wenn Premiere sie ablehnt. Danach sind alle Objekte ungültig. */
 function tx(project, undoName, build) {
   const ok = project.executeTransaction((compound) => {
@@ -26,6 +33,13 @@ function tx(project, undoName, build) {
     });
   }, undoName);
   if (ok === false) throw new Error('Transaktion „' + undoName + '“ wurde von Premiere abgelehnt');
+}
+
+/** Wie `tx`, holt aber das Projekt frisch (auch das Projekt-Objekt wird nach einer Änderung ungültig). */
+async function txp(ppro, undoName, build) {
+  const project = await ppro.Project.getActiveProject();
+  if (!project) throw new Error('In Premiere ist kein Projekt geöffnet.');
+  tx(project, undoName, build);
 }
 
 /** `fn` ausführen; bei ungültigen Objekten `refresh` (holt Caches neu) und noch einmal versuchen. */
@@ -68,4 +82,4 @@ function asClip(ppro, item) {
   try { return ppro.ClipProjectItem.cast(item); } catch (e) { return null; }
 }
 
-module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, retryStale, guarded, walkItems, asClip };
+module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, withTimeout, retryStale, guarded, walkItems, asClip };

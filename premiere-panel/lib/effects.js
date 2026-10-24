@@ -2,7 +2,7 @@
 // `locate()` ist eine Funktion, die den Clip FRISCH liefert (Objekte werden bei jeder Projektänderung ungültig, siehe core.js).
 'use strict';
 
-const { tt, tx, errText, retryStale } = require('./core');
+const { tt, tx, txp, errText, retryStale } = require('./core');
 
 // Anzeigenamen eingebauter Effekte/Parameter in beiden Oberflächensprachen.
 const NAMES = {
@@ -86,10 +86,10 @@ async function resolveMatchName(ppro, wanted, ctx) {
 }
 
 /** Alle Aktionen für einen Parameter in EINER Transaktion (Keyframes brauchen vorher „zeitabhängig“). */
-function setParam(ppro, project, param, spec, ctx) {
+async function setParam(ppro, project, param, spec, ctx) {
   const kfs = spec.keyframes;
   if (kfs && kfs.length) {
-    tx(project, 'Keyframes', (add) => {
+    await txp(ppro, 'Keyframes', (add) => {
       add(param.createSetTimeVaryingAction(true));
       for (const [t, val] of kfs) {
         const k = param.createKeyframe(toPproValue(ppro, val, ctx));
@@ -100,7 +100,7 @@ function setParam(ppro, project, param, spec, ctx) {
     return 'keyframes';
   }
   if (spec.value === undefined || spec.value === null) return 'unveraendert';
-  tx(project, 'Wert', (add) => add(param.createSetValueAction(param.createKeyframe(toPproValue(ppro, spec.value, ctx)), true)));
+  await txp(ppro, 'Wert', (add) => add(param.createSetValueAction(param.createKeyframe(toPproValue(ppro, spec.value, ctx)), true)));
   return 'wert';
 }
 
@@ -129,7 +129,7 @@ async function addEffect(ppro, project, locate, effect, ctx) {
   const comp = await ppro.VideoFilterFactory.createComponent(res.match);
   const chain = await (await locate()).getComponentChain();
   const index = chain.getComponentCount();
-  tx(project, 'Effekt ' + effect.id, (add) => add(chain.createAppendComponentAction(comp)));
+  await txp(ppro, 'Effekt ' + effect.id, (add) => add(chain.createAppendComponentAction(comp)));
   for (const p of effect.params || []) {
     if (p.value === undefined && !(p.keyframes && p.keyframes.length)) continue;
     const label = p.name || (p.names && p.names[0]) || '#' + p.index;
@@ -137,7 +137,7 @@ async function addEffect(ppro, project, locate, effect, ctx) {
       await retryStale(async () => {
         const param = findParam(await componentAt(locate, index), p.names || [p.name], p.index);
         if (!param) throw new Error('Parameter nicht gefunden');
-        setParam(ppro, project, param, p, ctx);
+        await setParam(ppro, project, param, p, ctx);
       });
       res.angewendet.push(label);
     } catch (e) {
@@ -156,7 +156,7 @@ async function setMotion(ppro, project, locate, { position, scale }, ctx) {
     if (!spec) continue;
     const param = findParam(await componentAt(locate, idx), names, pidx);
     if (!param) continue;
-    setParam(ppro, project, param, spec, ctx);
+    await setParam(ppro, project, param, spec, ctx);
     done.push(label);
   }
   return done;
@@ -169,7 +169,7 @@ async function setFade(ppro, project, locate, dur, fade, ctx) {
   const param = findParam(await componentAt(locate, idx), NAMES.opacity, 0);
   if (!param) throw new Error('Deckkraft-Parameter nicht gefunden');
   const f = Math.min(fade, dur / 2);
-  setParam(ppro, project, param, { keyframes: [[0, 0], [f, 100], [Math.max(f, dur - f), 100], [dur, 0]] }, ctx);
+  await setParam(ppro, project, param, { keyframes: [[0, 0], [f, 100], [Math.max(f, dur - f), 100], [dur, 0]] }, ctx);
 }
 
 /** Quadratischer Zuschnitt (Effekt „Zuschneiden“), Werte in Prozent. */
