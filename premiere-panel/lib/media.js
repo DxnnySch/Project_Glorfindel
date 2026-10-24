@@ -2,7 +2,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Fächer werden per Namen frisch geholt.
 'use strict';
 
-const { norm, tx, txp, withTimeout, walkItems, asClip, errText, retryStale } = require('./core');
+const { norm, tx, txp, withTimeout, at, walkItems, asClip, errText, retryStale } = require('./core');
 
 const fresh = (ppro) => ppro.Project.getActiveProject();
 
@@ -14,11 +14,13 @@ async function getBin(ppro, project, name) {
 
 /** Fach anlegen, falls nötig. Gibt das Fach frisch zurück (nur bis zur nächsten Änderung gültig). */
 async function ensureBin(ppro, project, name) {
-  let bin = await getBin(ppro, await fresh(ppro), name);
+  let bin = await at('Fach suchen', async () => getBin(ppro, await fresh(ppro), name));
   if (!bin) {
-    const root = await (await fresh(ppro)).getRootItem();
-    await txp(ppro, 'Fach anlegen', (add) => add(root.createBinAction(name, true)));
-    bin = await getBin(ppro, await fresh(ppro), name);
+    await at('Fach anlegen', async () => {
+      const root = await (await fresh(ppro)).getRootItem();
+      await txp(ppro, 'Fach anlegen', (add) => add(root.createBinAction(name, true)));
+    });
+    bin = await at('Fach suchen (nach Anlegen)', async () => getBin(ppro, await fresh(ppro), name));
   }
   return bin || (await (await fresh(ppro)).getRootItem());
 }
@@ -26,18 +28,18 @@ async function ensureBin(ppro, project, name) {
 /** Dateien importieren und jedem Pfad sein Projektelement zuordnen. Rückgabe: Map normierter Pfad → ClipProjectItem (frisch). */
 async function importFiles(ppro, project, paths, binName, emit) {
   await ensureBin(ppro, project, binName);
-  const known = await mediaByPath(ppro, await getBin(ppro, await fresh(ppro), binName));
+  const known = await at('Vorhandene Medien lesen', async () => mediaByPath(ppro, await getBin(ppro, await fresh(ppro), binName)));
   const todo = paths.filter((p) => !known.has(norm(p)));
   const CHUNK = 10;
   for (let i = 0; i < todo.length; i += CHUNK) {
     const part = todo.slice(i, i + CHUNK);
-    const bin = await getBin(ppro, await fresh(ppro), binName);        // nach jedem Import sind Projekt und Fach ungültig
+    const bin = await at('Fach vor Import holen', async () => getBin(ppro, await fresh(ppro), binName));   // nach jedem Import sind Projekt und Fach ungültig
     if (emit) emit('progress', { text: 'Importiere ' + (i + 1) + '–' + Math.min(i + CHUNK, todo.length) + ' von ' + todo.length + ': ' + part[0].split(/[\/]/).pop() });
-    const ok = await withTimeout((await fresh(ppro)).importFiles(part, true, bin, false), 180000, 'Import');      // false: nie als Bildsequenz (1.png, 2.png …)
+    const ok = await at('Import', async () => withTimeout((await fresh(ppro)).importFiles(part, true, bin, false), 180000, 'Import'));      // false: nie als Bildsequenz (1.png, 2.png …)
     if (ok === false) throw new Error('Import fehlgeschlagen: ' + part[0] + ' …');
     if (emit) emit('progress', { text: 'Medien importiert: ' + Math.min(i + CHUNK, todo.length) + ' von ' + todo.length });
   }
-  return mediaByPath(ppro, await getBin(ppro, await fresh(ppro), binName));
+  return at('Medien nach Import lesen', async () => mediaByPath(ppro, await getBin(ppro, await fresh(ppro), binName)));
 }
 
 async function mediaByPath(ppro, folder) {

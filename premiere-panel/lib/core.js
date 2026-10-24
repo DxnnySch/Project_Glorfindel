@@ -35,6 +35,11 @@ function tx(project, undoName, build) {
   if (ok === false) throw new Error('Transaktion „' + undoName + '“ wurde von Premiere abgelehnt');
 }
 
+/** Fehler mit Ortsangabe versehen, damit klar ist, welcher Aufruf scheitert. */
+async function at(label, fn) {
+  try { return await fn(); } catch (e) { throw new Error(label + ': ' + errText(e)); }
+}
+
 /** Wie `tx`, holt aber das Projekt frisch (auch das Projekt-Objekt wird nach einer Änderung ungültig). */
 async function txp(ppro, undoName, build) {
   const project = await ppro.Project.getActiveProject();
@@ -82,4 +87,4 @@ function asClip(ppro, item) {
   try { return ppro.ClipProjectItem.cast(item); } catch (e) { return null; }
 }
 
-module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, withTimeout, retryStale, guarded, walkItems, asClip };
+module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, at, withTimeout, retryStale, guarded, walkItems, asClip };
