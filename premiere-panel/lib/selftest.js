@@ -4,7 +4,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): alles wird per Locator frisch geholt.
 'use strict';
 
-const { tt, tx, txp, errText, norm } = require('./core');
+const { tt, tx, txp, errText, norm, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const { trackItemAt, sequenceByGuid } = require('./plan');
@@ -18,11 +18,7 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     try { const detail = await fn(); res.steps.push({ name, ok: true, detail }); emit('progress', { text: 'Selbsttest: ' + name }); return detail; }
     catch (e) { res.steps.push({ name, ok: false, detail: errText(e) }); res.ok = false; return undefined; }
   };
-  const getProject = async () => {
-    const p = await ppro.Project.getActiveProject();
-    if (!p) throw new Error('In Premiere ist kein Projekt geöffnet.');
-    return p;
-  };
+  const getProject = () => getProj(ppro);
   await getProject();
   let seqGuid = null, haveItem = false, haveClip = false;
   const ctx = {};
@@ -50,7 +46,9 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
   await step('Sequenz aus Vorgabe (Spuranzahl)', async () => {
     const seq = await (await getProject()).createSequenceWithPresetPath('GL-Selbsttest', preset);
     seqGuid = String(seq.guid);
-    return { video: await seq.getVideoTrackCount(), audio: await seq.getAudioTrackCount() };
+    const counts = { video: await seq.getVideoTrackCount(), audio: await seq.getAudioTrackCount() };
+    invalidate();
+    return counts;
   });
   await step('Clip setzen und Länge ändern', async () => {
     if (!haveItem) throw new Error('kein Test-Bild');
@@ -118,7 +116,7 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     const project = await getProject();
     if (seqGuid) {
       const seq = (await project.getSequences()).find((s) => String(s.guid) === seqGuid);
-      if (seq) await project.deleteSequence(seq);
+      if (seq) { await project.deleteSequence(seq); invalidate(); }
     }
     const p2 = await getProject();
     const root = await p2.getRootItem();

@@ -2,9 +2,9 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Fächer werden per Namen frisch geholt.
 'use strict';
 
-const { norm, tx, txp, withTimeout, at, walkItems, asClip, errText, retryStale } = require('./core');
+const { norm, tx, txp, withTimeout, at, getProj, invalidate, walkItems, asClip, errText, retryStale } = require('./core');
 
-const fresh = (ppro) => ppro.Project.getActiveProject();
+const fresh = (ppro) => getProj(ppro);
 
 async function getBin(ppro, project, name) {
   const root = await project.getRootItem();
@@ -35,7 +35,7 @@ async function importFiles(ppro, project, paths, binName, emit) {
     const part = todo.slice(i, i + CHUNK);
     const bin = await at('Fach vor Import holen', async () => getBin(ppro, await fresh(ppro), binName));   // nach jedem Import sind Projekt und Fach ungültig
     if (emit) emit('progress', { text: 'Importiere ' + (i + 1) + '–' + Math.min(i + CHUNK, todo.length) + ' von ' + todo.length + ': ' + part[0].split(/[\/]/).pop() });
-    const ok = await at('Import', async () => withTimeout((await fresh(ppro)).importFiles(part, true, bin, false), 180000, 'Import'));      // false: nie als Bildsequenz (1.png, 2.png …)
+    const ok = await at('Import', async () => withTimeout((await fresh(ppro)).importFiles(part, true, bin, false), 180000, 'Import').finally(invalidate));      // false: nie als Bildsequenz (1.png, 2.png …)
     if (ok === false) throw new Error('Import fehlgeschlagen: ' + part[0] + ' …');
     if (emit) emit('progress', { text: 'Medien importiert: ' + Math.min(i + CHUNK, todo.length) + ' von ' + todo.length });
   }
@@ -75,6 +75,7 @@ async function swapMedia(ppro, project, { swaps = [], refresh = [] }, emit) {
         if (!item) throw new Error('im Projekt nicht gefunden');
         if (item.canChangeMediaPath && !(await item.canChangeMediaPath())) throw new Error('Pfad dieses Elements lässt sich nicht ändern');
         const ok = await item.changeMediaFilePath(s.to, true);
+        invalidate();
         if (ok === false) throw new Error('Premiere hat den Tausch abgelehnt');
       });
       report.getauscht.push({ von: s.from, nach: s.to });
@@ -90,6 +91,7 @@ async function swapMedia(ppro, project, { swaps = [], refresh = [] }, emit) {
       try {
         const item = (await allMedia(ppro, project)).get(p);
         await item.refreshMedia();
+        invalidate();
         report.neu_geladen++;
       } catch (e) { report.fehler.push({ datei: p, fehler: errText(e) }); }
     }

@@ -24,6 +24,18 @@ function withTimeout(promise, ms, what) {
   return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
 }
 
+// Ein gemeinsames Projekt-Objekt bis zur nächsten Änderung: Objekte und Transaktion stammen so immer vom selben Projekt-Handle.
+let cached = null;
+const invalidate = () => { cached = null; };
+async function getProj(ppro) {
+  if (!cached || cached.ppro !== ppro) {
+    const project = await ppro.Project.getActiveProject();
+    if (!project) throw new Error('In Premiere ist kein Projekt geöffnet.');
+    cached = { ppro, project };
+  }
+  return cached.project;
+}
+
 /** Eine Transaktion ausführen; `build(add)` fügt Aktionen hinzu. Wirft, wenn Premiere sie ablehnt. Danach sind alle Objekte ungültig. */
 function tx(project, undoName, build) {
   const ok = project.executeTransaction((compound) => {
@@ -32,6 +44,7 @@ function tx(project, undoName, build) {
       if (compound.addAction(action) === false) throw new Error('Aktion wurde nicht angenommen');
     });
   }, undoName);
+  invalidate();
   if (ok === false) throw new Error('Transaktion „' + undoName + '“ wurde von Premiere abgelehnt');
 }
 
@@ -42,9 +55,7 @@ async function at(label, fn) {
 
 /** Wie `tx`, holt aber das Projekt frisch (auch das Projekt-Objekt wird nach einer Änderung ungültig). */
 async function txp(ppro, undoName, build) {
-  const project = await ppro.Project.getActiveProject();
-  if (!project) throw new Error('In Premiere ist kein Projekt geöffnet.');
-  tx(project, undoName, build);
+  tx(await getProj(ppro), undoName, build);
 }
 
 /** `fn` ausführen; bei ungültigen Objekten `refresh` (holt Caches neu) und noch einmal versuchen. */
@@ -87,4 +98,4 @@ function asClip(ppro, item) {
   try { return ppro.ClipProjectItem.cast(item); } catch (e) { return null; }
 }
 
-module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, at, withTimeout, retryStale, guarded, walkItems, asClip };
+module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, at, getProj, invalidate, withTimeout, retryStale, guarded, walkItems, asClip };

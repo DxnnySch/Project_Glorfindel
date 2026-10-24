@@ -3,7 +3,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, txp, norm, guarded, errText, walkItems, asClip, retryStale } = require('./core');
+const { tt, tx, txp, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 
@@ -41,11 +41,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   const ctx = { colorMode: (plan.calibration && plan.calibration.colorMode) || 'unit', offset: 0 };
   const kfBase = (plan.calibration && plan.calibration.keyframeBase) || 'clip';   // 'clip' | 'sequence' | 'source'
   const say = (text, done, of) => emit('progress', { text, done, of });
-  const getProject = async () => {
-    const p = await ppro.Project.getActiveProject();
-    if (!p) throw new Error('In Premiere ist kein Projekt geöffnet.');
-    return p;
-  };
+  const getProject = () => getProj(ppro);
   const project0 = await getProject();
 
   // ---- 1. Medien ----
@@ -83,6 +79,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
       const project = await getProject();
       const bin = await media.getBin(ppro, project, plan.bin);
       const ok = await project.importAEComps(plan.anim_source.aep, [plan.anim_source.comp], bin);
+      invalidate();
       if (ok === false) throw new Error('Import der Komposition „' + plan.anim_source.comp + '“ abgelehnt');
     });
   }
@@ -96,7 +93,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
     if (!epClip) throw new Error('Episoden-Medium fehlt');
     const project = await getProject();
     const bin = await media.getBin(ppro, project, plan.bin);
-    await project.createSequenceFromMedia(plan.episode_sequence, [epClip], bin);
+    try { await project.createSequenceFromMedia(plan.episode_sequence, [epClip], bin); } finally { invalidate(); }
   });
   await refresh();
   if (!names.epSeq) throw new Error('Ohne Episoden-Sequenz kann kein Rohschnitt entstehen: ' + ((report.errors.at(-1) || {}).fehler || 'nicht gefunden'));
@@ -110,12 +107,16 @@ async function runPlan(ppro, plan, emit = () => {}) {
     mainGuid = String(main.guid);
     nV = await main.getVideoTrackCount();
     nA = await main.getAudioTrackCount();
+    invalidate();
   }
   await guarded(report, 'Sequenz aktivieren', async () => {
     const project = await getProject();
     const main = await sequenceByGuid(ppro, project, mainGuid);
     await project.setActiveSequence(main);
-    await (await getProject()).openSequence(await sequenceByGuid(ppro, await getProject(), mainGuid));
+    invalidate();
+    const p2 = await getProject();
+    await p2.openSequence(await sequenceByGuid(ppro, p2, mainGuid));
+    invalidate();
   });
   if (nV < plan.preset.video_tracks || nA < plan.preset.audio_tracks) {
     report.warnings.push('Hauptsequenz hat nur ' + nV + ' Video-/' + nA + ' Audiospuren (geplant ' + plan.preset.video_tracks + '/' + plan.preset.audio_tracks + '). Die Sequenz-Vorgabe wurde nicht übernommen – Clips auf höheren Spuren fehlen.');
@@ -194,7 +195,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   });
 
   // ---- 7. Speichern ----
-  if (plan.save !== false) await guarded(report, 'Speichern', async () => { await (await getProject()).save(); });
+  if (plan.save !== false) await guarded(report, 'Speichern', async () => { await (await getProject()).save(); invalidate(); });
   report.seconds = (Date.now() - report.started) / 1000;
   return report;
 

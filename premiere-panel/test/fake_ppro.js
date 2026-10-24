@@ -7,16 +7,17 @@ const TPS = 254016000000;
 
 // Wie in Premiere 26.5: Nach JEDER Projektänderung sind alle zuvor gelieferten Objekte ungültig.
 let EPOCH = 0;
+let HANDLE = 0;   // jeder getActiveProject()-Aufruf liefert ein neues Handle; Objekte älterer Handles gelten als ungültig (Annahme, deckt „Fach anlegen“ ab)
 const bump = () => { EPOCH++; };
 const RAW = new WeakMap();
 const unwrap = (o) => (o && typeof o === 'object' && RAW.get(o)) || o;
 function wrap(o) {
   if (Array.isArray(o)) return o.map(wrap);
   if (!o || typeof o !== 'object' || o instanceof Action || o instanceof TickTime) return o;
-  const born = EPOCH;
+  const born = EPOCH, handle = HANDLE;
   const px = new Proxy(o, {
     get(t, k, r) {
-      if (typeof k !== 'symbol' && born !== EPOCH) throw new Error('The script object is no longer valid.');
+      if (typeof k !== 'symbol' && (born !== EPOCH || handle !== HANDLE)) throw new Error('The script object is no longer valid.');
       const v = Reflect.get(t, k, r);
       return v;
     },
@@ -253,7 +254,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
       async getMatchNames() { return Object.keys(PARAMS); },
       async getDisplayNames() { return Object.keys(PARAMS).map((k) => DISPLAY[k]); },
     },
-    Project: { async getActiveProject() { return wrap(project); } },
+    Project: { async getActiveProject() { HANDLE++; return wrap(project); } },
     SequenceEditor: {
       getEditor(seq) {
         return {
