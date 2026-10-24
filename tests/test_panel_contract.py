@@ -29,3 +29,11 @@ def test_manifest_is_valid_for_premiere():
     assert m["requiredPermissions"]["network"]["domains"] == "all"
     for f in ("lib/core.js", "lib/plan.js", "lib/bridge.js", "main.js"):
         assert (ROOT / "premiere-panel" / f).exists()
+
+
+def test_websocket_library_is_a_runtime_dependency():
+    """uvicorn nimmt WebSocket-Verbindungen nur mit `websockets` an – ohne sie würde sich das Panel nie verbinden."""
+    toml = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    deps = toml[toml.index("dependencies"):toml.index("[project.optional")]
+    assert "websockets" in deps
+    import websockets  # noqa: F401
