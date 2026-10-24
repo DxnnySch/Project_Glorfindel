@@ -37,3 +37,14 @@ def test_websocket_library_is_a_runtime_dependency():
     deps = toml[toml.index("dependencies"):toml.index("[project.optional")]
     assert "websockets" in deps
     import websockets  # noqa: F401
+
+
+def test_panel_version_matches_manifest():
+    import json
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "premiere-panel"
+    version = json.loads((root / "manifest.json").read_text(encoding="utf-8"))["version"]
+    assert f"const VERSION = '{version}'" in (root / "main.js").read_text(encoding="utf-8")
+    assert re.search(rf"version = '{re.escape(version)}'", (root / "lib" / "bridge.js").read_text(encoding="utf-8"))
