@@ -45,6 +45,9 @@ async function readComponents(trackItem, withParams) {
         const info = { index: p.index, name: p.name };
         try { info.value = plainValue((await p.param.getStartValue())); } catch (e) { info.value = null; }
         try { info.keyframes = p.param.isTimeVarying() ? p.param.getKeyframeListAsTickTimes().map((t) => +t.seconds.toFixed(4)) : []; } catch (e) { /* keine */ }
+        if (info.keyframes && info.keyframes.length) {
+          try { const ts = p.param.getKeyframeListAsTickTimes(); info.keyframeValues = []; for (const t of ts) info.keyframeValues.push(plainValue(await p.param.getValueAtTime(t))); } catch (e) { info.keyframeValues = 'Fehler: ' + errText(e); }
+        }
         entry.params.push(info);
       }
     }

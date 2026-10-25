@@ -1,6 +1,6 @@
 """Optionale LLM-Unterstützung über eine OpenAI-kompatible Schnittstelle (ScaDS.AI, Heft §5.10).
 
-Jede Funktion ist abschaltbar und hat einen stillen Fallback. Gesendet werden ausschließlich Texte.
+Jede Funktion ist abschaltbar und hat einen stillen Fallback. Gesendet werden Texte; nur der automatische Bildausschnitt (autoframe) sendet verkleinerte Artwork-Bilder.
 Rate-Limits (429) werden mit Wartezeit einmal wiederholt (Erfahrung aus anderen Repos mit ScaDS).
 """
 from __future__ import annotations
@@ -18,6 +18,7 @@ PREFERRED = {
     "image_suggest": ["zai-org/GLM-5.3-Flash", "deepseek-ai/DeepSeek-V4.1-Flash"],
     "map_suggest": ["zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4.1-Flash"],
     "scene_titles": ["zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4.1-Flash"],
+    "autoframe": ["alias-vision"],                      # Bilderkennung: sendet verkleinerte Artwork-Bilder
 }
 
 SYSTEM = ("Du hilfst beim Erstellen deutscher Video-Kommentare zur Serie „Die Ringe der Macht“ "

@@ -188,7 +188,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
       if (!ti) throw new Error('Clip auf V' + (track + 1) + ' nicht gefunden');
       return ti;
     };
-    const parts = [['Bild', n.image, n.image_track, n.image_scale], ['Maske', n.mask, n.mask_track, n.mask_scale]];
+    const parts = [['Bild', n.image, n.image_track, n.image_scale, n.image_position || n.position], ['Maske', n.mask, n.mask_track, n.mask_scale, n.mask_position || n.position]];
     for (const [label, media_, track] of parts) {
       await at('Artwork ' + label + ' setzen', async () => {
         await placeClip(ppro, guid, () => fresh(media_, true), 0, track, -1);
@@ -196,8 +196,8 @@ async function runPlan(ppro, plan, emit = () => {}) {
         if (Math.abs((await ti.getEndTime()).seconds - n.dur) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, n.dur))));
       });
     }
-    for (const [label, , track, scale] of parts) {
-      await at('Artwork ' + label + ': Position/Größe', async () => { await fx.setMotion(ppro, await getProject(), locator(track), { position: n.position, scale }, ctx); });
+    for (const [label, , track, scale, position] of parts) {
+      await at('Artwork ' + label + ': Position/Größe', async () => { await fx.setMotion(ppro, await getProject(), locator(track), { position, scale }, ctx); });
     }
     const matte = { id: 'spurmaske', match_name: 'AE.ADBE Legacy Key Track Matte', display: 'Spurmaske-Key',
       params: [{ index: 0, names: ['Maske:', 'Matte:', 'Mask:'], value: n.matte_track }, { index: 1, names: ['Compositing mit', 'Composite Using'], value: 0 }] };

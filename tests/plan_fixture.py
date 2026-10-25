@@ -44,7 +44,7 @@ def make_plan() -> dict:
                       premiere={"aep": f"{STABLE_ROOT}/Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep", "comp": "Play-Pause",
                                 "pause_in": 28.7, "play_in": 0.0, "preset": "C:/cache/rohschnitt.sqpreset", "video_tracks": 14, "audio_tracks": 16,
                                 "pause_media": f"{STABLE_ROOT}/Videomaterial/VFX/Pause.mov", "play_media": "C:/cache/anim/Play.mov",
-                                "mask_path": "C:/vorlagen/masken/Maske Quadrat.png", "nested_preset": "C:/cache/artwork.sqpreset", "art_px": 1000,
+                                "mask_dir": "C:/vorlagen/masken", "mask_mode": "auto", "landscape_px": 1536, "nested_preset": "C:/cache/artwork.sqpreset", "art_px": 1000,
                                 "bars_png": "C:/cache/anim/Schwarzstreifen.png"},
                       doppel=tpl["doppelbild"])
         plan = build_plan(pkg, env)

@@ -149,12 +149,19 @@ def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, st
         except RuntimeError:
             pass                                                    # Rückfall: Komposition aus der .aep
     extra["bars_png"] = str(bars_png(pdir(ep) / "anim" / "Schwarzstreifen.png"))
-    mask = templates_dir / "masken" / s.mask
-    if mask.exists():
-        extra["mask_path"] = str(mask)
+    masks = templates_dir / "masken"
+    if (masks / "Maske Quadrat.png").exists() and (masks / "Maske.png").exists():
+        extra["mask_dir"] = str(masks)
+        extra["mask_mode"] = s.mask
+        extra["landscape_px"] = s.landscape_px
+    from .autoframe import subject_box
+    from .llm import Llm
+    llm = Llm(ep.settings)
+    cache_file = pdir(ep) / "autoframe.json"
     return PlanEnv(
         root=ep.p.root, episode_media=reference, stills_dir=stills_dir,
         credit=lambda text, art, x: credit_png(text, art, pdir(ep) / "credits", x_override=x),
+        frame_box=lambda p: subject_box(llm, p, cache_file),
         image_size=_image_size, recipes=with_library(load_recipes(recipes_file if recipes_file.exists() else None), _library(ep, templates_dir)), doppel=tpl["doppelbild"],
         premiere={"aep": str(ep.p.root / s.aep), "comp": s.comp, "pause_in": s.pause_in, "play_in": s.play_in,
                   "preset": str(preset), "video_tracks": s.video_tracks, "audio_tracks": s.audio_tracks,

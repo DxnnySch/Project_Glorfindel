@@ -78,6 +78,13 @@ class Param {
   }
   isTimeVarying() { return this.varying; }
   getKeyframeListAsTickTimes() { return this.kfs.map(([t]) => new TickTime(t)); }
+  async getValueAtTime(t) {
+    if (!this.varying || !this.kfs.length) return this.value;
+    const x = t.seconds, k = this.kfs;
+    if (x <= k[0][0]) return k[0][1];
+    for (let i = 1; i < k.length; i++) if (x <= k[i][0]) { const [a, va] = k[i - 1], [b, vb] = k[i]; return typeof va === 'number' ? va + (vb - va) * (x - a) / (b - a) : va; }
+    return k.at(-1)[1];
+  }
   async getStartValue() { return { value: this.kfs.length ? this.kfs[0][1] : this.value }; }
 }
 

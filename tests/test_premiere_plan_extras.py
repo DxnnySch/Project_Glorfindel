@@ -58,7 +58,9 @@ def test_plan_has_nested_artworks_and_anim_media():
     assert len(set(names)) == len(names), "Namen der Artwork-Sequenzen eindeutig"
     n = plan["nested"][0]
     assert (n["image_track"], n["mask_track"], n["matte_track"]) == (2, 4, 5)
-    assert n["mask_scale"] == round(1000 / 800 * 100, 3)
+    assert n["mask_name"] == "Maske.png" and n["mask_scale"] == 80.0               # Querformat-Bild (2000×1000) → Querformat-Maske, 1536 px breit
+    hoch = next(x for x in plan["nested"] if "howe" in x["name"])
+    assert hoch["mask_name"] == "Maske Quadrat.png" and hoch["mask_scale"] == 125.0     # Hochformat (800×1200) → abgerundetes Quadrat, 1000 px hoch
     assert all("media" in c for c in plan["clips"] if c["kind"] == "anim")
     bars = [c for c in plan["clips"] if c["kind"] == "bars"]
     assert len(bars) == 1 and bars[0]["track"] == 7
@@ -105,3 +107,55 @@ def test_map_and_artwork_effects_come_from_the_library():
     assert rec["blur"]["match_name"] == "AE.Impact_Blur_FX" and rec["blur"]["ein"]["param"] == "Stärke"
     zoom = _resolve_chain(rec, [{"recipe": "zoom_schnell"}], 5.0, None, 60.0)[0]
     assert next(p for p in zoom["params"] if p["name"] == "Skalierungshöhe")["keyframes"][-1] == [120.0, 240.0]
+
+
+def test_autoframe_picks_masks_and_keeps_subject_visible():
+    from glorfindel import autoframe
+    assert autoframe.pick_mask((1920, 1080)) == "Maske.png" and autoframe.pick_mask((600, 500)) == "Maske Quadrat.png"
+    assert autoframe.pick_mask((800, 1200)) == "Maske Quadrat.png"
+    fr = autoframe.frame_image((800, 1200), "Maske Quadrat.png", 1150, {"x0": 0.3, "y0": 0.05, "x1": 0.7, "y1": 0.35})
+    x0, y0, x1, y1 = fr["region"]
+    assert x0 <= 0.3 and y0 <= 0.05 and x1 >= 0.7 and y1 >= 0.35 and 0 <= x0 and x1 <= 1 and 0 <= y0 and y1 <= 1   # Motiv im Ausschnitt, Ausschnitt im Bild
+    # Bild deckt die sichtbare Maske: Bildhälfte (in Bildschirmpixeln) ≥ Maskenhälfte
+    s = fr["image_scale"] / 100
+    assert 800 * s >= 1150 and 1200 * s >= 1000
+    # ohne Motiv: mittiger Ausschnitt
+    mid = autoframe.frame_image((1920, 1080), "Maske.png", 1536, None)
+    assert mid["image_position"][0] == 0.5 and mid["mask_scale"] == 80.0
+    # Doppelbild: Mitte der Maske im Rahmen verschoben, Bild folgt
+    left = autoframe.frame_image((600, 500), "Maske Quadrat.png", 500, None, center=(0.27, 0.5))
+    assert left["mask_position"] == [0.27, 0.5] and left["image_position"] == [0.27, 0.5]
+
+
+def test_subject_box_normalizes_vision_model_output(tmp_path):
+    from glorfindel import autoframe
+
+    class Msg:
+        content = '{"x0": 100, "y0": 50, "x1": 900, "y1": 950}'
+
+    class Resp:
+        choices = [type("C", (), {"message": Msg})]
+
+    class Client:
+        class chat:  # noqa: N801
+            class completions:  # noqa: N801
+                @staticmethod
+                def create(**kw):
+                    return Resp
+
+    class FakeLlm:
+        last_error = ""
+        client = Client
+
+        def enabled(self, f):
+            return True
+
+        def model_for(self, f):
+            return "alias-vision"
+
+    img = tmp_path / "a.png"
+    Image.new("RGB", (400, 300), (10, 20, 30)).save(img)
+    box = autoframe.subject_box(FakeLlm(), img, tmp_path / "cache.json")
+    assert box == {"x0": 0.1, "y0": 0.05, "x1": 0.9, "y1": 0.95}
+    assert autoframe.subject_box(None, img) is None
+    assert (tmp_path / "cache.json").exists()                      # zweite Anfrage kommt aus dem Zwischenspeicher

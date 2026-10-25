@@ -108,7 +108,17 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     res.findings.colorMode = 'unit';
     return tried;
   });
-  await step('Deckkraft-Einblendung', async () => { await fx.setFade(ppro, await getProject(), locate, 5, 0.42, ctx); return 'ok'; });
+  await step('Deckkraft-Einblendung', async () => {
+    await fx.setFade(ppro, await getProject(), locate, 5, 0.42, ctx);
+    const idx = await fx.builtinIndex(locate, 'opacity');
+    const p = fx.findParam(await fx.componentAt(locate, idx), fx.NAMES.opacity, 0);
+    const ts = p.getKeyframeListAsTickTimes();
+    const vals = [];
+    for (const t of ts) vals.push({ t: +t.seconds.toFixed(3), v: await p.getValueAtTime(t) });
+    for (const sec of [0, 0.2, 2.5]) vals.push({ t: sec, v: await p.getValueAtTime(ppro.TickTime.createWithSeconds(sec)), interpoliert: true });
+    res.findings.opacityValues = vals;
+    return vals;
+  });
 
   // Aufräumen – immer
   await step('Aufräumen', async () => {

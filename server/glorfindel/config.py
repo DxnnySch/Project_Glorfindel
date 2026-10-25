@@ -31,7 +31,7 @@ class LlmSettings(BaseModel):
     models: dict[str, str] = Field(default_factory=dict)  # Funktion -> Modell; leer = automatisch
     features: dict[str, bool] = Field(default_factory=lambda: {
         "transcript_fix": True, "name_check": True, "image_suggest": True,
-        "map_suggest": True, "scene_titles": True,
+        "map_suggest": True, "scene_titles": True, "autoframe": True,
     })
 
 
@@ -49,7 +49,8 @@ class PremiereSettings(BaseModel):
     pause_in: float = 28.7                                                  # Startzeit der Pause-Animation in der Komposition (s)
     play_in: float = 0.0
     pause_mov: str = "Videomaterial/VFX/Pause.mov"                          # Pause-Animation (ProRes mit Alpha); Play entsteht daraus rückwärts
-    mask: str = "Maske Quadrat.png"                                         # Maske für Artworks (Ordner vorlagen/masken)
+    mask: str = "auto"                                                      # Maske für einzelne Artworks: auto (nach Bildformat) | Maske.png | Maske Quadrat.png
+    landscape_px: int = 1536                                                # Breite der sichtbaren Querformat-Maske im 1080p-Bild
     presets_dir: str = "Videomaterial/Programm-Vorgaben/PremierePro"       # Ordner mit den .prfpset-Vorgaben (relativ zum OneDrive-Stamm)
     artwork_effects: list[str] = Field(default_factory=lambda: ["drop_shadow", "zoom_schnell", "fancy_out", "fancy_in"])   # Effekte je Artwork (Namen aus den Vorgaben)
     map_effects: list[str] = Field(default_factory=lambda: ["karte_in", "karte_out"])

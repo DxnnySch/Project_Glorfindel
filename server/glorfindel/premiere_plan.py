@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from . import autoframe
+
 SCHEMA = 1
 DEFAULT_RECIPES = Path(__file__).resolve().parents[2] / "vorlagen" / "premiere_rezepte.json"
 
@@ -60,6 +62,7 @@ class PlanEnv:
     recipes: dict = field(default_factory=dict)
     premiere: dict = field(default_factory=dict)              # Einstellungen: aep, comp, play_in, pause_in, preset (Pfad .sqpreset), tracks
     doppel: dict = field(default_factory=dict)                # Positionen für Doppelbild-Layouts
+    frame_box: Callable[[Path], dict | None] | None = None    # Hauptmotiv eines Bildes (relativer Rahmen) für den automatischen Ausschnitt
 
 
 def _resolve_chain(recipes: dict, ids: list[dict], dur: float, contour: str | None, fps: float) -> list[dict]:
@@ -176,14 +179,20 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 target_px = (pos["size"] * 1080) if pos else float(env.premiere.get("art_px", 1000.0))
                 effects = _resolve_chain(recipes, [{"recipe": r} for r in env.premiere.get("artwork_effects", ("drop_shadow", "zoom", "fancy_out", "fancy_in"))], dur, contour, fps)
                 position = [pos["x"], pos["y"]] if pos else [0.5, 0.5]
-                mask = env.premiere.get("mask_path")
-                if mask:
+                mask_dir = env.premiere.get("mask_dir")
+                if mask_dir:
                     # Wie im Ursprungsschnitt: Bild + Maske in einer verschachtelten Sequenz, Spurmaske-Key; Effekte liegen auf der Sequenz.
+                    mode = env.premiere.get("mask_mode", "auto")
+                    mask_name = "Maske Quadrat.png" if pos else (autoframe.pick_mask(size) if mode == "auto" else mode)
+                    shown_w = (target_px * autoframe.VISIBLE_PX[mask_name][0] / autoframe.VISIBLE_PX[mask_name][1] if mask_name == "Maske Quadrat.png"
+                               else float(env.premiere.get("landscape_px", 1536)))
+                    box = env.frame_box(f) if env.frame_box else None
+                    fr = autoframe.frame_image(size, mask_name, shown_w, box, center=(position[0], position[1]))
                     nid = f"n{len(nested) + 1}"
                     nested.append({"id": nid, "name": f"Artwork {len(nested) + 1:02d} {f.stem}", "dur": dur, "image": reg(f, "artwork", size=list(size)),
-                                   "mask": reg(Path(mask), "mask"), "image_track": 2, "mask_track": 4, "matte_track": 5,
-                                   "image_scale": round(target_px / min(size) * 100, 3), "mask_scale": round(target_px / 800 * 100, 3),
-                                   "position": position})
+                                   "mask": reg(Path(mask_dir) / mask_name, "mask"), "image_track": 2, "mask_track": 4, "matte_track": 5,
+                                   "image_scale": fr["image_scale"], "mask_scale": fr["mask_scale"], "image_position": fr["image_position"],
+                                   "mask_position": fr["mask_position"], "mask_name": mask_name, "motiv": box})
                     clip = {"kind": "artwork", **base, "nested": nid, "name": f.stem, "effects": effects}
                 else:
                     clip = {"kind": "artwork", **base, "media": reg(f, "artwork", size=list(size)), "name": f.stem,
