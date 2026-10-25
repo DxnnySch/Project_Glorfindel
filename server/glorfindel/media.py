@@ -250,13 +250,19 @@ def fix_proxy_audio(path: Path, on_progress=None) -> Path:
     return path
 
 
-def extract_frame(src: Path, t: float, dst: Path, width: int | None = None, fps_hint: float | None = None) -> Path:
+def extract_frame(src: Path, t: float, dst: Path, width: int | None = None, fps_hint: float | None = None, crop: list[int] | None = None) -> Path:
     """Einzelbild bei Zeit t (s) als PNG/JPG; -ss nach -i für Frame-Genauigkeit bei langen Dateien
     wird vermieden, indem Eingangssuche + Dekodier-Verwerfen genutzt wird (Standard in ffmpeg)."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-ss", f"{max(0.0, t):.4f}", "-i", str(src), "-frames:v", "1"]
+    vf = []
+    if crop:
+        cx, cy, cw, ch = crop
+        vf.append(f"crop={cw}:{ch}:{cx}:{cy}")
     if width:
-        cmd += ["-vf", f"scale={width}:-2"]
+        vf.append(f"scale={width}:-2")
+    if vf:
+        cmd += ["-vf", ",".join(vf)]
     tmp = dst.with_name(dst.stem + ".part" + dst.suffix)
     cmd += [str(tmp)]
     r = run(cmd)

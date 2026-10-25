@@ -219,3 +219,22 @@ def test_security_hardening_paths_and_csrf(client):
     # Browser-CSRF ohne Origin, aber als cross-site gekennzeichnet
     bad = client.put("/api/settings", json=Settings().model_dump(), headers={"sec-fetch-site": "cross-site"})
     assert bad.status_code == 403
+
+
+@needs_ffmpeg
+def test_frame_capture_makes_a_map_from_the_video(client):
+    from PIL import Image
+    client.post("/api/episodes", json={"season": 3, "episode": 1})
+    make_clip(client.root / "Filme" / "ref.mp4", seconds=6, size="640x360")
+    assert wait_job(client, client.post("/api/ep/3/1/sources", json={"path": "Filme/ref.mp4"}).json()["job"])["status"] == "fertig"
+    r = client.post("/api/ep/3/1/frame", json={"source": "q1", "t": 2.5, "title": "Gasthof"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    img = client.root / d["path"]
+    assert img.exists() and Image.open(img).size == (640, 360)                  # volle Auflösung, nicht der Proxy
+    assert d["map"]["titel"] == "Gasthof" and d["map"]["bild"] == d["path"] and d["map"]["id"] == "map_01"
+    assert client.get("/api/maps/thumb", params={"path": d["path"]}).status_code == 200      # im Karteneditor ladbar
+    assert client.get("/api/ep/3/1/maps").json()[0]["id"] == "map_01"
+    again = client.post("/api/ep/3/1/frame", json={"source": "q1", "t": 3.0}).json()
+    assert again["map"]["id"] == "map_02"
+    assert client.post("/api/ep/3/1/frame", json={"source": "zzz", "t": 1}).status_code == 404

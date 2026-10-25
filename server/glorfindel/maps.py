@@ -8,7 +8,7 @@ Element-Typen:
   pfeil   {punkte: [[x,y],[x,y]], text}   – Pfeil / Pfad (mehrere Punkte = Pfad, zeichnet sich)
   region  {punkte: [[x,y],...], text}     – Polygon
   kamera  {rect: [x,y,w,h]}               – Kamerarahmen
-Jedes Element hat optional `t0` (Einblendzeit in s) und `hinweis` (Freitext für den Schnitt).
+Jedes Element hat optional `t0` (Einblendzeit in s), `t1` (Ende der Einblendung in s; leer = bis zum Ende) und `hinweis` (Freitext für den Schnitt).
 Keyframes der Kamera: [{t, rect:[x,y,w,h]}] – dazwischen weiche Interpolation.
 """
 from __future__ import annotations
@@ -42,6 +42,9 @@ def thumbnail(path: Path, dst: Path, max_side: int = 400) -> Path:
             dst.parent.mkdir(parents=True, exist_ok=True)
             im.save(dst, "JPEG", quality=80)
     return dst
+
+
+OUT_FADE = 0.3          # Ausblenden nach dem Ende eines Elements (s)
 
 
 def new_map(map_id: str, image_rel: str, dauer: float = 6.0) -> dict:
@@ -118,10 +121,12 @@ def draw_elements(im: Image.Image, m: dict, t: float | None = None, scale: float
     f = _font(max(12, int(18 * scale)))
     lw = max(2, int(4 * scale))
     for el in m.get("elemente", []):
-        t0 = el.get("t0", 0.0)
-        if t is not None and t < t0:
+        t0, t1 = el.get("t0", 0.0), el.get("t1")            # t1 = Ende der Einblendung (None: bleibt bis zum Ende)
+        if t is not None and (t < t0 or (t1 is not None and t >= t1 + OUT_FADE)):
             continue
         alpha = 255 if t is None else int(255 * _ease((t - t0) / 0.4))
+        if t is not None and t1 is not None and t > t1:
+            alpha = int(alpha * (1 - _ease((t - t1) / OUT_FADE)))
         typ, col = el["typ"], _el_color(el)
         if typ == "marker":
             x, y = px((el["x"], el["y"]))
@@ -139,13 +144,13 @@ def draw_elements(im: Image.Image, m: dict, t: float | None = None, scale: float
             prog = 1.0 if t is None else _ease((t - t0) / dur)
             pts = [px(p) for p in _path_progress(el["punkte"], prog)]
             if len(pts) >= 2:
-                d.line(pts, fill=col + (255,), width=lw, joint="curve")
+                d.line(pts, fill=col + (alpha,), width=lw, joint="curve")
                 (x0, y0), (x1, y1) = pts[-2], pts[-1]
                 ang = math.atan2(y1 - y0, x1 - x0)
                 hl = 14 * scale + lw
                 for s in (-0.45, 0.45):
                     d.line([(x1, y1), (x1 - hl * math.cos(ang + s), y1 - hl * math.sin(ang + s))],
-                           fill=col + (255,), width=lw)
+                           fill=col + (alpha,), width=lw)
             if el.get("text") and pts:
                 d.text((pts[0][0] + 6, pts[0][1] + 6), el["text"], font=f, fill=(255, 255, 255, alpha),
                        stroke_width=2, stroke_fill=(0, 0, 0, alpha))

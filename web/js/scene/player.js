@@ -1,4 +1,5 @@
 // Player mit Szenen-Zeitleiste (Bereich, Segmente, Kommentarmarken) und klickbarem Dialog der Episode.
+import { captureFrame } from '../framecap.js';
 import { h, $, clear, btn, icon, toast, runJob, fmtTC, empty } from '../ui.js';
 import { api, epUrl } from '../api.js';
 
@@ -157,6 +158,7 @@ export function createPlayer(E) {
     const bar = h('div', { class: 'player-bar' }, playBtn,
       btn('', { icon: 'stepb', kind: 'ghost', size: 'sm', title: 'Ein Bild zurück (←)', onClick: () => step(-1) }), btn('', { icon: 'step', kind: 'ghost', size: 'sm', title: 'Ein Bild vor (→)', onClick: () => step(1) }), tc,
       btn('I  Anfang', { size: 'sm', title: 'Anfang des Segments markieren (I)', onClick: markIn }), btn('O  Ende', { size: 'sm', title: 'Ende markieren (O) – danach entsteht das Segment', onClick: markOut }), pendEl,
+      btn('', { icon: 'image', kind: 'ghost', size: 'sm', title: 'Dieses Bild speichern und als Karte öffnen (darin markieren)', onClick: async () => { try { await captureFrame(ep, ref.id, video.currentTime, '', async () => { E.maps = await api.get(epUrl(ep, '/maps')); }); } catch (e) { toast(e.message, 'err'); } } }),
       h('span', { class: 'grow' }),
       h('label', { class: 'check help', title: 'Zeitleiste und Dialog auf die ganze Episode ausdehnen' }, h('input', { type: 'checkbox', checked: !!ui.allEp, onChange: (e) => { ui.allEp = e.target.checked; drawTimeline(); drawDialog(); } }), 'ganze Episode'));
     box.append(video, tl, bar);

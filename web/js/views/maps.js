@@ -3,6 +3,7 @@ import { api, epUrl } from '../api.js';
 import { S } from '../state.js';
 import { openMapEditor, openMapPreview } from '../mapeditor.js';
 import { modal } from '../ui.js';
+import { openFrameDialog } from '../framecap.js';
 
 export async function render(main) {
   const ep = S.ep;
@@ -29,6 +30,7 @@ export async function render(main) {
   }, 300);
   const rel0 = (p) => p.replace((S.settings.onedrive_root || '').replace(/\\/g, '/') + '/', '');
   q.addEventListener('input', search); drawOwn(); search();
-  main.append(h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Karten'), h('p', {}, 'Karten für Kartenerklärungen auswählen. Für Premiere/After Effects wird ein Kartenblatt und ein Platzhalter-Clip erzeugt.'))),
+  main.append(h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Karten'), h('p', {}, 'Karten für Kartenerklärungen auswählen. Für Premiere/After Effects wird ein Kartenblatt und ein Platzhalter-Clip erzeugt.')),
+      btn('Karte aus Videobild', { icon: 'video', title: 'Ein Bild aus dem Video speichern und darin markieren', onClick: () => openFrameDialog(async () => { mine = await api.get(epUrl(ep, '/maps')); drawOwn(); }) })),
     h('h3', { style: { margin: '0 0 10px' } }, 'In dieser Folge'), own, h('h3', { style: { margin: '22px 0 10px' } }, 'Kartenbibliothek'), h('div', { style: { marginBottom: '12px' } }, q), lib));
 }

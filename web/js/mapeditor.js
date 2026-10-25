@@ -12,14 +12,40 @@ export function openMapEditor(map, onSaved) {
   const root = (S.settings.onedrive_root || '').replace(/\\/g, '/');
   const img = h('img', { src: `/api/maps/thumb?path=${encodeURIComponent(m.bild)}`, style: { display: 'block', width: '100%', userSelect: 'none' }, draggable: 'false' });
   const cv = h('canvas', { style: { position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'crosshair' } });
-  const box = h('div', { class: 'map-canvas', style: { position: 'relative' } }, img, cv);
+  const box = h('div', { class: 'map-canvas', style: { position: 'relative', transformOrigin: '0 0' } }, img, cv);
+  const viewport = h('div', { class: 'map-viewport' }, box);
+  const zoomLabel = h('span', { class: 'help', style: { minWidth: '44px', textAlign: 'center' } }, '100 %');
+  let zoom = 1, panX = 0, panY = 0, panning = null, spaceDown = false;
+  const applyView = () => {
+    const h0 = box.offsetHeight;
+    if (h0) viewport.style.height = `${h0}px`;                 // Rahmen behält die Größe, das Bild darin wird vergrößert
+    const vw = viewport.clientWidth, vh = viewport.clientHeight;
+    panX = Math.min(0, Math.max(vw - vw * zoom, panX)); panY = Math.min(0, Math.max(vh - vh * zoom, panY));   // Bild füllt immer den Rahmen
+    box.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    zoomLabel.textContent = `${Math.round(zoom * 100)} %`;
+    draw();
+  };
+  const zoomAt = (f, cx, cy) => {
+    const nz = Math.min(8, Math.max(1, zoom * f)), k = nz / zoom;
+    panX = cx - (cx - panX) * k; panY = cy - (cy - panY) * k; zoom = nz; applyView();
+  };
+  viewport.addEventListener('wheel', (e) => { e.preventDefault(); const r = viewport.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  viewport.addEventListener('mousedown', (e) => { if (e.button === 1 || e.button === 2 || spaceDown) { e.preventDefault(); panning = { x: e.clientX, y: e.clientY, px: panX, py: panY }; viewport.style.cursor = 'grabbing'; } }, true);
+  window.addEventListener('mousemove', (e) => { if (panning) { panX = panning.px + e.clientX - panning.x; panY = panning.py + e.clientY - panning.y; applyView(); } });
+  window.addEventListener('mouseup', () => { if (panning) { panning = null; viewport.style.cursor = ''; } });
+  viewport.addEventListener('contextmenu', (e) => e.preventDefault());
+  const zoomBar = h('div', { class: 'row gap-s' }, btn('', { icon: 'minus', size: 'sm', title: 'Verkleinern', onClick: () => zoomAt(1 / 1.4, viewport.clientWidth / 2, viewport.clientHeight / 2) }), zoomLabel,
+    btn('', { icon: 'plus', size: 'sm', title: 'Vergrößern (auch Mausrad)', onClick: () => zoomAt(1.4, viewport.clientWidth / 2, viewport.clientHeight / 2) }),
+    btn('Einpassen', { size: 'sm', onClick: () => { zoom = 1; panX = panY = 0; applyView(); } }),
+    h('span', { class: 'help' }, 'Mausrad = zoomen · Leertaste oder mittlere/rechte Maustaste halten und ziehen = verschieben'));
   const list = h('div', { class: 'col gap-s' });
   const toolBar = h('div', { class: 'seg' });
   const info = h('div', { class: 'help' });
 
   const N = (e) => { const r = cv.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
   function draw() {
-    const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = cv.clientHeight * devicePixelRatio, g = cv.getContext('2d');
+    const q = devicePixelRatio * Math.min(zoom, 4);          // beim Zoomen schärfer zeichnen
+    const W = cv.width = cv.clientWidth * q, H = cv.height = cv.clientHeight * q, g = cv.getContext('2d');
     const P = (p) => [p[0] * W, p[1] * H], lw = Math.max(2, W / 400);
     g.clearRect(0, 0, W, H); g.font = `${Math.max(12, W / 55)}px sans-serif`; g.lineWidth = lw; g.lineJoin = 'round';
     const text = (s, p) => { g.strokeStyle = '#000'; g.lineWidth = lw * 1.5; g.strokeText(s, p[0] + 8, p[1] - 8); g.fillStyle = '#fff'; g.fillText(s, p[0] + 8, p[1] - 8); g.lineWidth = lw; };
@@ -56,14 +82,18 @@ export function openMapEditor(map, onSaved) {
     else if (tool === 'pfeil' || tool === 'region') { draft.push(p); draw(); }
   });
   cv.addEventListener('dblclick', () => { if (draft.length) { draft.pop(); finish(); } });
-  const keys = (e) => { if (e.key === 'Enter' && draft.length) finish(); if (e.key === 'Escape' && draft.length) { draft = []; draw(); e.stopPropagation(); } };
-  document.addEventListener('keydown', keys);
+  const keys = (e) => { if (e.key === ' ' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) { spaceDown = e.type === 'keydown'; if (e.type === 'keydown') e.preventDefault(); } if (e.type === 'keyup') return; if (e.key === 'Enter' && draft.length) finish(); if (e.key === 'Escape' && draft.length) { draft = []; draw(); e.stopPropagation(); } };
+  document.addEventListener('keydown', keys); document.addEventListener('keyup', keys);
 
   const num = (v, cb, w = '78px') => h('input', { type: 'text', value: fmtTC(v), style: { width: w }, onChange: (e) => { const x = parseTC(e.target.value); if (x != null) cb(x); e.target.value = fmtTC(x ?? v); } });
+  // Ende der Einblendung: leer = bleibt bis zum Ende der Animation
+  const endTime = (el) => h('input', { type: 'text', value: el.t1 != null ? fmtTC(el.t1) : '', placeholder: 'Ende', title: 'Ende der Einblendung (leer = bis zum Schluss)', style: { width: '78px' },
+    onChange: (e) => { const v = e.target.value.trim(); if (!v) { delete el.t1; } else { const x = parseTC(v); if (x != null && x > (el.t0 || 0)) el.t1 = x; else e.target.value = el.t1 != null ? fmtTC(el.t1) : ''; } } });
   function drawList() {
     list.replaceChildren(
       ...m.elemente.map((el, i) => h('div', { class: 'row' }, h('input', { type: 'color', class: 'colorpick', value: el.farbe || COL[el.typ], title: 'Farbe dieses Elements', onInput: (e) => { el.farbe = e.target.value; draw(); } }), h('span', { style: { width: '56px' } }, { marker: 'Marker', label: 'Text', pfeil: 'Pfeil', region: 'Region' }[el.typ]),
         h('input', { type: 'text', value: el.text || '', placeholder: 'Beschriftung', onInput: (e) => { el.text = e.target.value; draw(); } }), h('span', { class: 'help' }, 'ab'), num(el.t0 || 0, (x) => { el.t0 = x; }),
+        h('span', { class: 'help' }, 'bis'), endTime(el),
         btn('', { icon: 'trash', size: 'sm', kind: 'ghost', onClick: () => { m.elemente.splice(i, 1); drawAll(); } }))),
       ...m.kamera.map((k, i) => h('div', { class: 'row' }, h('span', { class: 'dot', style: { background: '#7ee0a0' } }), h('span', { style: { width: '62px' } }, `Kamera ${i + 1}`), h('span', { class: 'help grow' }, `Ausschnitt ${k.rect.map((v) => Math.round(v * 100)).join('/')} %`), h('span', { class: 'help' }, 'bei'), num(k.t, (x) => { k.t = x; }),
         btn('', { icon: 'trash', size: 'sm', kind: 'ghost', onClick: () => { m.kamera.splice(i, 1); drawAll(); } }))));
@@ -75,12 +105,12 @@ export function openMapEditor(map, onSaved) {
   const dauer = h('input', { type: 'number', min: 1, value: m.dauer, style: { width: '80px' }, onInput: (e) => { m.dauer = +e.target.value; } });
   const hint = h('textarea', { rows: 3, placeholder: 'Hinweise für die Animation (z. B. „erst Eregion, dann Fahrt nach Osten“)', value: m.hinweise || '', onInput: (e) => { m.hinweise = e.target.value; } });
   const save = async () => { try { const r = await api.put(epUrl(S.ep, `/maps/${m.id}`), m); onSaved?.(r); toast('Karte gespeichert.', 'ok'); } catch (e) { toast(e.message, 'err'); return false; } };
-  const dlg = modal({ title: `Karte: ${m.titel || m.id}`, wide: true, onClose: () => document.removeEventListener('keydown', keys),
+  const dlg = modal({ title: `Karte: ${m.titel || m.id}`, wide: true, onClose: () => { document.removeEventListener('keydown', keys); document.removeEventListener('keyup', keys); },
     body: h('div', { class: 'grid', style: { gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)' } },
-      h('div', { class: 'col' }, toolBar, box, info),
+      h('div', { class: 'col' }, toolBar, zoomBar, viewport, info),
       h('div', { class: 'col' }, h('div', { class: 'row' }, field('Dauer (s)', dauer)), list, h('label', { class: 'field' }, h('span', {}, 'Hinweise'), hint))),
     actions: [{ label: 'Vorschau abspielen', keep: true, onClick: () => { openMapPreview(m); return false; } }, { label: 'Schließen' }, { label: 'Speichern', kind: 'primary', onClick: save }] });
-  img.addEventListener('load', drawAll); setTimeout(drawAll, 200);
+  img.addEventListener('load', () => { applyView(); drawList(); }); setTimeout(() => { applyView(); drawList(); }, 200);
   return dlg;
 }
 
@@ -115,14 +145,14 @@ export function openMapPreview(m) {
     const P = (p) => [(p[0] - vx) / vw * W, (p[1] - vy) / vh * H], lw = 4;
     g.lineJoin = 'round'; g.lineCap = 'round'; g.font = '700 20px sans-serif';
     for (const el of m.elemente || []) {
-      const t0 = el.t0 || 0; if (t < t0) continue;
-      const a = ease((t - t0) / 0.4), col = el.farbe || COL[el.typ] || '#fff';
+      const t0 = el.t0 || 0, t1 = el.t1 ?? null; if (t < t0 || (t1 != null && t >= t1 + 0.3)) continue;
+      const a = ease((t - t0) / 0.4) * (t1 != null && t > t1 ? 1 - ease((t - t1) / 0.3) : 1), col = el.farbe || COL[el.typ] || '#fff';
       g.globalAlpha = a; g.strokeStyle = g.fillStyle = col; g.lineWidth = lw;
       const label = (txt, p) => { if (!txt) return; g.lineWidth = 5; g.strokeStyle = '#000'; g.strokeText(txt, p[0] + 12, p[1] - 10); g.fillStyle = '#fff'; g.fillText(txt, p[0] + 12, p[1] - 10); g.strokeStyle = g.fillStyle = col; g.lineWidth = lw; };
       if (el.typ === 'marker') { const p = P([el.x, el.y]); g.beginPath(); g.arc(p[0], p[1], 10, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.stroke(); label(el.text, p); }
       else if (el.typ === 'label') label(el.text || '', P([el.x, el.y]));
       else if (el.typ === 'pfeil' && el.punkte?.length > 1) {
-        const prog = ease((t - t0) / Math.max(0.1, el.dauer || 1.5)); g.globalAlpha = 1;
+        const prog = ease((t - t0) / Math.max(0.1, el.dauer || 1.5)); g.globalAlpha = a;
         const pts = el.punkte.map(P); const segLen = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])), total = segLen.reduce((u, v) => u + v, 0);
         let rest = total * prog; g.beginPath(); g.moveTo(...pts[0]); let end = pts[0];
         for (let i = 0; i < segLen.length && rest > 0; i++) { const f = Math.min(1, rest / segLen[i]); end = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f]; g.lineTo(...end); rest -= segLen[i]; }

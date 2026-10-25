@@ -278,3 +278,5 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .rt-preview { padding: 12px 14px; font-size: 15px; line-height: 1.65; }
 .rt-view ul, .rt-view ol { margin: 4px 0 4px 22px; padding: 0; } .rt-view h4, .rt-view h5, .rt-view h6 { margin: 8px 0 4px; }
 .rt-view strong { font-weight: 700; } .rt-view s { opacity: .7; }
+
+.map-viewport { position: relative; overflow: hidden; border-radius: var(--radius); background: #000; } .map-viewport .map-canvas { border-radius: 0; will-change: transform; }

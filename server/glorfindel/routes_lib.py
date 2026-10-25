@@ -188,6 +188,40 @@ def map_thumb(path: str, state: AppState = Depends(st)):
     return FileResponse(maps.thumbnail(src, dst, 600))
 
 
+class FrameBody(BaseModel):
+    source: str
+    t: float
+    title: str = ""
+    as_map: bool = True
+
+
+@router.post("/ep/{season}/{episode}/frame")
+def capture_frame(body: FrameBody, ep: Episode = Depends(ep_of)):
+    """Bild aus dem Video in voller Auflösung speichern (Letterbox wird wie bei der Referenz abgeschnitten) und – auf Wunsch – als Karte anlegen,
+    damit man darin markieren kann."""
+    from .paths import to_rel
+    try:
+        src = ep.source(body.source)
+    except KeyError:
+        raise HTTPException(404, "Quelle unbekannt")
+    f = ep.source_path(src)
+    if not f.exists():
+        raise HTTPException(404, "Quelldatei nicht gefunden")
+    t = max(0.0, min(body.t, max(src.duration - 0.05, 0.0))) if src.duration else max(0.0, body.t)
+    dst = ep.p.base / "Screenshots" / f"Frame_{src.id}_{int(round(t * 1000)):08d}.png"
+    media.extract_frame(f, t, dst, crop=src.crop)
+    rel = to_rel(ep.p.root, dst)
+    out = {"path": rel, "t": t}
+    if body.as_map:
+        existing = pipeline.load_maps(ep)
+        n = len(existing) + 1
+        while f"map_{n:02d}" in existing:
+            n += 1
+        mid = f"map_{n:02d}"
+        out["map"] = pipeline.save_map(ep, {"id": mid, "titel": body.title.strip() or f"Videobild {media.fmt_clock(t)}", "bild": rel, "elemente": []})
+    return out
+
+
 @router.get("/ep/{season}/{episode}/maps")
 def ep_maps(ep: Episode = Depends(ep_of)):
     return list(pipeline.load_maps(ep).values())

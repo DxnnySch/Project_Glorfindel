@@ -107,3 +107,20 @@ def test_llm_feature_toggle_and_failure():
 def test_llm_map_suggest_validates_choice():
     assert llm('{"karte": "A", "orte": ["x"]}').suggest_map("t", ["A", "B"])["karte"] == "A"
     assert llm('{"karte": "Z", "orte": []}').suggest_map("t", ["A", "B"]) is None
+
+
+def test_element_end_time_hides_with_fade(map_img):
+    from PIL import ImageChops
+    m = maps.new_map("k", "x.png", dauer=3.0)
+    m["elemente"] = [{"typ": "marker", "x": 0.5, "y": 0.5, "text": "", "t0": 0.5, "t1": 1.5}]
+    base = Image.new("RGB", (400, 300), (40, 40, 40))
+
+    def at(t):
+        return maps.draw_elements(base.copy().convert("RGBA"), m, t=t)
+
+    def changed(im):
+        return ImageChops.difference(im.convert("RGB"), base).getbbox() is not None
+
+    assert not changed(at(0.2)) and changed(at(1.0))                # vor dem Start unsichtbar, danach sichtbar
+    assert changed(at(1.6))                                         # kurzes Ausblenden
+    assert not changed(at(2.0))                                     # nach Ende + Ausblenden weg

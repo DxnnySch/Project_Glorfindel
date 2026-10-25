@@ -77,3 +77,4 @@ def test_all_web_scripts_parse():
     for f in sorted(web.rglob("*.js")):
         r = subprocess.run(["node", "--check", str(f)], capture_output=True)
         assert r.returncode == 0, f"{f.name}: {r.stderr.decode('utf-8', 'replace')[:300]}"
+
