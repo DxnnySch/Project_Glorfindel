@@ -233,4 +233,58 @@ async function probePlace(ppro, { png, preset }) {
   return out;
 }
 
-module.exports = { probePlace, probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };
+/** Fehlersuche: Medien-Tausch (changeMediaFilePath) in mehreren Varianten an Test-Elementen ausprobieren. pairs: [{a, b, seq}] */
+async function probeSwap(ppro, { pairs }) {
+  const { getProj, invalidate, norm } = require('./core');
+  const media = require('./media');
+  const BIN = 'GL-Probe-Tausch';
+  const out = [];
+  for (const [i, pr] of pairs.entries()) {
+    const res = { paar: i + 1, von: pr.a.split(/[\/]/).pop(), nach: pr.b.split(/[\/]/).pop(), sequenz: !!pr.seq, varianten: [] };
+    let seqGuid = null;
+    try {
+      await media.ensureBin(ppro, await getProj(ppro), BIN);
+      await media.importFiles(ppro, await getProj(ppro), [pr.a], BIN);
+      const find = async () => (await media.mediaByPath(ppro, await media.getBin(ppro, await getProj(ppro), BIN)));
+      if (pr.seq) {
+        const raw = await media.rawByPath(ppro, await media.getBin(ppro, await getProj(ppro), BIN), pr.a);
+        const seq = await (await getProj(ppro)).createSequenceFromMedia('GL-Probe-Tausch-Seq', [raw], await media.getBin(ppro, await getProj(ppro), BIN));
+        seqGuid = String(seq.guid); invalidate();
+      }
+      const variants = [
+        ['override=true', async (item, project) => item.changeMediaFilePath(pr.b, true)],
+        ['override=false', async (item, project) => item.changeMediaFilePath(pr.b, false)],
+        ['ohne zweiten Parameter', async (item, project) => item.changeMediaFilePath(pr.b)],
+        ['lockedAccess, override=true', async (item, project) => { let p; project.lockedAccess(() => { p = item.changeMediaFilePath(pr.b, true); }); return p; }],
+      ];
+      let done = false;
+      for (const [name, fn] of variants) {
+        if (done) break;
+        const v = { variante: name };
+        try {
+          const project = await getProj(ppro);
+          const item = (await find()).get(norm(pr.a));
+          if (!item) { v.fehler = 'Element nicht gefunden'; res.varianten.push(v); continue; }
+          try { v.canChange = await item.canChangeMediaPath(); } catch (e) { v.canChange = 'Fehler: ' + (e.message || e); }
+          v.ergebnis = String(await fn(item, project));
+          invalidate();
+          const now = await find();
+          v.jetzt = now.has(norm(pr.b)) ? 'Pfad getauscht' : (now.has(norm(pr.a)) ? 'Pfad unverändert' : 'unklar');
+          if (v.jetzt === 'Pfad getauscht') done = true;
+        } catch (e) { v.fehler = e.message || String(e); invalidate(); }
+        res.varianten.push(v);
+      }
+    } catch (e) { res.fehler = e.message || String(e); }
+    try {
+      const project = await getProj(ppro);
+      if (seqGuid) { const sq = (await project.getSequences()).find((x) => String(x.guid) === seqGuid); if (sq) { await project.deleteSequence(sq); invalidate(); } }
+      const p2 = await getProj(ppro), root = await p2.getRootItem();
+      const b = (await root.getItems()).find((x) => x.name === BIN);
+      if (b) await require('./core').txp(ppro, 'GL-Probe aufräumen', (add) => add(root.createRemoveItemAction(b)));
+    } catch (e) { res.aufraeumen = e.message || String(e); }
+    out.push(res);
+  }
+  return out;
+}
+
+module.exports = { probeSwap, probePlace, probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };
