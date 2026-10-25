@@ -9,7 +9,7 @@ const NAMES = {
   motion: ['Motion', 'Bewegung'],
   opacity: ['Opacity', 'Deckkraft'],
   position: ['Position'],
-  scale: ['Scale', 'Skalierung'],
+  scale: ['Scale', 'Skalieren', 'Skalierung'],
   crop: { left: ['Left', 'Links'], top: ['Top', 'Oben'], right: ['Right', 'Rechts'], bottom: ['Bottom', 'Unten'] },
 };
 
@@ -44,6 +44,7 @@ function paramList(comp) {
 function findParam(comp, names, index) {
   const list = paramList(comp);
   const want = (Array.isArray(names) ? names : [names]).filter(Boolean).map((n) => String(n).toLowerCase());
+  if (index != null && list[index] && want.includes(String(list[index].name).toLowerCase())) return list[index].param;   // doppelte Namen (Zufallsparameter): Position gewinnt
   const byName = list.find((p) => want.includes(String(p.name).toLowerCase()));
   if (byName) return byName.param;
   if (index != null && list[index]) return list[index].param;
@@ -153,7 +154,7 @@ async function setMotion(ppro, project, locate, { position, scale }, ctx) {
   const idx = await builtinIndex(locate, 'motion');
   if (idx < 0) throw new Error('Bewegung-Effekt nicht gefunden');
   const done = [];
-  for (const [label, names, pidx, spec] of [['Position', NAMES.position, 1, position ? { value: { point: position } } : null], ['Skalierung', NAMES.scale, 2, scale != null ? { value: scale } : null]]) {
+  for (const [label, names, pidx, spec] of [['Position', NAMES.position, 0, position ? { value: { point: position } } : null], ['Skalierung', NAMES.scale, 1, scale != null ? { value: scale } : null]]) {
     if (!spec) continue;
     const param = findParam(await componentAt(locate, idx), names, pidx);
     if (!param) continue;

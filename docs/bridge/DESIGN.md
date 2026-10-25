@@ -63,3 +63,13 @@ Nicht möglich / offen: Audio-Überblendung „Konstante Leistung“ (API bietet
 WebSocket nur auf 127.0.0.1; Token (Datei im lokalen App-Ordner) wird vom Panel per HTTP beim App-Server geholt (Browser-Seiten können die
 Antwort wegen fehlender CORS-Freigabe nicht lesen); Browser-Origins (http/https) werden für den WebSocket abgelehnt. Das Panel führt nur
 benannte Operationen aus (keine freie Skriptausführung).
+
+## Gemessene Eigenheiten von Premiere 26.5.2 (per `probe.bin`, `probe.place`, Selbsttest)
+- **Jede Änderung braucht `project.lockedAccess(() => project.executeTransaction(...))`**; sonst „Requires locked access“ oder „script object is no longer valid“. Aktionen werden innerhalb des Callbacks erzeugt (`core.tx`).
+- **Alle API-Objekte (auch das Projekt-Handle) sind nach einer Änderung ungültig.** Ein Projekt-Handle pro „Epoche“ (`core.getProj`/`invalidate`), alles andere frisch holen.
+- **Schnitt-Aktionen (`createOverwriteItemAction`, `createSequenceFromMedia`) nehmen nur rohe `ProjectItem`s**; ein per `ClipProjectItem.cast` umgewandeltes Element wird mit „Invalid parameter“ abgelehnt. In/Out-Punkte (`createSetInOutPointsAction`) gehören dagegen zum `ClipProjectItem`.
+- Sequenz-Vorgabe-Pfade nur mit Backslashes (`C:\…`), sonst „Preset file is invalid“.
+- Effekt-Match-Namen (deutsche Oberfläche): Zuschneiden `AE.ADBE AECrop`, Transformieren `AE.ADBE Geometry2`, übrige wie im Ursprungsprojekt. Komponentenreihenfolge im Clip: Deckkraft, Bewegung. Bewegung: Position, **Skalieren** (nicht „Skalierung“), Skalierungsbreite …
+- Mehrere Parameter heißen gleich („Zufallsparameter“): Position in der Liste gewinnt vor dem Namen (`findParam`).
+- Keyframe-Zeiten sind clip-relativ (`keyframeOrigin: clipanfang`), Farben 0..1.
+- Diagnose ohne Neubau: `POST /api/bridge/call` mit `probe.bin`, `probe.place`, `sequence.dump`, `introspect`; Selbsttest `POST /api/bridge/selftest`. Panel-Änderungen wirken erst nach einem Premiere-Neustart.
