@@ -67,6 +67,8 @@ async function sequenceDump(ppro, { name, maxItems = 200, params = true } = {}) 
       for (const it of items.slice(0, maxItems)) {
         const row = { name: await it.getName(), start: +(await it.getStartTime()).seconds.toFixed(3), end: +(await it.getEndTime()).seconds.toFixed(3),
           in: +(await it.getInPoint()).seconds.toFixed(3), out: +(await it.getOutPoint()).seconds.toFixed(3) };
+        try { row.adjustment = await it.isAdjustmentLayer(); } catch (e) { /* ältere API */ }
+        try { const pi = await it.getProjectItem(); row.source = pi ? pi.name : null; } catch (e) { /* ohne Quelle */ }
         try { row.components = await readComponents(it, params); } catch (e) { row.components_error = errText(e); }
         rows.push(row);
       }

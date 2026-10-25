@@ -10,7 +10,7 @@ from pathlib import Path
 from . import media, pipeline, rough_cut, store
 from .bridge import HUB, BridgeError
 from .config import app_dir
-from .premiere_media import EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png
+from .premiere_media import EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png
 from .premiere_plan import PlanEnv, build_plan, load_recipes
 from .premiere_preset import make_sequence_preset
 from .progress import as_progress
@@ -88,16 +88,28 @@ def _image_size(p: Path):
         return None
 
 
-def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path) -> PlanEnv:
+def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path, nested_preset: Path | None = None) -> PlanEnv:
     tpl = rough_cut.load_template(templates_dir / "rohschnitt_vorlage.json" if (templates_dir / "rohschnitt_vorlage.json").exists() else None)
     s = ep.settings.premiere
     recipes_file = templates_dir / "premiere_rezepte.json"
+    extra = {}
+    pause_src = ep.p.root / s.pause_mov
+    if pause_src.exists():
+        try:
+            extra["pause_media"], extra["play_media"] = (str(x) for x in play_pause_clips(pause_src, pdir(ep) / "anim"))
+        except RuntimeError:
+            pass                                                    # Rückfall: Komposition aus der .aep
+    extra["bars_png"] = str(bars_png(pdir(ep) / "anim" / "Schwarzstreifen.png"))
+    mask = templates_dir / "masken" / s.mask
+    if mask.exists():
+        extra["mask_path"] = str(mask)
     return PlanEnv(
         root=ep.p.root, episode_media=reference, stills_dir=stills_dir,
         credit=lambda text, art, x: credit_png(text, art, pdir(ep) / "credits", x_override=x),
         image_size=_image_size, recipes=load_recipes(recipes_file if recipes_file.exists() else None), doppel=tpl["doppelbild"],
         premiere={"aep": str(ep.p.root / s.aep), "comp": s.comp, "pause_in": s.pause_in, "play_in": s.play_in,
-                  "preset": str(preset), "video_tracks": s.video_tracks, "audio_tracks": s.audio_tracks})
+                  "preset": str(preset), "video_tracks": s.video_tracks, "audio_tracks": s.audio_tracks,
+                  "nested_preset": str(nested_preset or ""), "art_px": s.art_size_px, **extra})
 
 
 # ---------- Bauen ----------
@@ -120,7 +132,8 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     pg.step(4)
     preset = make_sequence_preset(pdir(ep) / "Glorfindel-Rohschnitt.sqpreset", video_tracks=ep.settings.premiere.video_tracks,
                                   audio_tracks=ep.settings.premiere.audio_tracks)
-    plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset, stills_dir))
+    nested_preset = make_sequence_preset(pdir(ep) / "Glorfindel-Artwork.sqpreset", video_tracks=5, audio_tracks=1)
+    plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset, stills_dir, nested_preset))
     plan["calibration"] = calibration()
     plan["save"] = True
     store.write_json(pdir(ep) / f"bauplan_v{res['version']}.json", plan)

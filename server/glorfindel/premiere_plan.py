@@ -70,6 +70,16 @@ def _resolve_chain(recipes: dict, ids: list[dict], dur: float, contour: str | No
     return out
 
 
+def _map_effect(dur: float, slide: float = 0.5) -> dict | None:
+    """Karte: wie die Vorgaben „KarteIN/KarteOUT“ – Transformieren, Position gleitet in 0,5 s von oben (y=-0,5) in die Mitte und am Ende wieder hinaus."""
+    if dur <= 2 * slide:
+        return None
+    top, mid = {"point": [0.5, -0.5]}, {"point": [0.5, 0.5]}
+    kfs = [[0.0, top], [slide, mid], [round(dur - slide, 4), mid], [round(dur, 4), top]]
+    return {"id": "karte", "match_name": "AE.ADBE Geometry", "display": "Transformieren",
+            "params": [{"index": 1, "name": "Position", "value": mid, "keyframes": kfs}]}
+
+
 def _square_crop(w: int, h: int) -> dict:
     """Mittiges Quadrat aus einem Bild w×h als Zuschneiden-Prozente."""
     if w >= h:
@@ -94,6 +104,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
 
     ep_id = reg(env.episode_media, "episode")
     clips: list[dict] = []
+    nested: list[dict] = []                                           # Artwork-Sequenzen (Bild + Maske + Spurmaske-Key)
     blur_periods: list[tuple[float, float]] = []
     fps = pkg["sequence"]["fps"]
     recipes = env.recipes
@@ -125,8 +136,12 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 clips.append({"kind": "still", **base, "media": reg(f, "still"), "name": f.stem})
             elif typ == "anim":
                 pr = env.premiere
-                clips.append({"kind": "anim", **base, "template": c["name"], "name": c["name"], "comp": pr.get("comp", "Play-Pause"),
-                              "comp_in": float(pr.get("pause_in", 28.7) if c["name"] == "Pause" else pr.get("play_in", 0.0))})
+                mov = pr.get("pause_media") if c["name"] == "Pause" else pr.get("play_media")
+                if mov:                                              # eigene .mov-Dateien (Pause.mov bzw. rückwärts als Play.mov)
+                    clips.append({"kind": "anim", **base, "template": c["name"], "name": c["name"], "media": reg(Path(mov), "anim")})
+                else:
+                    clips.append({"kind": "anim", **base, "template": c["name"], "name": c["name"], "comp": pr.get("comp", "Play-Pause"),
+                                  "comp_in": float(pr.get("pause_in", 28.7) if c["name"] == "Pause" else pr.get("play_in", 0.0))})
             elif typ == "blur":
                 blur_periods.append((start, end))                   # wird unten dem Standbild als Effekt zugeordnet
             elif typ == "artwork":
@@ -138,17 +153,27 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 contour = next((e.get("contour") for e in c.get("effects", []) if e["recipe"] == "fancy_in"), None)
                 lay = c.get("layout", "einzel")
                 pos = env.doppel.get("links" if lay == "doppel_links" else "rechts") if lay != "einzel" else None
-                target_px = (pos["size"] * 1080) if pos else 1000.0
-                clip = {"kind": "artwork", **base, "media": reg(f, "artwork", size=list(size)), "name": f.stem,
-                        "crop": _square_crop(*size), "scale": round(target_px / min(size) * 100, 3),
-                        "position": [pos["x"], pos["y"]] if pos else [0.5, 0.5],
-                        "effects": _resolve_chain(recipes, [{"recipe": r} for r in ("drop_shadow", "zoom", "fancy_out", "fancy_in")], dur, contour, fps)}
+                target_px = (pos["size"] * 1080) if pos else float(env.premiere.get("art_px", 1000.0))
+                effects = _resolve_chain(recipes, [{"recipe": r} for r in ("drop_shadow", "zoom", "fancy_out", "fancy_in")], dur, contour, fps)
+                position = [pos["x"], pos["y"]] if pos else [0.5, 0.5]
+                mask = env.premiere.get("mask_path")
+                if mask:
+                    # Wie im Ursprungsschnitt: Bild + Maske in einer verschachtelten Sequenz, Spurmaske-Key; Effekte liegen auf der Sequenz.
+                    nid = f"n{len(nested) + 1}"
+                    nested.append({"id": nid, "name": f"Artwork {len(nested) + 1:02d} {f.stem}", "dur": dur, "image": reg(f, "artwork", size=list(size)),
+                                   "mask": reg(Path(mask), "mask"), "image_track": 2, "mask_track": 4, "matte_track": 5,
+                                   "image_scale": round(target_px / min(size) * 100, 3), "mask_scale": round(target_px / 800 * 100, 3),
+                                   "position": position})
+                    clip = {"kind": "artwork", **base, "nested": nid, "name": f.stem, "effects": effects}
+                else:
+                    clip = {"kind": "artwork", **base, "media": reg(f, "artwork", size=list(size)), "name": f.stem,
+                            "crop": _square_crop(*size), "scale": round(target_px / min(size) * 100, 3), "position": position, "effects": effects}
                 clips.append(clip)
             elif typ == "credit":
                 art = {"credit_amazon": "amazon", "credit_artwork": "artwork", "credit_musik": "musik"}.get(c.get("slot", ""), "artwork")
                 x = env.doppel.get("links" if c.get("layout") == "doppel_links" else "rechts", {}).get("x")                     if art == "artwork" and c.get("layout") in ("doppel_links", "doppel_rechts") else None
                 png = env.credit(c["text"], art, x)
-                clips.append({"kind": "credit", **base, "media": reg(png, "credit"), "name": c["text"],
+                clips.append({"kind": "credit", **base, "art": art, "media": reg(png, "credit"), "name": c["text"],
                               "fade": c.get("fade", 0.0) or 0.0})
             elif typ == "comment":
                 if c.get("placeholder") or not c.get("rec_path"):
@@ -161,22 +186,79 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 if f is None or not f.exists():
                     warnings.append(f"{c.get('scene', '')}: Kartenplatzhalter {c.get('ref')} noch nicht gerendert – nur Marker")
                     continue
-                clips.append({"kind": "map", **base, "media": reg(f, "map"), "name": c.get("ref", "Karte")})
-    _assign_blur(clips, merge_periods(blur_periods), recipes, warnings)
+                clip = {"kind": "map", **base, "media": reg(f, "map"), "name": c.get("ref", "Karte")}
+                fx = _map_effect(dur)
+                if fx:
+                    clip["effects"] = [fx]
+                clips.append(clip)
+    _amazon_vs_artist(clips)
+    periods = merge_periods(blur_periods)
+    _assign_blur(clips, periods, recipes, warnings)
+    _adjust_blur(clips, periods, recipes, env.premiere.get("blur_track", 1))
+    bars = env.premiere.get("bars_png")
+    if bars and clips:
+        clips.append({"kind": "bars", "start": 0.0, "end": snap(max(c["end"] for c in clips)), "track": env.premiere.get("bars_track", 7),
+                      "scene": "", "media": reg(Path(bars), "bars"), "name": "Schwarzstreifen"})
     # Videospuren zuerst, je Spur nach Zeit; Premiere bekommt feste Reihenfolge für deterministische Ergebnisse
     clips.sort(key=lambda c: (0 if c["kind"] != "voice" else 1, c["track"], c["start"]))
     return {
         "schema": SCHEMA, "name": pkg["sequence"]["name"], "slug": pkg.get("slug", ""), "fps": fps,
         "episode_sequence": pkg["episode_sequence"], "bin": f"Glorfindel {pkg['sequence']['name']}",
+        "adjustment_names": ["Einstellungsebene", "Adjustment Layer"],
         "anim_source": {"aep": env.premiere.get("aep", ""), "comp": env.premiere.get("comp", "Play-Pause")},
         "preset": {"path": env.premiere.get("preset", ""), "video_tracks": env.premiere.get("video_tracks", 14),
                    "audio_tracks": env.premiere.get("audio_tracks", 16)},
-        "media": list(media.values()), "clips": clips,
+        "nested_preset": env.premiere.get("nested_preset", ""),
+        "nested": nested, "media": list(media.values()), "clips": clips,
         "markers": [{"time": snap(m["time"]), "name": m["text"][:60], "comment": m["text"], "kind": m.get("kind", "")} for m in pkg.get("markers", [])],
         "warnings": warnings,
         "stats": {"clips": len(clips), "media": len(media), "duration": pkg.get("duration", 0.0),
                   "by_kind": {k: sum(1 for c in clips if c["kind"] == k) for k in sorted({c["kind"] for c in clips})}},
     }
+
+
+def _amazon_vs_artist(clips: list[dict]) -> None:
+    """„© amazon studios“ verschwindet, solange ein Künstler-Credit zu sehen ist (Ursprungsschnitt): Amazon-Credits werden an den Künstler-Credits aufgetrennt."""
+    spans = sorted((c["start"], c["end"]) for c in clips if c["kind"] == "credit" and c.get("art") == "artwork")
+    if not spans:
+        return
+    out: list[dict] = []
+    for c in clips:
+        if c["kind"] != "credit" or c.get("art") != "amazon":
+            out.append(c)
+            continue
+        pieces = [(c["start"], c["end"])]
+        for a, b in spans:
+            nxt = []
+            for x, y in pieces:
+                if b <= x or a >= y:
+                    nxt.append((x, y))
+                    continue
+                if a > x:
+                    nxt.append((x, a))
+                if b < y:
+                    nxt.append((b, y))
+            pieces = nxt
+        for x, y in pieces:
+            if y - x >= 0.1:
+                out.append({**c, "start": round(x, 4), "end": round(y, 4)})
+    clips[:] = out
+
+
+def _adjust_blur(clips: list[dict], periods: list[tuple[float, float]], recipes: dict, track: int) -> None:
+    """Gauß In/Out wie im Ursprungsschnitt: je Spanne eine Einstellungsebene (V2) über Film/Standbild, unter Bildern und Karten.
+    Das Panel setzt sie, wenn das Projekt eine Einstellungsebene enthält; sonst gilt der Weichzeichner direkt am Standbild."""
+    spec = recipes.get("blur", {})
+    ein = spec.get("ein")
+    if not ein:
+        return
+    strength, ramp = ein["keyframes"][-1][1], ein["keyframes"][-1][0]
+    for a, b in periods:
+        d = b - a
+        r = min(ramp, d / 2)
+        kfs = [[0.0, 0.0], [round(r, 4), strength], [round(d - r, 4), strength], [round(d, 4), 0.0]]
+        clips.append({"kind": "adjust", "start": round(a, 4), "end": round(b, 4), "track": track, "scene": "", "name": "Gauß In/Out",
+                      "effects": [{"id": "blur", "match_name": spec["match_name"], "params": [{"index": ein["param_index"], "name": ein["param"], "value": 0.0, "keyframes": kfs}]}]})
 
 
 def merge_periods(periods: list[tuple[float, float]], eps: float = 0.02) -> list[tuple[float, float]]:
@@ -217,5 +299,5 @@ def _assign_blur(clips: list[dict], periods: list[tuple[float, float]], recipes:
             for t, v in ((a - st, 0.0), (a - st + r, strength), (b - st - r, strength), (b - st, 0.0)):
                 if not kfs or t > kfs[-1][0] + 1e-6:
                     kfs.append([round(t, 4), v])
-        stills[i].setdefault("effects", []).append(
+        stills[i].setdefault("fallback_effects", []).append(
             {"id": "blur", "match_name": spec["match_name"], "params": [{"index": ein["param_index"], "name": ein["param"], "value": 0.0, "keyframes": kfs}]})

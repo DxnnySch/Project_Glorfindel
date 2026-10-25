@@ -45,7 +45,7 @@ class Color {
 }
 class Action { constructor(run, label) { this.run = run; this.label = label; } }
 
-const DISPLAY = { 'AE.ADBE AECrop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry2': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner' };
+const DISPLAY = { 'AE.ADBE AECrop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry2': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner', 'AE.ADBE Legacy Key Track Matte': 'Spurmaske-Key' };
 const PARAMS = {
   'AE.ADBE AECrop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
   'AE.ADBE Roughen Edges': [['Kantenart', 'num', 1], ['Konturfarbe', 'color', null], ['Rahmen', 'num', 8], ['Kantenschärfe', 'num', 0], ['Fraktaleinfluss', 'num', 1], ['Skalieren', 'num', 100],
@@ -53,6 +53,7 @@ const PARAMS = {
   'AE.ADBE Drop Shadow': [['Schattenfarbe', 'color', null], ['Deckkraft', 'num', 50], ['Richtung', 'num', 135], ['Abstand', 'num', 10], ['Weiche Kante', 'num', 5], ['Nur Schatten', 'bool', false]],
   'AE.ADBE Geometry2': [['Ankerpunkt', 'point', null], ['Position', 'point', null], ['Einheitliche Skalierung', 'bool', true], ['Skalierungshöhe', 'num', 100], ['Skalierungsbreite', 'num', 100],
     ['Verzerren', 'num', 0], ['Achse der Verzerrung', 'num', 0], ['Drehung', 'num', 0], ['Deckkraft', 'num', 100]],
+  'AE.ADBE Legacy Key Track Matte': [['Maske:', 'num', 1], ['Compositing mit', 'num', 0], ['Umkehren', 'bool', false]],
   'AE.ADBE Gaussian Blur 2': [['Weichzeichnung', 'num', 0], ['Weichzeichnungsdimensionen', 'num', 0], ['Kantenpixel wiederholen', 'bool', false]],
 };
 
@@ -88,7 +89,7 @@ class Component {
 
 class Chain {
   constructor(isVideo) {
-    this.comps = isVideo ? [new Component('Bewegung', [['Position', 'point'], ['Skalierung', 'num', 100], ['Einheitliche Skalierung', 'bool', true]].map(([a, b, c]) => [a, b, c])),
+    this.comps = isVideo ? [new Component('Bewegung', [['Position', 'point'], ['Skalieren', 'num', 100], ['Einheitliche Skalierung', 'bool', true]].map(([a, b, c]) => [a, b, c])),
       new Component('Deckkraft', [['Deckkraft', 'num', 100]])] : [];
     this.comps[0] && (this.comps[0].params[0].value = new PointF(0.5, 0.5));
   }
@@ -104,6 +105,8 @@ class TrackItem {
   async getInPoint() { return new TickTime(this.inPt); }
   async getOutPoint() { return new TickTime(this.inPt + (this.end - this.start)); }
   async getName() { return this.name; }
+  async isAdjustmentLayer() { return !!this.item.adjustment; }
+  async getProjectItem() { return this.item; }
   async getComponentChain() { return this.chain; }
   createSetEndAction(t) { if (!(t instanceof TickTime)) throw new Error('TickTime erwartet'); return new Action(() => { this.end = t.seconds; }, 'setend'); }
   createSetNameAction(n) { return new Action(() => { this.name = n; }, 'name'); }

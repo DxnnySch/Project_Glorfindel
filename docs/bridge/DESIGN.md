@@ -73,3 +73,11 @@ benannte Operationen aus (keine freie Skriptausführung).
 - Mehrere Parameter heißen gleich („Zufallsparameter“): Position in der Liste gewinnt vor dem Namen (`findParam`).
 - Keyframe-Zeiten sind clip-relativ (`keyframeOrigin: clipanfang`), Farben 0..1.
 - Diagnose ohne Neubau: `POST /api/bridge/call` mit `probe.bin`, `probe.place`, `sequence.dump`, `introspect`; Selbsttest `POST /api/bridge/selftest`. Panel-Änderungen wirken erst nach einem Premiere-Neustart.
+
+## Umbau nach Rückmeldung (Panel 0.4.0)
+- **Artworks** liegen wie im Ursprungsschnitt in je einer verschachtelten Sequenz „Artwork NN <Name>“ (Vorgabe `Glorfindel-Artwork.sqpreset`, 5 Videospuren): Bild auf V3, Maske (`vorlagen/masken/Maske Quadrat.png`) auf V5, am Bild der Effekt „Spurmaske-Key“ (Maske: Spur 5, Compositing mit Alpha). Position/Größe stehen in den Motion-Werten von Bild und Maske, **alle Effekte (Schlagschatten, Zoom, Fancy In/Out) liegen auf dem Sequenz-Clip** in der Hauptsequenz. Maskengröße = Zielkante/800 · 100 %, Bildskalierung = Zielkante/kürzeste Bildseite · 100 %.
+- **Pause/Play** aus `Videomaterial/VFX/Pause.mov`; Play ist daraus per ffmpeg rückwärts erzeugt (`Play.mov`, ProRes 4444 mit Alpha, einmalig im Cache). Die After-Effects-Komposition ist nur noch Rückfall.
+- **Karten** bekommen „Transformieren“ mit Position-Keyframes wie die Vorgaben KarteIN/KarteOUT (0,5 s von oben hinein/hinaus). Premiere-Vorgaben (.prfpset) lassen sich per UXP nicht anwenden; ihre Werte sind in `vorlagen/premiere_rezepte.json`/Plan übernommen.
+- **Gauß In/Out** als Einstellungsebene auf V2 (je Artwork-Spanne ein Clip mit Gaußscher Weichzeichner 0→15→0). Die API kann keine Einstellungsebene anlegen, nur eine vorhandene platzieren: einmal **Datei → Neu → Einstellungsebene** (Name „Einstellungsebene“) im Projekt anlegen. Fehlt sie, liegt der Weichzeichner ersatzweise direkt am Standbild (Hinweis im Bericht).
+- **Schwarzstreifen** (V8, über die ganze Länge, unter den Credits): PNG 1920×1080 mit 13 % schwarz oben/unten (`Schwarzstreifen.png`).
+- **© amazon studios** wird an den Künstler-Credits aufgetrennt und ist nie gleichzeitig mit ihnen zu sehen.

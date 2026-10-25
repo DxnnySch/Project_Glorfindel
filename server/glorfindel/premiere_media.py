@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 from pathlib import Path
 
 from . import media
@@ -95,4 +96,33 @@ def credit_png(text: str, kind: str, dst_dir: Path, *, font_px: int = 26, x_over
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(layer).text((x - l, y - t), text, font=font, fill=(255, 255, 255, 255))
     Image.alpha_composite(shadow, layer).save(dst)
+    return dst
+
+
+def play_pause_clips(pause_src: Path, out_dir: Path) -> tuple[Path, Path]:
+    """Pause-Animation (Quelle) und daraus rückwärts abgespieltes „Play“ als eigene .mov (ProRes 4444 mit Alpha, einmalig erzeugt)."""
+    play = out_dir / "Play.mov"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if not play.exists() or play.stat().st_mtime < pause_src.stat().st_mtime:
+        tmp = play.with_name("Play.tmp.mov")
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(pause_src), "-vf", "reverse", "-an", "-c:v", "prores_ks", "-profile:v", "4444",
+               "-pix_fmt", "yuva444p10le", str(tmp)]
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0 or not tmp.exists():
+            raise RuntimeError(f"Play-Animation konnte nicht erzeugt werden: {r.stderr.strip()[-300:]}")
+        tmp.replace(play)
+    return pause_src, play
+
+
+def bars_png(dst: Path, *, size: tuple[int, int] = (1920, 1080), fraction: float = 0.13) -> Path:
+    """Schwarzstreifen oben und unten (je 13 %, wie „Zuschneiden“ im Ursprungsschnitt), Mitte transparent."""
+    from PIL import Image, ImageDraw
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    w, h = size
+    bar = round(h * fraction)
+    im = Image.new("RGBA", size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rectangle([0, 0, w, bar - 1], fill=(0, 0, 0, 255))
+    d.rectangle([0, h - bar, w, h], fill=(0, 0, 0, 255))
+    im.save(dst)
     return dst

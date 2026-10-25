@@ -34,7 +34,7 @@ function makeHandlers(ppro) {
 }
 
 class Bridge {
-  constructor({ ppro, WebSocketImpl, fetchImpl, hostInfo = {}, version = '0.3.10', log = () => {}, onStatus = () => {} }) {
+  constructor({ ppro, WebSocketImpl, fetchImpl, hostInfo = {}, version = '0.4.0', log = () => {}, onStatus = () => {} }) {
     this.ppro = ppro;
     this.WS = WebSocketImpl;
     this.fetch = fetchImpl;

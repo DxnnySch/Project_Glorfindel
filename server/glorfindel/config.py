@@ -48,6 +48,9 @@ class PremiereSettings(BaseModel):
     comp: str = "Play-Pause"
     pause_in: float = 28.7                                                  # Startzeit der Pause-Animation in der Komposition (s)
     play_in: float = 0.0
+    pause_mov: str = "Videomaterial/VFX/Pause.mov"                          # Pause-Animation (ProRes mit Alpha); Play entsteht daraus rückwärts
+    mask: str = "Maske Quadrat.png"                                         # Maske für Artworks (Ordner vorlagen/masken)
+    art_size_px: int = 1000                                                 # Kantenlänge eines einzelnen Artworks im 1080p-Bild
     video_tracks: int = 14                                                  # Spuren der Hauptsequenz (wie im Ursprungsschnitt)
     audio_tracks: int = 16
 

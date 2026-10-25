@@ -3,7 +3,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, txp, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate } = require('./core');
+const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 
@@ -95,7 +95,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   };
 
   // ---- 2. Pause/Play aus der After-Effects-Komposition ----
-  if (plan.clips.some((c) => c.kind === 'anim') && plan.anim_source && plan.anim_source.aep) {
+  if (plan.clips.some((c) => c.kind === 'anim' && !c.media) && plan.anim_source && plan.anim_source.aep) {
     await guarded(report, 'After-Effects-Komposition', async () => {
       const project = await getProject();
       const bin = await media.getBin(ppro, project, plan.bin);
@@ -103,6 +103,35 @@ async function runPlan(ppro, plan, emit = () => {}) {
       invalidate();
       if (ok === false) throw new Error('Import der Komposition „' + plan.anim_source.comp + '“ abgelehnt');
     });
+  }
+
+  // ---- 2b. Artwork-Sequenzen: Bild (V3) + Maske (V5) + Spurmaske-Key, wie im Ursprungsschnitt ----
+  const nestedItem = async (name) => {
+    const project = await getProject();
+    const root = await project.getRootItem();
+    for (const it of await walkItems(ppro, root)) {
+      if (it.name !== name) continue;
+      const c = asClip(ppro, it);
+      if (c && (await c.isSequence())) return it;            // rohes ProjectItem (nur das nimmt der SequenceEditor an)
+    }
+    return null;
+  };
+
+  // Einstellungsebene (für Gauß In/Out): die API kann keine anlegen, aber eine vorhandene im Projekt platzieren.
+  const adjustmentItem = async () => {
+    const want = (plan.adjustment_names || []).map((x) => x.toLowerCase());
+    const root = await (await getProject()).getRootItem();
+    for (const it of await walkItems(ppro, root)) {
+      if (!want.includes(String(it.name).toLowerCase())) continue;
+      const c = asClip(ppro, it);
+      if (c && !(await c.isSequence())) return it;
+    }
+    return null;
+  };
+  let useAdjust = false;
+  if (plan.clips.some((c) => c.kind === 'adjust')) {
+    useAdjust = !!(await guarded(report, 'Einstellungsebene suchen', adjustmentItem));
+    if (!useAdjust) report.warnings.push('Keine Einstellungsebene im Projekt gefunden (Datei → Neu → Einstellungsebene, Name „Einstellungsebene“): Gauß In/Out liegt vorerst direkt auf den Standbildern.');
   }
 
   // ---- 3. Episoden-Sequenz (verschachtelt: hier wird später das HQ-Medium getauscht) ----
@@ -144,6 +173,52 @@ async function runPlan(ppro, plan, emit = () => {}) {
   }
   await refresh();
 
+  // ---- 4b. Artwork-Sequenzen bauen ----
+  const nestedName = {};
+  const nestedFailed = new Set();
+  const buildNested = async (n) => {
+    const guid = await retryStale(async () => {
+      const seq = await (await getProject()).createSequenceWithPresetPath(n.name, plan.nested_preset);
+      const g = String(seq.guid);
+      invalidate();
+      return g;
+    });
+    const locator = (track) => async () => {
+      const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), guid), 'video', track, 0);
+      if (!ti) throw new Error('Clip auf V' + (track + 1) + ' nicht gefunden');
+      return ti;
+    };
+    const parts = [['Bild', n.image, n.image_track, n.image_scale], ['Maske', n.mask, n.mask_track, n.mask_scale]];
+    for (const [label, media_, track] of parts) {
+      await at('Artwork ' + label + ' setzen', async () => {
+        await placeClip(ppro, guid, () => fresh(media_, true), 0, track, -1);
+        const ti = await locator(track)();
+        if (Math.abs((await ti.getEndTime()).seconds - n.dur) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, n.dur))));
+      });
+    }
+    for (const [label, , track, scale] of parts) {
+      await at('Artwork ' + label + ': Position/Größe', async () => { await fx.setMotion(ppro, await getProject(), locator(track), { position: n.position, scale }, ctx); });
+    }
+    const matte = { id: 'spurmaske', match_name: 'AE.ADBE Legacy Key Track Matte', display: 'Spurmaske-Key',
+      params: [{ index: 0, names: ['Maske:', 'Matte:', 'Mask:'], value: n.matte_track }, { index: 1, names: ['Compositing mit', 'Composite Using'], value: 0 }] };
+    const r = await at('Spurmaske-Key', async () => fx.addEffect(ppro, await getProject(), locator(n.image_track), matte, ctx));
+    if (r.fehlend.length) report.warnings.push('Spurmaske-Key (' + n.name + '): ' + r.fehlend.join(', '));
+    nestedName[n.id] = n.name;
+  };
+  if ((plan.nested || []).length) {
+    say('Artwork-Sequenzen anlegen …');
+    for (const n of plan.nested) {
+      await guarded(report, 'Artwork-Sequenz ' + n.name, async () => {
+        try { await buildNested(n); } catch (e) { nestedFailed.add(n.id); throw e; }
+      });
+    }
+    await guarded(report, 'Hauptsequenz wieder aktivieren', async () => {
+      const project = await getProject();
+      await project.setActiveSequence(await sequenceByGuid(ppro, project, mainGuid));
+      invalidate();
+    });
+  }
+
   // ---- 5. Clips ----
   const total = plan.clips.length;
   let done = 0;
@@ -151,6 +226,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   for (const c of plan.clips) {
     done++;
     if (done % 10 === 0 || done === total) say('Clips setzen: ' + done + ' von ' + total, done, total);
+    if (c.kind === 'adjust' && !useAdjust) continue;
     await guarded(report, c.kind + ' ' + (c.name || '') + ' @' + c.start.toFixed(2), async () => {
       const dur = c.end - c.start;
       const isAudio = c.kind === 'voice';
@@ -167,12 +243,19 @@ async function runPlan(ppro, plan, emit = () => {}) {
         let key, audioIdx = -1, videoIdx = c.track, inOut = null;
         if (c.kind === 'episode') { key = 'epSeq'; audioIdx = c.audio; inOut = [c.src_in, c.src_out]; }
         else if (c.kind === 'voice') { key = c.media; audioIdx = c.track; videoIdx = 0; inOut = [c.src_in, c.src_out]; }
-        else if (c.kind === 'anim') { key = 'comp'; inOut = [c.comp_in, c.comp_in + dur]; }
+        else if (c.kind === 'anim' && !c.media) { key = 'comp'; inOut = [c.comp_in, c.comp_in + dur]; }
+        else if (c.nested) { key = 'nested'; }
+        else if (c.kind === 'adjust') { key = 'adjust'; }
         else { key = c.media; }
-        const src = await fresh(key);
-        if (!src) throw new Error('Quelle fehlt');
-        if (inOut) await txp(ppro, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
-        await placeClip(ppro, mainGuid, () => fresh(key, true), c.start, videoIdx, audioIdx);   // nach der Änderung (In/Out) ist `src` ungültig
+        const getItem = key === 'adjust' ? adjustmentItem : key === 'nested'
+          ? async () => { if (!nestedName[c.nested]) throw new Error('Artwork-Sequenz wurde nicht angelegt'); return nestedItem(nestedName[c.nested]); }
+          : () => fresh(key, true);
+        if (inOut) {
+          const src = await fresh(key);
+          if (!src) throw new Error('Quelle fehlt');
+          await txp(ppro, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
+        }
+        await placeClip(ppro, mainGuid, getItem, c.start, videoIdx, audioIdx);   // nach der Änderung (In/Out) ist `src` ungültig
       }, refresh);
       const ti = await locate();
       if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
@@ -181,12 +264,12 @@ async function runPlan(ppro, plan, emit = () => {}) {
       if (isAudio) return;
 
       // Effekte je nach Art des Clips
-      if (c.kind === 'artwork') {
+      if (c.kind === 'artwork' && c.crop) {
         const r1 = await fx.addCrop(ppro, await getProject(), locate, c.crop, ctx);
         if (r1.fehlend.length) report.warnings.push('Zuschneiden: nicht gesetzt: ' + r1.fehlend.join(', '));
         await fx.setMotion(ppro, await getProject(), locate, { position: c.position, scale: c.scale }, ctx);
       }
-      for (const e of c.effects || []) {
+      for (const e of [...(c.effects || []), ...(useAdjust ? [] : c.fallback_effects || [])]) {
         ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? (await (await locate()).getInPoint()).seconds : 0;
         const r = await fx.addEffect(ppro, await getProject(), locate, e, ctx);
         report.effects[e.id] = (report.effects[e.id] || 0) + 1;

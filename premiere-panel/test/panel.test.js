@@ -15,7 +15,7 @@ const fx = require('../lib/effects');
 
 const PLAN = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'plan.json'), 'utf8'));
 const clone = (o) => JSON.parse(JSON.stringify(o));
-const newEnv = () => fake.create({ presets: { 'C:/cache/rohschnitt.sqpreset': { video: 14, audio: 16 } } });
+const newEnv = () => fake.create({ presets: { 'C:/cache/rohschnitt.sqpreset': { video: 14, audio: 16 }, 'C:/cache/artwork.sqpreset': { video: 5, audio: 1 } } });
 const mainSeq = (project) => project.sequences.find((s) => s.name === PLAN.name);
 const trackItems = (seq, kind, i) => seq.tracks[kind][i].items;
 const compNames = (ti) => ti.chain.comps.map((c) => c.name);
@@ -26,7 +26,7 @@ test('Bau: alle Clips landen auf den richtigen Spuren, ohne Fehler', async () =>
   const events = [];
   const rep = await runPlan(ppro, clone(PLAN), (n, d) => events.push([n, d]));
   assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
-  assert.deepEqual(rep.placed, { episode: 3, still: 2, anim: 3, artwork: 4, credit: 6, voice: 1, marker: PLAN.markers.length });
+  assert.deepEqual(rep.placed, { episode: 3, still: 2, anim: 3, artwork: 4, credit: 8, voice: 1, bars: 1, marker: PLAN.markers.length });
   const main = mainSeq(project);
   assert.equal(main.tracks.video.length, 14);
   assert.equal(main.tracks.audio.length, 16);
@@ -36,7 +36,7 @@ test('Bau: alle Clips landen auf den richtigen Spuren, ohne Fehler', async () =>
   assert.equal(trackItems(main, 'audio', 1).length, 1, 'Sprecher Philipp auf A2');
   assert.equal(trackItems(main, 'video', 6).length, 3, 'Pause/Play auf V7');
   assert.ok(trackItems(main, 'video', 2).length + trackItems(main, 'video', 3).length === 4, 'Artworks auf V3/V4');
-  assert.equal(trackItems(main, 'video', 8).length, 2, '© amazon studios auf V9');
+  assert.equal(trackItems(main, 'video', 8).length, 4, '© amazon studios auf V9, an den Künstler-Credits unterbrochen');
   assert.equal(trackItems(main, 'video', 9).length + trackItems(main, 'video', 12).length, 4, 'Artwork-Credits auf V10/V13');
   assert.ok(events.some(([n]) => n === 'progress'));
   assert.equal(project.saved, 1);
@@ -58,17 +58,29 @@ test('Episoden-Sequenz ist verschachtelt, Segmente tragen die geplanten Quellzei
   }
 });
 
-test('Artwork: Zuschnitt, Skalierung, Effektkette wie im Ursprungsschnitt, Farben in 0..1, Keyframes in Clipzeit', async () => {
+test('Artwork: verschachtelte Sequenz mit Bild, Maske und Spurmaske-Key; Effekte liegen auf der Sequenz, Farben 0..1, Keyframes in Clipzeit', async () => {
   const { ppro, project } = newEnv();
-  await runPlan(ppro, clone(PLAN));
+  const rep = await runPlan(ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
   const main = mainSeq(project);
-  const art = PLAN.clips.find((c) => c.kind === 'artwork' && c.scale === 100);
+  const art = PLAN.clips.find((c) => c.kind === 'artwork');
+  const n = PLAN.nested.find((x) => x.id === art.nested);
+  const nested = project.sequences.find((s) => s.name === n.name);
+  assert.ok(nested, 'Artwork-Sequenz angelegt');
+  assert.equal(nested.tracks.video.length, 5);
+  const img = trackItems(nested, 'video', 2)[0], mask = trackItems(nested, 'video', 4)[0];
+  assert.ok(img && mask, 'Bild auf V3, Maske auf V5');
+  assert.ok(/Maske/.test(mask.item.path));
+  assert.ok(Math.abs(img.end - n.dur) < 0.004 && Math.abs(mask.end - n.dur) < 0.004, 'beide so lang wie das Artwork');
+  assert.equal(param(img.chain.comps[0], 'Skalieren').value, n.image_scale);
+  assert.equal(param(mask.chain.comps[0], 'Skalieren').value, n.mask_scale);
+  const matte = img.chain.comps.find((c) => c.name === 'AE.ADBE Legacy Key Track Matte');
+  assert.ok(matte, 'Spurmaske-Key am Bild');
+  assert.equal(param(matte, 'Maske:').value, 5);
   const ti = [...trackItems(main, 'video', 2), ...trackItems(main, 'video', 3)].find((t) => Math.abs(t.start - art.start) < 0.004);
-  assert.deepEqual(compNames(ti), ['Bewegung', 'Deckkraft', 'AE.ADBE AECrop', 'AE.ADBE Drop Shadow', 'AE.ADBE Geometry2', 'AE.ADBE Roughen Edges', 'AE.ADBE Roughen Edges']);
-  const [motion, , crop, shadow, geo, out, inn] = ti.chain.comps;
-  assert.equal(param(crop, 'Links').value, 25);
-  assert.equal(param(crop, 'Rechts').value, 25);
-  assert.equal(param(motion, 'Skalierung').value, 100);
+  assert.equal(ti.item, nested.item, 'Hauptsequenz enthält die verschachtelte Sequenz');
+  assert.deepEqual(compNames(ti), ['Bewegung', 'Deckkraft', 'AE.ADBE Drop Shadow', 'AE.ADBE Geometry2', 'AE.ADBE Roughen Edges', 'AE.ADBE Roughen Edges']);
+  const [, , shadow, geo, out, inn] = ti.chain.comps;
   assert.equal(param(shadow, 'Abstand').value, 31);
   assert.deepEqual(param(geo, 'Skalierungshöhe').kfs.at(-1), [120, 240]);
   const col = param(inn, 'Konturfarbe').value;
@@ -77,6 +89,15 @@ test('Artwork: Zuschnitt, Skalierung, Effektkette wie im Ursprungsschnitt, Farbe
   const dur = art.end - art.start;
   const outKf = param(out, 'Rahmen').kfs;
   assert.ok(Math.abs(outKf[0][0] - (dur - 0.5333)) < 0.01 && outKf.at(-1)[1] === 500 && Math.abs(outKf.at(-1)[0] - (dur - 0.0167)) < 0.01);
+});
+
+test('Pause/Play kommen aus eigenen .mov-Dateien (keine After-Effects-Komposition)', async () => {
+  const { ppro, project } = newEnv();
+  await runPlan(ppro, clone(PLAN));
+  const v7 = trackItems(mainSeq(project), 'video', 6);
+  assert.equal(v7.length, 3);
+  assert.ok(v7.every((t) => /(Pause|Play)\.mov$/.test(t.item.path)));
+  assert.ok(!project.calls.some((c) => c[0] === 'importAEComps'));
 });
 
 test('Credits blenden über die Deckkraft ein und aus; Standbild bekommt den Weichzeichner', async () => {
@@ -151,7 +172,8 @@ test('Auslesen: Projekt und Sequenz mit Effekten, Parametern und Keyframes', asy
   await runPlan(ppro, clone(PLAN));
   const pd = await dump.projectDump(ppro);
   assert.equal(pd.open, true);
-  assert.deepEqual(pd.sequences.map((s) => s.name).sort(), [PLAN.name, PLAN.episode_sequence].sort());
+  assert.deepEqual(pd.sequences.map((s) => s.name).filter((n) => !n.startsWith('Artwork ')).sort(), [PLAN.name, PLAN.episode_sequence].sort());
+  assert.equal(pd.sequences.filter((s) => s.name.startsWith('Artwork ')).length, PLAN.nested.length);
   const sd = await dump.sequenceDump(ppro, { name: PLAN.name, maxItems: 50 });
   assert.equal(sd.video, 14);
   const v3 = sd.tracks.find((t) => t.track === 'V3') || sd.tracks.find((t) => t.track === 'V4');
@@ -230,4 +252,37 @@ test('Bridge: koppelt per Token, beantwortet Aufrufe, meldet Fortschritt, lehnt 
   assert.ok(ws.sent.some((m) => m.t === 'event' && m.id === 3 && m.name === 'progress'));
   ws.close();
   await session;
+});
+
+test('Amazon-Credit ist nie zugleich mit einem Künstler-Credit zu sehen; Schwarzstreifen liegen auf V8 über die ganze Länge', async () => {
+  const { ppro, project } = newEnv();
+  await runPlan(ppro, clone(PLAN));
+  const main = mainSeq(project);
+  const amazon = trackItems(main, 'video', 8);
+  const artists = [...trackItems(main, 'video', 9), ...trackItems(main, 'video', 12)];
+  for (const a of amazon) for (const b of artists) assert.ok(a.end <= b.start + 0.004 || a.start >= b.end - 0.004, 'Überlappung ' + [a.start, a.end, b.start, b.end]);
+  const bars = trackItems(main, 'video', 7);
+  assert.equal(bars.length, 1);
+  assert.equal(bars[0].name, 'Schwarzstreifen');
+  assert.ok(bars[0].start < 0.01 && Math.abs(bars[0].end - Math.max(...PLAN.clips.filter((c) => c.kind !== 'bars' && c.kind !== 'adjust').map((c) => c.end))) < 0.01);
+});
+
+test('Gauß In/Out: mit Einstellungsebene im Projekt liegt es auf V2, ohne Einstellungsebene als Rückfall am Standbild (mit Hinweis)', async () => {
+  const withAdj = newEnv();
+  const adj = new withAdj.ClipItem(withAdj.project, 'Einstellungsebene', null, { hasVideo: true, length: 5 });
+  adj.adjustment = true;
+  (await withAdj.project.getRootItem()).children.push(adj);       // roh angelegt wie „Datei → Neu → Einstellungsebene“
+  const rep = await runPlan(withAdj.ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const v2 = trackItems(mainSeq(withAdj.project), 'video', 1);
+  assert.equal(v2.length, PLAN.clips.filter((c) => c.kind === 'adjust').length);
+  const kf = v2[0].chain.comps.find((c) => c.name === 'AE.ADBE Gaussian Blur 2').params[0].kfs;
+  assert.deepEqual(kf.map(([, v]) => v), [0, 15, 15, 0]);
+  const stills = trackItems(mainSeq(withAdj.project), 'video', 0).filter((t) => t.item.name.endsWith('.png'));
+  assert.ok(stills.every((t) => !t.chain.comps.some((c) => c.name === 'AE.ADBE Gaussian Blur 2')), 'kein Doppel-Blur');
+  assert.ok(!rep.warnings.some((w) => /Einstellungsebene/.test(w)));
+  const without = newEnv();
+  const rep2 = await runPlan(without.ppro, clone(PLAN));
+  assert.ok(rep2.warnings.some((w) => /Keine Einstellungsebene/.test(w)));
+  assert.equal(trackItems(mainSeq(without.project), 'video', 1).length, 0);
 });

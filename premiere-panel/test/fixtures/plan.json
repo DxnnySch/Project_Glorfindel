@@ -5,6 +5,10 @@
  "fps": 60,
  "episode_sequence": "S3 E1 Sequenz",
  "bin": "Glorfindel Rohschnitt S3 E1 v1",
+ "adjustment_names": [
+  "Einstellungsebene",
+  "Adjustment Layer"
+ ],
  "anim_source": {
   "aep": "F:/OneDrive/Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep",
   "comp": "Play-Pause"
@@ -14,6 +18,73 @@
   "video_tracks": 14,
   "audio_tracks": 16
  },
+ "nested_preset": "C:/cache/artwork.sqpreset",
+ "nested": [
+  {
+   "id": "n1",
+   "name": "Artwork 01 alan lee - hafen",
+   "dur": 4.616666666666665,
+   "image": "m8",
+   "mask": "m9",
+   "image_track": 2,
+   "mask_track": 4,
+   "matte_track": 5,
+   "image_scale": 100.0,
+   "mask_scale": 125.0,
+   "position": [
+    0.5,
+    0.5
+   ]
+  },
+  {
+   "id": "n2",
+   "name": "Artwork 02 alan lee - hafen",
+   "dur": 1.5000000000000036,
+   "image": "m8",
+   "mask": "m9",
+   "image_track": 2,
+   "mask_track": 4,
+   "matte_track": 5,
+   "image_scale": 66.96,
+   "mask_scale": 83.7,
+   "position": [
+    0.27,
+    0.5
+   ]
+  },
+  {
+   "id": "n3",
+   "name": "Artwork 03 john howe",
+   "dur": 6.916666666666666,
+   "image": "m12",
+   "mask": "m9",
+   "image_track": 2,
+   "mask_track": 4,
+   "matte_track": 5,
+   "image_scale": 125.0,
+   "mask_scale": 125.0,
+   "position": [
+    0.5,
+    0.5
+   ]
+  },
+  {
+   "id": "n4",
+   "name": "Artwork 04 john howe",
+   "dur": 1.5000000000000036,
+   "image": "m12",
+   "mask": "m9",
+   "image_track": 2,
+   "mask_track": 4,
+   "matte_track": 5,
+   "image_scale": 83.7,
+   "mask_scale": 83.7,
+   "position": [
+    0.73,
+    0.5
+   ]
+  }
+ ],
  "media": [
   {
    "id": "m1",
@@ -37,11 +108,21 @@
   },
   {
    "id": "m5",
+   "path": "F:/OneDrive/Videomaterial/VFX/Pause.mov",
+   "kind": "anim"
+  },
+  {
+   "id": "m6",
+   "path": "C:/cache/anim/Play.mov",
+   "kind": "anim"
+  },
+  {
+   "id": "m7",
    "path": "F:/OneDrive/Aufnahmen/philipp.wav",
    "kind": "voice"
   },
   {
-   "id": "m6",
+   "id": "m8",
    "path": "F:/OneDrive/Bilder/alan lee - hafen.jpg",
    "kind": "artwork",
    "size": [
@@ -50,23 +131,9 @@
    ]
   },
   {
-   "id": "m7",
-   "path": "F:/OneDrive/credits/credit_m7.png",
-   "kind": "credit"
-  },
-  {
-   "id": "m8",
-   "path": "F:/OneDrive/credits/credit_m8.png",
-   "kind": "credit"
-  },
-  {
    "id": "m9",
-   "path": "F:/OneDrive/Bilder/john howe.jpg",
-   "kind": "artwork",
-   "size": [
-    800,
-    1200
-   ]
+   "path": "C:/vorlagen/masken/Maske Quadrat.png",
+   "kind": "mask"
   },
   {
    "id": "m10",
@@ -77,6 +144,30 @@
    "id": "m11",
    "path": "F:/OneDrive/credits/credit_m11.png",
    "kind": "credit"
+  },
+  {
+   "id": "m12",
+   "path": "F:/OneDrive/Bilder/john howe.jpg",
+   "kind": "artwork",
+   "size": [
+    800,
+    1200
+   ]
+  },
+  {
+   "id": "m13",
+   "path": "F:/OneDrive/credits/credit_m13.png",
+   "kind": "credit"
+  },
+  {
+   "id": "m14",
+   "path": "F:/OneDrive/credits/credit_m14.png",
+   "kind": "credit"
+  },
+  {
+   "id": "m15",
+   "path": "C:/cache/anim/Schwarzstreifen.png",
+   "kind": "bars"
   }
  ],
  "clips": [
@@ -112,7 +203,7 @@
    "scene": "sz_01",
    "media": "m3",
    "name": "1",
-   "effects": [
+   "fallback_effects": [
     {
      "id": "blur",
      "match_name": "AE.ADBE Gaussian Blur 2",
@@ -164,7 +255,7 @@
    "scene": "sz_02",
    "media": "m4",
    "name": "2",
-   "effects": [
+   "fallback_effects": [
     {
      "id": "blur",
      "match_name": "AE.ADBE Gaussian Blur 2",
@@ -197,24 +288,91 @@
    ]
   },
   {
+   "kind": "adjust",
+   "start": 12.0333,
+   "end": 21.2667,
+   "track": 1,
+   "scene": "",
+   "name": "Gauß In/Out",
+   "effects": [
+    {
+     "id": "blur",
+     "match_name": "AE.ADBE Gaussian Blur 2",
+     "params": [
+      {
+       "index": 0,
+       "name": "Weichzeichnung",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         15.0
+        ],
+        [
+         8.7333,
+         15.0
+        ],
+        [
+         9.2333,
+         0.0
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "adjust",
+   "start": 31.45,
+   "end": 32.95,
+   "track": 1,
+   "scene": "",
+   "name": "Gauß In/Out",
+   "effects": [
+    {
+     "id": "blur",
+     "match_name": "AE.ADBE Gaussian Blur 2",
+     "params": [
+      {
+       "index": 0,
+       "name": "Weichzeichnung",
+       "value": 0.0,
+       "keyframes": [
+        [
+         0.0,
+         0.0
+        ],
+        [
+         0.5,
+         15.0
+        ],
+        [
+         1.0,
+         15.0
+        ],
+        [
+         1.5,
+         0.0
+        ]
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
    "kind": "artwork",
    "start": 12.033333333333333,
    "end": 16.65,
    "track": 2,
    "scene": "sz_01",
-   "media": "m6",
+   "nested": "n1",
    "name": "alan lee - hafen",
-   "crop": {
-    "links": 25.0,
-    "rechts": 25.0,
-    "oben": 0.0,
-    "unten": 0.0
-   },
-   "scale": 100.0,
-   "position": [
-    0.5,
-    0.5
-   ],
    "effects": [
     {
      "id": "drop_shadow",
@@ -595,19 +753,8 @@
    "end": 32.95,
    "track": 2,
    "scene": "sz_02",
-   "media": "m6",
+   "nested": "n2",
    "name": "alan lee - hafen",
-   "crop": {
-    "links": 25.0,
-    "rechts": 25.0,
-    "oben": 0.0,
-    "unten": 0.0
-   },
-   "scale": 66.96,
-   "position": [
-    0.27,
-    0.5
-   ],
    "effects": [
     {
      "id": "drop_shadow",
@@ -988,19 +1135,8 @@
    "end": 21.266666666666666,
    "track": 3,
    "scene": "sz_01",
-   "media": "m9",
+   "nested": "n3",
    "name": "john howe",
-   "crop": {
-    "links": 0.0,
-    "rechts": 0.0,
-    "oben": 16.666666666666664,
-    "unten": 16.666666666666664
-   },
-   "scale": 125.0,
-   "position": [
-    0.5,
-    0.5
-   ],
    "effects": [
     {
      "id": "drop_shadow",
@@ -1381,19 +1517,8 @@
    "end": 32.95,
    "track": 3,
    "scene": "sz_02",
-   "media": "m9",
+   "nested": "n4",
    "name": "john howe",
-   "crop": {
-    "links": 0.0,
-    "rechts": 0.0,
-    "oben": 16.666666666666664,
-    "unten": 16.666666666666664
-   },
-   "scale": 83.7,
-   "position": [
-    0.73,
-    0.5
-   ],
    "effects": [
     {
      "id": "drop_shadow",
@@ -1776,8 +1901,7 @@
    "scene": "sz_01",
    "template": "Pause",
    "name": "Pause",
-   "comp": "Play-Pause",
-   "comp_in": 28.7
+   "media": "m5"
   },
   {
    "kind": "anim",
@@ -1787,8 +1911,7 @@
    "scene": "sz_01",
    "template": "Play",
    "name": "Play",
-   "comp": "Play-Pause",
-   "comp_in": 0.0
+   "media": "m6"
   },
   {
    "kind": "anim",
@@ -1798,15 +1921,35 @@
    "scene": "sz_02",
    "template": "Pause",
    "name": "Pause",
-   "comp": "Play-Pause",
-   "comp_in": 28.7
+   "media": "m5"
+  },
+  {
+   "kind": "bars",
+   "start": 0.0,
+   "end": 34.15,
+   "track": 7,
+   "scene": "",
+   "media": "m15",
+   "name": "Schwarzstreifen"
   },
   {
    "kind": "credit",
    "start": 0.0,
+   "end": 12.0333,
+   "track": 8,
+   "scene": "sz_01",
+   "art": "amazon",
+   "media": "m2",
+   "name": "© amazon studios",
+   "fade": 0.0
+  },
+  {
+   "kind": "credit",
+   "start": 21.2667,
    "end": 27.15,
    "track": 8,
    "scene": "sz_01",
+   "art": "amazon",
    "media": "m2",
    "name": "© amazon studios",
    "fade": 0.0
@@ -1814,9 +1957,21 @@
   {
    "kind": "credit",
    "start": 27.15,
+   "end": 31.45,
+   "track": 8,
+   "scene": "sz_02",
+   "art": "amazon",
+   "media": "m2",
+   "name": "© amazon studios",
+   "fade": 0.0
+  },
+  {
+   "kind": "credit",
+   "start": 32.95,
    "end": 34.15,
    "track": 8,
    "scene": "sz_02",
+   "art": "amazon",
    "media": "m2",
    "name": "© amazon studios",
    "fade": 0.0
@@ -1827,7 +1982,8 @@
    "end": 16.65,
    "track": 9,
    "scene": "sz_01",
-   "media": "m7",
+   "art": "artwork",
+   "media": "m10",
    "name": "© alan lee",
    "fade": 0.42
   },
@@ -1837,7 +1993,8 @@
    "end": 32.95,
    "track": 9,
    "scene": "sz_02",
-   "media": "m8",
+   "art": "artwork",
+   "media": "m11",
    "name": "© alan lee",
    "fade": 0.42
   },
@@ -1847,7 +2004,8 @@
    "end": 21.266666666666666,
    "track": 12,
    "scene": "sz_01",
-   "media": "m10",
+   "art": "artwork",
+   "media": "m13",
    "name": "© john howe",
    "fade": 0.42
   },
@@ -1857,7 +2015,8 @@
    "end": 32.95,
    "track": 12,
    "scene": "sz_02",
-   "media": "m11",
+   "art": "artwork",
+   "media": "m14",
    "name": "© john howe",
    "fade": 0.42
   },
@@ -1867,7 +2026,7 @@
    "end": 26.65,
    "track": 1,
    "scene": "sz_01",
-   "media": "m5",
+   "media": "m7",
    "src_in": 10.0,
    "src_out": 22.0,
    "name": "philipp sz_01"
@@ -1917,13 +2076,15 @@
   "Hafen [sz_02]: Credit für a2 aus Dateiname vorbelegt („john howe“)"
  ],
  "stats": {
-  "clips": 19,
-  "media": 11,
+  "clips": 24,
+  "media": 15,
   "duration": 34.15,
   "by_kind": {
+   "adjust": 2,
    "anim": 3,
    "artwork": 4,
-   "credit": 6,
+   "bars": 1,
+   "credit": 8,
    "episode": 3,
    "still": 2,
    "voice": 1

@@ -104,7 +104,7 @@ def test_credits_blur_voice_and_markers(env):
     art = [c for c in plan["clips"] if c["kind"] == "artwork"][0]
     assert cred["start"] == art["start"] and cred["end"] == art["end"] and cred["fade"] == pytest.approx(0.42) and cred["track"] == 9
     still = next(c for c in plan["clips"] if c["kind"] == "still")               # Weichzeichner am Standbild, Rampen 0,5 s auf 15
-    blur = next(e for e in still["effects"] if e["id"] == "blur")["params"][0]
+    blur = next(e for e in still["fallback_effects"] if e["id"] == "blur")["params"][0]
     kf = blur["keyframes"]
     assert kf[0] == [pytest.approx(art["start"] - still["start"], abs=0.02), 0.0] and kf[1][1] == 15.0 and kf[-1][1] == 0.0
     assert kf[1][0] - kf[0][0] == pytest.approx(0.5, abs=0.02) and [t for t, _ in kf] == sorted(t for t, _ in kf)
