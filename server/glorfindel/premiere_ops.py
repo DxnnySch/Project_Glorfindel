@@ -10,6 +10,7 @@ from pathlib import Path
 from . import media, pipeline, prfpset, rough_cut, store
 from .bridge import HUB, BridgeError
 from .config import app_dir
+from .timemap import TimeMap
 from .premiere_media import EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png
 from .premiere_plan import PlanEnv, build_plan, load_recipes, with_library
 from .premiere_preset import make_sequence_preset
@@ -37,6 +38,8 @@ def save_state(ep: Episode, st: dict) -> None:
 def remember_hq(ep: Episode, hq_file: str) -> None:
     """Vom HQ-Conform aufgerufen: diese Datei ist die zeitgleiche HQ-Fassung."""
     st = load_state(ep)
+    if st.get("direct"):
+        return                                              # unveränderte HQ-Datei ist schon eingetragen
     st["hq"] = str(hq_file)
     save_state(ep, st)
 
@@ -46,8 +49,35 @@ def calibration() -> dict:
 
 
 # ---------- Medien ----------
-def ensure_reference(ep: Episode, pg=None) -> Path:
-    """Konforme Referenz (konstante Bildrate, zugeschnitten): die Datei, die in Premiere liegt und aus der die Standbilder stammen."""
+NATIVE_FPS = (24000 / 1001, 24.0, 25.0, 30000 / 1001, 30.0)
+
+
+def direct_hq(ep: Episode) -> dict | None:
+    """HQ-Quelle, die ohne Umwandlung in Premiere eingesetzt werden kann: Zeitabbildung ist eine reine Verschiebung (gleiche Geschwindigkeit).
+    Dann liegt die Referenz auf der Zeitachse der HQ-Datei (Schwarz davor) und die HQ-Datei bleibt unverändert, auch in ihrer Bildrate."""
+    for src in ep.sources():
+        if src.role != "hq" or not src.anchors:
+            continue
+        path = ep.source_path(src)
+        if not path.exists():
+            continue
+        off = TimeMap(src.anchors).pure_offset()
+        fps = next((f for f in NATIVE_FPS if abs(f - src.fps) < 0.01), None)
+        if off is None or fps is None:
+            continue
+        return {"source": src, "file": path, "fps": fps, "offset": round(off * fps) / fps}
+    return None
+
+
+def _sync_episode_fps(ep: Episode, fps: float) -> None:
+    pr = ep.project()
+    if abs(pr.fps - fps) > 0.001:
+        old, pr.fps = pr.fps, fps
+        ep.save_project(pr)
+        store.log_change(ep.p.gl, ep.settings.user, f"Bildrate der Folge von {old:.3f} auf {fps:.3f} fps gestellt (native Bildrate der HQ-Datei)")
+
+def ensure_reference(ep: Episode, pg=None, offset: float = 0.0) -> Path:
+    """Konforme Referenz (konstante Bildrate, zugeschnitten, ggf. auf der Zeitachse der HQ-Datei): die Datei in Premiere, aus der die Standbilder stammen."""
     pg = as_progress(pg)
     pr = ep.project()
     if not pr.reference_source:
@@ -55,18 +85,22 @@ def ensure_reference(ep: Episode, pg=None) -> Path:
     src = ep.source(pr.reference_source)
     srcfile = ep.source_path(src)
     dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR.mp4"
-    if dst.exists() and dst.stat().st_mtime >= srcfile.stat().st_mtime:
+    side = dst.with_suffix(".json")
+    want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop}
+    if dst.exists() and dst.stat().st_mtime >= srcfile.stat().st_mtime and store.read_json(side, {}) == want:
         pg.fraction(1.0, "konforme Referenz ist aktuell")
         return dst
-    pg.fraction(0.0, f"{src.path.rsplit('/', 1)[-1]} → konstante Bildrate {EPISODE_FPS:.3f} fps, {EPISODE_SIZE[0]}×{EPISODE_SIZE[1]}")
-    conform_reference(srcfile, dst, crop=src.crop, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
+    extra = f", um {offset:.3f} s auf die Zeitachse der HQ-Datei verschoben" if offset else ""
+    pg.fraction(0.0, f"{src.path.rsplit('/', 1)[-1]} → konstante Bildrate {pr.fps:.3f} fps, {EPISODE_SIZE[0]}×{EPISODE_SIZE[1]}{extra}")
+    conform_reference(srcfile, dst, crop=src.crop, fps=pr.fps, offset=offset, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
+    store.write_json(side, want)
     return dst
 
 
 def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, float] | None = None, pg=None) -> dict[str, float]:
     """Standbilder (letztes Bild je Segment) aus genau dieser Datei ziehen. Rückgabe: Dateiname → Zeit in der Episode."""
     pg = as_progress(pg)
-    times = times if times is not None else pipeline.still_times(scenes)
+    times = times if times is not None else pipeline.still_times(scenes, fps)
     info = media.probe(media_file)
     fps = info["fps"] or EPISODE_FPS
     for i, (name, t) in enumerate(times.items()):
@@ -102,7 +136,8 @@ def _library(ep: Episode, templates_dir: Path) -> dict:
     return library_for(ep.p.root, ep.settings.premiere.presets_dir, templates_dir)
 
 
-def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path, nested_preset: Path | None = None) -> PlanEnv:
+def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path, nested_preset: Path | None = None,
+             ep_offset: float = 0.0) -> PlanEnv:
     tpl = rough_cut.load_template(templates_dir / "rohschnitt_vorlage.json" if (templates_dir / "rohschnitt_vorlage.json").exists() else None)
     s = ep.settings.premiere
     recipes_file = templates_dir / "premiere_rezepte.json"
@@ -124,7 +159,7 @@ def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, st
         premiere={"aep": str(ep.p.root / s.aep), "comp": s.comp, "pause_in": s.pause_in, "play_in": s.play_in,
                   "preset": str(preset), "video_tracks": s.video_tracks, "audio_tracks": s.audio_tracks,
                   "nested_preset": str(nested_preset or ""), "art_px": s.art_size_px,
-                  "artwork_effects": list(s.artwork_effects), "map_effects": list(s.map_effects), **extra})
+                  "artwork_effects": list(s.artwork_effects), "map_effects": list(s.map_effects), "ep_offset": ep_offset, **extra})
 
 
 # ---------- Bauen ----------
@@ -136,19 +171,25 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     if not hub.connected:
         raise BridgeError("Premiere ist nicht verbunden. In Premiere: Fenster → Erweiterungen → „Glorfindel Bridge“ öffnen.")
     pg.step(1)
-    ref = ensure_reference(ep, pg)
+    direct = direct_hq(ep)
+    if direct:
+        _sync_episode_fps(ep, direct["fps"])
+    off = direct["offset"] if direct else 0.0
+    ref = ensure_reference(ep, pg, off)
     pg.step(2)
     res = pipeline.build_rough_cut(ep, templates_dir, with_stills=False, by_strand=by_strand, progress=None)
     pkg = json.loads(Path(res["json"]).read_text(encoding="utf-8"))
     scenes = pipeline.scenes_in_video(pipeline.ordered_scenes(ep, by_strand))
     pg.step(3)
     stills_dir = ep.p.stills / f"Bridge_v{res['version']}"     # eigener Ordner je Bau: Premiere sperrt Dateien aus früheren Importen
-    times = stills_from_file(scenes, ref, stills_dir, pg=pg)
+    fps_ep = ep.project().fps
+    times = {n: round(t + off, 6) for n, t in pipeline.still_times(scenes, fps_ep).items()}      # Zeitachse der Referenz in Premiere (= HQ-Zeit)
+    stills_from_file(None, ref, stills_dir, times=times, pg=pg)
     pg.step(4)
     preset = make_sequence_preset(pdir(ep) / "Glorfindel-Rohschnitt.sqpreset", video_tracks=ep.settings.premiere.video_tracks,
                                   audio_tracks=ep.settings.premiere.audio_tracks)
     nested_preset = make_sequence_preset(pdir(ep) / "Glorfindel-Artwork.sqpreset", video_tracks=5, audio_tracks=1)
-    plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset, stills_dir, nested_preset))
+    plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset, stills_dir, nested_preset, ep_offset=off))
     plan["calibration"] = calibration()
     plan["save"] = True
     store.write_json(pdir(ep) / f"bauplan_v{res['version']}.json", plan)
@@ -164,7 +205,9 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     pg.step(6)
     st = load_state(ep)
     st.update({"ref_cfr": str(ref), "stills": times, "stills_dir": str(stills_dir), "active": "proxy", "version": res["version"],
-               "sequence": plan["name"]})
+               "sequence": plan["name"], "ep_offset": off, "direct": bool(direct)})
+    if direct:
+        st["hq"] = str(direct["file"])                      # die unveränderte HQ-Datei: kein Conform nötig
     save_state(ep, st)
     store.write_json(pdir(ep) / f"bericht_v{res['version']}.json", report)
     store.log_change(ep.p.gl, ep.settings.user, f"Rohschnitt v{res['version']} in Premiere gebaut ({plan['stats']['clips']} Clips, {len(report.get('errors', []))} Fehler)")
@@ -185,9 +228,10 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
         raise ValueError(f"Premiere arbeitet bereits mit der {'HQ-' if to == 'hq' else 'Proxy-'}Fassung.")
     if to == "hq":
         hq_fps = media.probe(Path(st["hq"]))["fps"] or 0.0
-        if abs(hq_fps - EPISODE_FPS) > 0.01:
-            raise ValueError(f"Die HQ-Datei hat {hq_fps:.3f} statt {EPISODE_FPS:.3f} Bildern pro Sekunde (ältere Conform-Version). "
-                             "Bitte unter „Kontrolle“ den HQ-Conform noch einmal ausführen; dann lässt Premiere den Tausch zu.")
+        ref_fps = media.probe(Path(st["ref_cfr"]))["fps"] or EPISODE_FPS
+        if abs(hq_fps - ref_fps) > 0.01:
+            raise ValueError(f"Die HQ-Datei hat {hq_fps:.3f} statt {ref_fps:.3f} Bildern pro Sekunde wie die Referenz in Premiere. "
+                             "Bitte unter „Kontrolle“ den HQ-Conform noch einmal ausführen (oder den Rohschnitt neu bauen); dann lässt Premiere den Tausch zu.")
     pg.plan([("Verbindung prüfen", 0.5), ("HQ-Standbilder erzeugen" if to == "hq" else "Standbilder vorbereiten", 8), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
     pg.step(0)
     if not hub.connected:

@@ -122,6 +122,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
         return by_path[key]
 
     ep_id = reg(env.episode_media, "episode")
+    ep_off = float(env.premiere.get("ep_offset", 0.0))               # Referenz in Premiere liegt auf der Zeitachse der HQ-Datei
     clips: list[dict] = []
     nested: list[dict] = []                                           # Artwork-Sequenzen (Bild + Maske + Spurmaske-Key)
     blur_periods: list[tuple[float, float]] = []
@@ -143,7 +144,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
             dur = end - start
             base = {"start": start, "end": end, "track": idx, "scene": c.get("scene", "")}
             if typ == "scene_segment":
-                clips.append({"kind": "episode", **base, "media": ep_id, "src_in": c["src_in"], "src_out": c["src_out"],
+                clips.append({"kind": "episode", **base, "media": ep_id, "src_in": c["src_in"] + ep_off, "src_out": c["src_out"] + ep_off,
                               "audio": 3, "name": f"{c.get('scene', '')} Segment"})
             elif typ == "scene_audio":
                 continue                                            # Ton hängt am verknüpften Episoden-Clip (A4)

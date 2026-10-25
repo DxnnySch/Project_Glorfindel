@@ -52,6 +52,12 @@ class TimeMap:
             pieces.append(Piece(lo, hi, a, b))
         return pieces
 
+    def pure_offset(self) -> float | None:
+        """Reine Verschiebung (HQ-Zeit = Referenzzeit + Offset, gleiche Geschwindigkeit)? Dann Offset, sonst None."""
+        if all(abs(pc.a - 1.0) < 1e-6 for pc in self.pieces) and max(pc.b for pc in self.pieces) - min(pc.b for pc in self.pieces) < 1e-3:
+            return self.pieces[0].b
+        return None
+
     @property
     def is_identity(self) -> bool:
         return all(abs(pc.a - 1) < 1e-12 and abs(pc.b) < 1e-9 for pc in self.pieces)

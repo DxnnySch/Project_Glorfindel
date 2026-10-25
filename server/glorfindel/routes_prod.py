@@ -386,7 +386,6 @@ class ConformBody(BaseModel):
 def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     if body.codec not in conform_mod.CODECS:
         raise HTTPException(400, f"Unbekanntes Format: {body.codec}")
-    from .premiere_media import EPISODE_FPS            # konstante 23,976 fps wie die Referenz in Premiere (die Capture-Datei hat variable Bildrate)
     def work(progress):
         pr = ep.project()
         src, ref = ep.source(body.source), ep.source(pr.reference_source)
@@ -396,10 +395,10 @@ def run_conform(body: ConformBody, ep: Episode = Depends(ep_of), state: AppState
         base = (ep.p.base if state.settings.keep_hq_in_onedrive else ep.p.cache()) / "conform"
         progress.step(1, "ffmpeg startet …")
         dst = conform_mod.conform(ep.source_path(src), tm, ref.duration, base / f"{ep.p.slug.replace(' ', '_')}_HQ_conform",
-                                  fps=EPISODE_FPS, codec=body.codec, progress_cb=lambda f, info: progress.fraction(f, info["text"]))
+                                  fps=pr.fps, codec=body.codec, progress_cb=lambda f, info: progress.fraction(f, info["text"]))
         info = {"file": str(dst)}
         from . import premiere_ops
-        premiere_ops.remember_hq(ep, str(dst))
+        premiere_ops.remember_hq(ep, str(dst))      # (bei direktem HQ-Einsatz ignoriert)
         progress.step(2, "Letztes Bild jeder Szene")
         if body.stills:
             info["stills"] = pipeline.render_stills(ep, pipeline.scenes_in_video(pipeline.ordered_scenes(ep)), body.source, progress)

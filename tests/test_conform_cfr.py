@@ -26,3 +26,20 @@ def test_conform_is_constant_frame_rate(tmp_path, codec):
     assert num / den == pytest.approx(24000 / 1001, abs=0.001), v
     assert v["avg_frame_rate"] == v["r_frame_rate"]
     assert int(v["nb_frames"]) == pytest.approx(19.0 * 24000 / 1001, abs=2)
+
+
+def test_time_map_pure_offset():
+    assert TimeMap([(10.0, 12.5)]).pure_offset() == pytest.approx(2.5)
+    assert TimeMap([(0.0, 3.0), (100.0, 103.0)]).pure_offset() == pytest.approx(3.0)
+    assert TimeMap([(0.0, 3.0), (100.0, 104.0)]).pure_offset() is None            # Tempoänderung
+
+
+@needs_ffmpeg
+def test_reference_offset_shifts_timeline(tmp_path):
+    from glorfindel import media
+    from glorfindel.premiere_media import conform_reference
+    src = make_clip(tmp_path / "s.mp4", seconds=6, fps=24, size="320x136")
+    out = conform_reference(src, tmp_path / "r.mp4", fps=24.0, size=(320, 136), offset=2.0)
+    assert media.probe(out)["duration"] == pytest.approx(8.0, abs=0.2)
+    cut = conform_reference(src, tmp_path / "c.mp4", fps=24.0, size=(320, 136), offset=-1.0)
+    assert media.probe(cut)["duration"] == pytest.approx(5.0, abs=0.2)

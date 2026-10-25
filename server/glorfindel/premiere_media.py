@@ -30,18 +30,26 @@ FONT_CANDIDATES = [
 
 
 def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fps: float = EPISODE_FPS,
-                      size: tuple[int, int] = EPISODE_SIZE, crf: int = 17, on_progress=None) -> Path:
-    """Referenz in konstante Bildrate bringen, Letterbox abschneiden, auf Episodengröße bringen. Zeitachse bleibt erhalten."""
+                      size: tuple[int, int] = EPISODE_SIZE, crf: int = 17, offset: float = 0.0, on_progress=None) -> Path:
+    """Referenz in konstante Bildrate bringen, Letterbox abschneiden, auf Episodengröße bringen.
+    `offset` (Sekunden, auf das Bildraster gerundet) verschiebt die Zeitachse: positiv = Schwarz davor, negativ = Anfang abschneiden.
+    So kann die Referenz auf der Zeitachse der HQ-Datei liegen und die HQ-Datei später unverändert eingesetzt werden."""
     w, h = size
+    offset = round(offset * fps) / fps
     vf = []
     if crop:
         cx, cy, cw, ch = crop
         vf.append(f"crop={cw}:{ch}:{cx}:{cy}")
-    vf += [f"fps={fps:.6f}", f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos",
+    vf += [f"fps={fps:.6f}"]
+    if offset > 0:
+        vf.append(f"tpad=start_duration={offset:.6f}:color=black")
+    vf += [f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos",
            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black", "setsar=1", "format=yuv420p"]
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".part.mp4")
-    cmd = [media._bin("ffmpeg"), "-y", "-v", "error", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf),
+    pre = ["-ss", f"{-offset:.6f}"] if offset < 0 else []
+    af = ["-af", f"adelay={round(offset * 1000)}:all=1"] if offset > 0 else []
+    cmd = [media._bin("ffmpeg"), "-y", "-v", "error", *pre, "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf), *af,
            "-fps_mode", "cfr", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-g", "48", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
     try:

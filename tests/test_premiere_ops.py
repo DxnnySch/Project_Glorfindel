@@ -166,3 +166,33 @@ def test_swap_refuses_hq_with_wrong_frame_rate(ep):
     premiere_ops.remember_hq(ep, str(hq))
     with pytest.raises(ValueError, match="Bildern pro Sekunde"):
         premiere_ops.swap(ep, "hq", hub=FakeHub())
+
+
+def test_direct_hq_needs_no_conform(ep):
+    """HQ mit nativer Bildrate und reiner Verschiebung: Referenz liegt auf der HQ-Zeitachse, die HQ-Datei wird unverändert eingesetzt."""
+    from glorfindel import media
+    from glorfindel.models import Anchor
+    hq = make_video(ep.p.root / "Filme" / "hq24.mp4", "green", seconds=40, fps=24, size="1920x1080")
+    src = ep.import_source(hq, role="hq")
+    ep.set_anchors(src.id, [Anchor(ref=10.0, src=12.5)])                         # HQ-Zeit = Referenzzeit + 2,5 s
+    root = Path(__file__).resolve().parents[1] / "vorlagen"
+    hub = FakeHub()
+    premiere_ops.build_in_premiere(ep, root, hub=hub)
+    st = premiere_ops.load_state(ep)
+    assert st["direct"] is True and st["ep_offset"] == pytest.approx(2.5) and st["hq"] == str(hq)
+    assert ep.project().fps == 24.0
+    ref = Path(st["ref_cfr"])
+    info = media.probe(ref)
+    assert info["fps"] == pytest.approx(24.0, abs=0.01) and info["duration"] == pytest.approx(30 + 2.5, abs=0.3)
+    media.extract_frame(ref, 1.0, ep.p.root / "f_black.png")
+    media.extract_frame(ref, 4.0, ep.p.root / "f_red.png")
+    assert np.asarray(Image.open(ep.p.root / "f_black.png").convert("L")).mean() < 5            # davor Schwarz
+    assert np.asarray(Image.open(ep.p.root / "f_red.png").convert("L")).mean() > 20
+    plan = hub.calls[0][1]["plan"]
+    first = next(c for c in plan["clips"] if c["kind"] == "episode")
+    assert first["src_in"] == pytest.approx(2 + 2.5, abs=0.05)                  # Segment ab 2 s der Referenz = 4,5 s in HQ-Zeit
+    assert st["stills"]["1.png"] == pytest.approx(17.0 + 2.5, abs=0.05)
+    hub2 = FakeHub()
+    premiere_ops.swap(ep, "hq", hub=hub2)                                       # ohne vorherigen Conform
+    assert hub2.calls[0][1]["swaps"][0] == {"from": st["ref_cfr"], "to": str(hq)}
+    assert (ep.p.stills / "Bridge_v1_HQ" / "1.png").exists()

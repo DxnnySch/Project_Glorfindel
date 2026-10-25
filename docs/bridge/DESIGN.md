@@ -88,3 +88,10 @@ Premiere lässt sich per UXP nicht anweisen, eine .prfpset anzuwenden. Stattdess
 - Einstellungen `premiere.artwork_effects` (Standard: drop_shadow, zoom_schnell, fancy_out, fancy_in) und `premiere.map_effects` (karte_in, karte_out) wählen die Effekte; `zoom_langsam` o. ä. lassen sich dort eintragen.
 - Ist der Ordner nicht erreichbar, gilt der mitgelieferte Stand `vorlagen/effekt_bibliothek.json` (neu erzeugen: `python scripts/import_presets.py <Ordner>`).
 - Gauß In/Out (`AE.Impact_Blur_FX`, Parameter „Stärke“ 0→15) bestimmt den Weichzeichner (Einstellungsebene bzw. Rückfall am Standbild).
+
+## HQ ohne Umwandlung („direkter Einsatz“)
+Ist die Zeitabbildung einer HQ-Quelle eine reine Verschiebung (HQ-Zeit = Referenzzeit + Offset, Geschwindigkeit gleich) und hat die HQ-Datei eine native Bildrate (23,976/24/25/29,97/30), dann
+- stellt das Tool die Bildrate der Folge auf die der HQ-Datei (z. B. 24 fps),
+- konformt die **Referenz** (klein, H.264) auf diese Bildrate und legt sie um den Offset auf die Zeitachse der HQ-Datei (Schwarz davor), alle Segment- und Standbildzeiten werden um denselben Offset verschoben,
+- und der Tausch zu HQ setzt die **unveränderte HQ-Datei** ein – kein Conform, keine Neukodierung der Episode. Bildrate der HQ-Datei und der Referenz müssen gleich sein (Prüfung vor dem Tausch).
+Sonst (Tempoänderungen, andere Bildrate) bleibt der bisherige HQ-Conform mit konstanter Bildrate der Folge.
