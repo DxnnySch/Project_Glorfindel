@@ -7,11 +7,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import media, pipeline, rough_cut, store
+from . import media, pipeline, prfpset, rough_cut, store
 from .bridge import HUB, BridgeError
 from .config import app_dir
 from .premiere_media import EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png
-from .premiere_plan import PlanEnv, build_plan, load_recipes
+from .premiere_plan import PlanEnv, build_plan, load_recipes, with_library
 from .premiere_preset import make_sequence_preset
 from .progress import as_progress
 from .service import Episode
@@ -88,6 +88,16 @@ def _image_size(p: Path):
         return None
 
 
+def _library(ep: Episode, templates_dir: Path) -> dict:
+    """Effekt-Bibliothek: direkt aus dem Vorgaben-Ordner (immer aktuell), sonst der mitgelieferte Stand."""
+    folder = ep.p.root / ep.settings.premiere.presets_dir
+    lib = prfpset.effect_library(folder) if folder.exists() else {}
+    if lib:
+        return lib
+    snap = templates_dir / "effekt_bibliothek.json"
+    return json.loads(snap.read_text(encoding="utf-8")) if snap.exists() else {}
+
+
 def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path, nested_preset: Path | None = None) -> PlanEnv:
     tpl = rough_cut.load_template(templates_dir / "rohschnitt_vorlage.json" if (templates_dir / "rohschnitt_vorlage.json").exists() else None)
     s = ep.settings.premiere
@@ -106,10 +116,11 @@ def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, st
     return PlanEnv(
         root=ep.p.root, episode_media=reference, stills_dir=stills_dir,
         credit=lambda text, art, x: credit_png(text, art, pdir(ep) / "credits", x_override=x),
-        image_size=_image_size, recipes=load_recipes(recipes_file if recipes_file.exists() else None), doppel=tpl["doppelbild"],
+        image_size=_image_size, recipes=with_library(load_recipes(recipes_file if recipes_file.exists() else None), _library(ep, templates_dir)), doppel=tpl["doppelbild"],
         premiere={"aep": str(ep.p.root / s.aep), "comp": s.comp, "pause_in": s.pause_in, "play_in": s.play_in,
                   "preset": str(preset), "video_tracks": s.video_tracks, "audio_tracks": s.audio_tracks,
-                  "nested_preset": str(nested_preset or ""), "art_px": s.art_size_px, **extra})
+                  "nested_preset": str(nested_preset or ""), "art_px": s.art_size_px,
+                  "artwork_effects": list(s.artwork_effects), "map_effects": list(s.map_effects), **extra})
 
 
 # ---------- Bauen ----------

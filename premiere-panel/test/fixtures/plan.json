@@ -206,11 +206,11 @@
    "fallback_effects": [
     {
      "id": "blur",
-     "match_name": "AE.ADBE Gaussian Blur 2",
+     "match_name": "AE.Impact_Blur_FX",
      "params": [
       {
-       "index": 0,
-       "name": "Weichzeichnung",
+       "index": 5,
+       "name": "Stärke",
        "value": 0.0,
        "keyframes": [
         [
@@ -258,11 +258,11 @@
    "fallback_effects": [
     {
      "id": "blur",
-     "match_name": "AE.ADBE Gaussian Blur 2",
+     "match_name": "AE.Impact_Blur_FX",
      "params": [
       {
-       "index": 0,
-       "name": "Weichzeichnung",
+       "index": 5,
+       "name": "Stärke",
        "value": 0.0,
        "keyframes": [
         [
@@ -297,11 +297,11 @@
    "effects": [
     {
      "id": "blur",
-     "match_name": "AE.ADBE Gaussian Blur 2",
+     "match_name": "AE.Impact_Blur_FX",
      "params": [
       {
-       "index": 0,
-       "name": "Weichzeichnung",
+       "index": 5,
+       "name": "Stärke",
        "value": 0.0,
        "keyframes": [
         [
@@ -336,11 +336,11 @@
    "effects": [
     {
      "id": "blur",
-     "match_name": "AE.ADBE Gaussian Blur 2",
+     "match_name": "AE.Impact_Blur_FX",
      "params": [
       {
-       "index": 0,
-       "name": "Weichzeichnung",
+       "index": 5,
+       "name": "Stärke",
        "value": 0.0,
        "keyframes": [
         [
@@ -419,7 +419,7 @@
      ]
     },
     {
-     "id": "zoom",
+     "id": "zoom_schnell",
      "match_name": "AE.ADBE Geometry",
      "display": "Transformieren",
      "params": [
@@ -487,11 +487,6 @@
        "index": 10,
        "name": "Verschlusswinkel",
        "value": 0.0
-      },
-      {
-       "index": 11,
-       "name": "Sampling",
-       "value": 0
       }
      ]
     },
@@ -801,7 +796,7 @@
      ]
     },
     {
-     "id": "zoom",
+     "id": "zoom_schnell",
      "match_name": "AE.ADBE Geometry",
      "display": "Transformieren",
      "params": [
@@ -869,11 +864,6 @@
        "index": 10,
        "name": "Verschlusswinkel",
        "value": 0.0
-      },
-      {
-       "index": 11,
-       "name": "Sampling",
-       "value": 0
       }
      ]
     },
@@ -1183,7 +1173,7 @@
      ]
     },
     {
-     "id": "zoom",
+     "id": "zoom_schnell",
      "match_name": "AE.ADBE Geometry",
      "display": "Transformieren",
      "params": [
@@ -1251,11 +1241,6 @@
        "index": 10,
        "name": "Verschlusswinkel",
        "value": 0.0
-      },
-      {
-       "index": 11,
-       "name": "Sampling",
-       "value": 0
       }
      ]
     },
@@ -1565,7 +1550,7 @@
      ]
     },
     {
-     "id": "zoom",
+     "id": "zoom_schnell",
      "match_name": "AE.ADBE Geometry",
      "display": "Transformieren",
      "params": [
@@ -1633,11 +1618,6 @@
        "index": 10,
        "name": "Verschlusswinkel",
        "value": 0.0
-      },
-      {
-       "index": 11,
-       "name": "Sampling",
-       "value": 0
       }
      ]
     },

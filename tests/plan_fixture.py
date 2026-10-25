@@ -7,7 +7,7 @@ from PIL import Image
 
 from glorfindel.config import Thresholds
 from glorfindel.models import AssetRef, CommentBlock, Scene, Segment
-from glorfindel.premiere_plan import PlanEnv, build_plan, load_recipes
+from glorfindel.premiere_plan import PlanEnv, build_plan, load_recipes, with_library
 from glorfindel.rough_cut import build_package, load_template
 
 FIXTURE = Path(__file__).resolve().parents[1] / "premiere-panel" / "test" / "fixtures" / "plan.json"
@@ -40,7 +40,7 @@ def make_plan() -> dict:
         Image.new("RGB", (800, 1200)).save(root / "Bilder" / "john howe.jpg")
         env = PlanEnv(root=root, episode_media=root / "cache" / "S3_E1_ref_cfr.mp4", stills_dir=root / "Videoelemente",
                       credit=lambda text, art, x: root / "credits" / f"{art}_{abs(hash((text, x))) % 10**6}.png",
-                      image_size=lambda p: Image.open(p).size, recipes=load_recipes(),
+                      image_size=lambda p: Image.open(p).size, recipes=with_library(load_recipes(), json.loads((Path(__file__).resolve().parents[1] / "vorlagen" / "effekt_bibliothek.json").read_text(encoding="utf-8"))),
                       premiere={"aep": f"{STABLE_ROOT}/Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep", "comp": "Play-Pause",
                                 "pause_in": 28.7, "play_in": 0.0, "preset": "C:/cache/rohschnitt.sqpreset", "video_tracks": 14, "audio_tracks": 16,
                                 "pause_media": f"{STABLE_ROOT}/Videomaterial/VFX/Pause.mov", "play_media": "C:/cache/anim/Play.mov",

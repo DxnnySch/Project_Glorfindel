@@ -63,3 +63,45 @@ def test_plan_has_nested_artworks_and_anim_media():
     bars = [c for c in plan["clips"] if c["kind"] == "bars"]
     assert len(bars) == 1 and bars[0]["track"] == 7
     assert {c["kind"] for c in plan["clips"] if c["kind"] == "adjust"} == {"adjust"}
+
+
+def _library():
+    import json
+    from pathlib import Path
+    return json.loads((Path(__file__).resolve().parents[1] / "vorlagen" / "effekt_bibliothek.json").read_text(encoding="utf-8"))
+
+
+def test_library_matches_the_measured_original_values():
+    lib = _library()
+    assert {"fancy_in", "fancy_out", "zoom_schnell", "zoom_langsam", "karte_in", "karte_out", "gauss_in", "gauss_out"} <= set(lib)
+    rahmen = lambda r: next(p for p in lib[r]["params"] if p["name"] == "Rahmen")["keyframes"]  # noqa: E731
+    assert rahmen("fancy_in") == [[0.0, 500.0], [0.5, 8.0]]
+    assert [t for t, _ in rahmen("fancy_out")] == [-0.5333, -0.5167, -0.0167]          # wie im Ursprungsschnitt gemessen
+    assert lib["fancy_out"]["anchor"] == "end" and lib["fancy_in"]["anchor"] == "start" and lib["zoom_schnell"]["anchor"] == "start"
+    zoom = next(p for p in lib["zoom_schnell"]["params"] if p["name"] == "Skalierungshöhe")["keyframes"]
+    assert zoom == [[0.0, 100.0], [120.0, 240.0]]
+    assert lib["karte_in"]["anchor"] == "start" and lib["karte_out"]["anchor"] == "end"
+    pos = next(p for p in lib["karte_in"]["params"] if p["name"] == "Position")["keyframes"]
+    assert pos[0][1]["point"][1] < -0.5 and pos[1][1]["point"] == [0.5, 0.5]
+
+
+def test_real_preset_folder_agrees_with_snapshot():
+    import pytest
+    from pathlib import Path
+    from glorfindel import prfpset
+    folder = Path(r"F:\OneDrive\Videomaterial\Programm-Vorgaben\PremierePro")
+    if not folder.exists():
+        pytest.skip("Vorgaben-Ordner nur auf Dannys Rechner")
+    assert prfpset.effect_library(folder) == _library()
+
+
+def test_map_and_artwork_effects_come_from_the_library():
+    from glorfindel.premiere_plan import _resolve_chain, load_recipes, with_library
+    rec = with_library(load_recipes(), _library())
+    chain = _resolve_chain(rec, [{"recipe": "karte_in"}, {"recipe": "karte_out"}], 10.0, None, 60.0)
+    assert [c["id"] for c in chain] == ["karte_in", "karte_out"]
+    out_kf = next(p for p in chain[1]["params"] if p["name"] == "Position")["keyframes"]
+    assert [t for t, _ in out_kf] == [9.4833, 9.9833]
+    assert rec["blur"]["match_name"] == "AE.Impact_Blur_FX" and rec["blur"]["ein"]["param"] == "Stärke"
+    zoom = _resolve_chain(rec, [{"recipe": "zoom_schnell"}], 5.0, None, 60.0)[0]
+    assert next(p for p in zoom["params"] if p["name"] == "Skalierungshöhe")["keyframes"][-1] == [120.0, 240.0]

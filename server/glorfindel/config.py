@@ -50,6 +50,9 @@ class PremiereSettings(BaseModel):
     play_in: float = 0.0
     pause_mov: str = "Videomaterial/VFX/Pause.mov"                          # Pause-Animation (ProRes mit Alpha); Play entsteht daraus rückwärts
     mask: str = "Maske Quadrat.png"                                         # Maske für Artworks (Ordner vorlagen/masken)
+    presets_dir: str = "Videomaterial/Programm-Vorgaben/PremierePro"       # Ordner mit den .prfpset-Vorgaben (relativ zum OneDrive-Stamm)
+    artwork_effects: list[str] = Field(default_factory=lambda: ["drop_shadow", "zoom_schnell", "fancy_out", "fancy_in"])   # Effekte je Artwork (Namen aus den Vorgaben)
+    map_effects: list[str] = Field(default_factory=lambda: ["karte_in", "karte_out"])
     art_size_px: int = 1000                                                 # Kantenlänge eines einzelnen Artworks im 1080p-Bild
     video_tracks: int = 14                                                  # Spuren der Hauptsequenz (wie im Ursprungsschnitt)
     audio_tracks: int = 16

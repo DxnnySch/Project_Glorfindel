@@ -111,9 +111,9 @@ test('Credits blenden über die Deckkraft ein und aus; Standbild bekommt den Wei
   assert.deepEqual(op.kfs.map(([t]) => +t.toFixed(2)), [0, 0.42, +(dur - 0.42).toFixed(2), +dur.toFixed(2)]);
   assert.deepEqual(op.kfs.map(([, v]) => v), [0, 100, 100, 0]);
   const stills = trackItems(main, 'video', 0).filter((t) => t.item.name.endsWith('.png'));
-  const blurred = stills.find((t) => t.chain.comps.some((c) => c.name === 'AE.ADBE Gaussian Blur 2'));
+  const blurred = stills.find((t) => t.chain.comps.some((c) => c.name === 'AE.Impact_Blur_FX'));
   assert.ok(blurred, 'Standbild mit Blur');
-  const kf = blurred.chain.comps.find((c) => c.name === 'AE.ADBE Gaussian Blur 2').params[0].kfs;
+  const kf = blurred.chain.comps.find((c) => c.name === 'AE.Impact_Blur_FX').params.find((p) => p.displayName === 'Stärke').kfs;
   assert.deepEqual(kf.map(([, v]) => v), [0, 15, 15, 0]);
 });
 
@@ -276,10 +276,10 @@ test('Gauß In/Out: mit Einstellungsebene im Projekt liegt es auf V2, ohne Einst
   assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
   const v2 = trackItems(mainSeq(withAdj.project), 'video', 1);
   assert.equal(v2.length, PLAN.clips.filter((c) => c.kind === 'adjust').length);
-  const kf = v2[0].chain.comps.find((c) => c.name === 'AE.ADBE Gaussian Blur 2').params[0].kfs;
+  const kf = v2[0].chain.comps.find((c) => c.name === 'AE.Impact_Blur_FX').params.find((p) => p.displayName === 'Stärke').kfs;
   assert.deepEqual(kf.map(([, v]) => v), [0, 15, 15, 0]);
   const stills = trackItems(mainSeq(withAdj.project), 'video', 0).filter((t) => t.item.name.endsWith('.png'));
-  assert.ok(stills.every((t) => !t.chain.comps.some((c) => c.name === 'AE.ADBE Gaussian Blur 2')), 'kein Doppel-Blur');
+  assert.ok(stills.every((t) => !t.chain.comps.some((c) => c.name === 'AE.Impact_Blur_FX')), 'kein Doppel-Blur');
   assert.ok(!rep.warnings.some((w) => /Einstellungsebene/.test(w)));
   const without = newEnv();
   const rep2 = await runPlan(without.ppro, clone(PLAN));

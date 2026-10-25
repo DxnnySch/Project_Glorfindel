@@ -19,6 +19,24 @@ def load_recipes(path: Path | None = None) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+def with_library(recipes: dict, library: dict[str, dict] | None) -> dict:
+    """Rezepte um die Effekt-Bibliothek aus den .prfpset-Vorgaben ergänzen: Sie gehen den Rezepten aus dem Ursprungsprojekt vor,
+    Gauß In/Out bestimmt den Weichzeichner."""
+    out = dict(recipes)
+    lib = dict(library or {})
+    if "zoom_schnell" in lib:
+        lib.setdefault("zoom", lib["zoom_schnell"])
+    out["bibliothek"] = lib
+    gin = lib.get("gauss_in")
+    if gin:
+        kp = next((p for p in gin["params"] if p.get("keyframes")), None)
+        if kp:
+            out["blur"] = {**recipes.get("blur", {}), "match_name": gin["match_name"], "display": gin.get("display", ""),
+                           "ein": {"match_name": gin["match_name"], "param_index": kp["index"], "param": kp["name"],
+                                   "keyframes": [[t, v] for t, v in kp["keyframes"]]}}
+    return out
+
+
 def track_index(name: str) -> tuple[str, int]:
     """'V10' -> ('video', 9), 'A4' -> ('audio', 3)"""
     kind = "video" if name[0].upper() == "V" else "audio"
@@ -48,6 +66,7 @@ def _resolve_chain(recipes: dict, ids: list[dict], dur: float, contour: str | No
     """Rezept-Komponenten eines Clips auflösen: Farbe einsetzen, Keyframes auf Clip-Zeit (Sekunden ab Clipanfang) bringen."""
     out = []
     by_id = {c["id"]: c for c in recipes.get("artwork_kette", [])}
+    by_id.update(recipes.get("bibliothek", {}))
     for ref in ids:
         c = by_id.get(ref["recipe"])
         if c is None:
@@ -61,7 +80,7 @@ def _resolve_chain(recipes: dict, ids: list[dict], dur: float, contour: str | No
                 kfs = []
                 for t, v in p["keyframes"]:
                     ta = dur + t if c["anchor"] == "end" else t
-                    if 0 <= ta <= max(dur, 0) + 1e-6 or c["id"] == "zoom":
+                    if ta >= 0 and (c["anchor"] != "end" or ta <= max(dur, 0) + 1e-6):
                         kfs.append([round(max(ta, 0.0), 4), v])
                 if kfs:
                     e["keyframes"] = kfs
@@ -154,7 +173,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 lay = c.get("layout", "einzel")
                 pos = env.doppel.get("links" if lay == "doppel_links" else "rechts") if lay != "einzel" else None
                 target_px = (pos["size"] * 1080) if pos else float(env.premiere.get("art_px", 1000.0))
-                effects = _resolve_chain(recipes, [{"recipe": r} for r in ("drop_shadow", "zoom", "fancy_out", "fancy_in")], dur, contour, fps)
+                effects = _resolve_chain(recipes, [{"recipe": r} for r in env.premiere.get("artwork_effects", ("drop_shadow", "zoom", "fancy_out", "fancy_in"))], dur, contour, fps)
                 position = [pos["x"], pos["y"]] if pos else [0.5, 0.5]
                 mask = env.premiere.get("mask_path")
                 if mask:
@@ -187,9 +206,11 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                     warnings.append(f"{c.get('scene', '')}: Kartenplatzhalter {c.get('ref')} noch nicht gerendert – nur Marker")
                     continue
                 clip = {"kind": "map", **base, "media": reg(f, "map"), "name": c.get("ref", "Karte")}
-                fx = _map_effect(dur)
+                fx = _resolve_chain(recipes, [{"recipe": r} for r in env.premiere.get("map_effects", ("karte_in", "karte_out"))], dur, None, fps)
+                if not fx and _map_effect(dur):
+                    fx = [_map_effect(dur)]
                 if fx:
-                    clip["effects"] = [fx]
+                    clip["effects"] = fx
                 clips.append(clip)
     _amazon_vs_artist(clips)
     periods = merge_periods(blur_periods)

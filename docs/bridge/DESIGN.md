@@ -81,3 +81,10 @@ benannte Operationen aus (keine freie Skriptausführung).
 - **Gauß In/Out** als Einstellungsebene auf V2 (je Artwork-Spanne ein Clip mit Gaußscher Weichzeichner 0→15→0). Die API kann keine Einstellungsebene anlegen, nur eine vorhandene platzieren: einmal **Datei → Neu → Einstellungsebene** (Name „Einstellungsebene“) im Projekt anlegen. Fehlt sie, liegt der Weichzeichner ersatzweise direkt am Standbild (Hinweis im Bericht).
 - **Schwarzstreifen** (V8, über die ganze Länge, unter den Credits): PNG 1920×1080 mit 13 % schwarz oben/unten (`Schwarzstreifen.png`).
 - **© amazon studios** wird an den Künstler-Credits aufgetrennt und ist nie gleichzeitig mit ihnen zu sehen.
+
+## Effekt-Bibliothek aus den .prfpset-Vorgaben
+Premiere lässt sich per UXP nicht anweisen, eine .prfpset anzuwenden. Stattdessen liest `prfpset.effect_library` die Vorgaben direkt aus `Videomaterial/Programm-Vorgaben/PremierePro` (Einstellung `premiere.presets_dir`) und macht daraus Rezepte: alle Parameter mit Index/Name/Wert, Keyframes in Sekunden – am Einblendpunkt der Vorgabe (AnchorInPoint) am Clipanfang, am Ausblendpunkt (AnchorOutPoint) am Clipende (negativ). Das ergibt dieselben Werte wie im Ursprungsschnitt gemessen (Fancy Out −0,5333/−0,5167/−0,0167 s, Zoom 100→240 über 120 s).
+- Ids: `fancy_in/out`, `gauss_in/out`, `karte_in/out`, `kreis_in/out`, `pop_in/out`, `right_in`, `trans_in/out`, `zoom_schnell`, `zoom_langsam` (Vorgaben mit mehreren Effekten, z. B. „Übergänge“, werden nicht übernommen).
+- Einstellungen `premiere.artwork_effects` (Standard: drop_shadow, zoom_schnell, fancy_out, fancy_in) und `premiere.map_effects` (karte_in, karte_out) wählen die Effekte; `zoom_langsam` o. ä. lassen sich dort eintragen.
+- Ist der Ordner nicht erreichbar, gilt der mitgelieferte Stand `vorlagen/effekt_bibliothek.json` (neu erzeugen: `python scripts/import_presets.py <Ordner>`).
+- Gauß In/Out (`AE.Impact_Blur_FX`, Parameter „Stärke“ 0→15) bestimmt den Weichzeichner (Einstellungsebene bzw. Rückfall am Standbild).

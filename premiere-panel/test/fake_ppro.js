@@ -45,7 +45,7 @@ class Color {
 }
 class Action { constructor(run, label) { this.run = run; this.label = label; } }
 
-const DISPLAY = { 'AE.ADBE AECrop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry2': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner', 'AE.ADBE Legacy Key Track Matte': 'Spurmaske-Key' };
+const DISPLAY = { 'AE.ADBE AECrop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry2': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner (veraltet)', 'AE.Impact_Blur_FX': 'Gaußscher Weichzeichner', 'AE.ADBE Legacy Key Track Matte': 'Spurmaske-Key' };
 const PARAMS = {
   'AE.ADBE AECrop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
   'AE.ADBE Roughen Edges': [['Kantenart', 'num', 1], ['Konturfarbe', 'color', null], ['Rahmen', 'num', 8], ['Kantenschärfe', 'num', 0], ['Fraktaleinfluss', 'num', 1], ['Skalieren', 'num', 100],
@@ -54,6 +54,7 @@ const PARAMS = {
   'AE.ADBE Geometry2': [['Ankerpunkt', 'point', null], ['Position', 'point', null], ['Einheitliche Skalierung', 'bool', true], ['Skalierungshöhe', 'num', 100], ['Skalierungsbreite', 'num', 100],
     ['Verzerren', 'num', 0], ['Achse der Verzerrung', 'num', 0], ['Drehung', 'num', 0], ['Deckkraft', 'num', 100]],
   'AE.ADBE Legacy Key Track Matte': [['Maske:', 'num', 1], ['Compositing mit', 'num', 0], ['Umkehren', 'bool', false]],
+  'AE.Impact_Blur_FX': [['Quelle', 'num', 0], ['Modus', 'num', 0], ['Rand', 'num', 0], ['Hinweis', 'num', 0], ['Qualität', 'num', 0], ['Stärke', 'num', 0], ['Wiederholen', 'bool', false]],
   'AE.ADBE Gaussian Blur 2': [['Weichzeichnung', 'num', 0], ['Weichzeichnungsdimensionen', 'num', 0], ['Kantenpixel wiederholen', 'bool', false]],
 };
 

@@ -1,0 +1,1375 @@
+{
+ "fancy_in": {
+  "id": "fancy_in",
+  "match_name": "AE.ADBE Roughen Edges",
+  "display": "Kanten aufrauen",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Kantenart",
+    "value": 1
+   },
+   {
+    "index": 1,
+    "name": "Konturfarbe",
+    "value": {
+     "argb16": [
+      65280,
+      29952,
+      9216,
+      5632
+     ]
+    }
+   },
+   {
+    "index": 2,
+    "name": "Rahmen",
+    "value": 500.0,
+    "keyframes": [
+     [
+      0.0,
+      500.0
+     ],
+     [
+      0.5,
+      8.0
+     ]
+    ]
+   },
+   {
+    "index": 3,
+    "name": "Kantenschärfe",
+    "value": 0.0,
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.5,
+      0.20000000298
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Fraktaleinfluss",
+    "value": 1.0
+   },
+   {
+    "index": 5,
+    "name": "Skalieren",
+    "value": 204.0,
+    "keyframes": [
+     [
+      0.0,
+      204.0
+     ],
+     [
+      0.5,
+      192.0
+     ]
+    ]
+   },
+   {
+    "index": 6,
+    "name": "Breite oder Höhe dehnen",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Offset (Turbulenz)",
+    "value": {
+     "point": [
+      0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "index": 8,
+    "name": "Komplexität",
+    "value": 10
+   },
+   {
+    "index": 9,
+    "name": "Evolution",
+    "value": 0.0
+   },
+   {
+    "index": 10,
+    "name": "Evolutionsoptionen",
+    "value": false
+   },
+   {
+    "index": 12,
+    "name": "Zyklus (in Umdrehungen)",
+    "value": 1
+   },
+   {
+    "index": 13,
+    "name": "Zufallsparameter",
+    "value": 148
+   },
+   {
+    "index": 14,
+    "name": "Zufallsparameter",
+    "value": false
+   }
+  ],
+  "quelle": "Fancy In.prfpset",
+  "color_param": "Konturfarbe"
+ },
+ "fancy_out": {
+  "id": "fancy_out",
+  "match_name": "AE.ADBE Roughen Edges",
+  "display": "Kanten aufrauen",
+  "anchor": "end",
+  "params": [
+   {
+    "index": 0,
+    "name": "Kantenart",
+    "value": 1
+   },
+   {
+    "index": 1,
+    "name": "Konturfarbe",
+    "value": {
+     "argb16": [
+      65280,
+      29952,
+      9216,
+      5632
+     ]
+    }
+   },
+   {
+    "index": 2,
+    "name": "Rahmen",
+    "value": 500.0,
+    "keyframes": [
+     [
+      -0.5333,
+      0.0
+     ],
+     [
+      -0.5167,
+      8.0
+     ],
+     [
+      -0.0167,
+      500.0
+     ]
+    ]
+   },
+   {
+    "index": 3,
+    "name": "Kantenschärfe",
+    "value": 0.0,
+    "keyframes": [
+     [
+      -0.5333,
+      0.0
+     ],
+     [
+      -0.5167,
+      0.20000000298
+     ],
+     [
+      -0.0167,
+      0.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Fraktaleinfluss",
+    "value": 1.0
+   },
+   {
+    "index": 5,
+    "name": "Skalieren",
+    "value": 204.0,
+    "keyframes": [
+     [
+      -0.5333,
+      10.0
+     ],
+     [
+      -0.5167,
+      192.0
+     ],
+     [
+      -0.0167,
+      204.0
+     ]
+    ]
+   },
+   {
+    "index": 6,
+    "name": "Breite oder Höhe dehnen",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Offset (Turbulenz)",
+    "value": {
+     "point": [
+      0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "index": 8,
+    "name": "Komplexität",
+    "value": 10
+   },
+   {
+    "index": 9,
+    "name": "Evolution",
+    "value": 0.0
+   },
+   {
+    "index": 10,
+    "name": "Evolutionsoptionen",
+    "value": false
+   },
+   {
+    "index": 12,
+    "name": "Zyklus (in Umdrehungen)",
+    "value": 1
+   },
+   {
+    "index": 13,
+    "name": "Zufallsparameter",
+    "value": 148
+   },
+   {
+    "index": 14,
+    "name": "Zufallsparameter",
+    "value": false
+   }
+  ],
+  "quelle": "Fancy Out.prfpset",
+  "color_param": "Konturfarbe"
+ },
+ "gauss_in": {
+  "id": "gauss_in",
+  "match_name": "AE.Impact_Blur_FX",
+  "display": "Gaußscher Weichzeichner",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Es ist ein Fehler aufgetreten.",
+    "value": false
+   },
+   {
+    "index": 1,
+    "name": "Steuerelemente",
+    "value": false
+   },
+   {
+    "index": 3,
+    "name": "Parameter",
+    "value": 0.0
+   },
+   {
+    "index": 4,
+    "name": "Winkel",
+    "value": 45.0
+   },
+   {
+    "index": 5,
+    "name": "Stärke",
+    "value": 0.0,
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.5,
+      15.0
+     ]
+    ]
+   },
+   {
+    "index": 6,
+    "name": "Linienstärke",
+    "value": 89.0
+   },
+   {
+    "index": 7,
+    "name": "Einheitlicher Weichzeichner",
+    "value": true
+   },
+   {
+    "index": 8,
+    "name": "Chromatische Aberration",
+    "value": 100.0
+   },
+   {
+    "index": 9,
+    "name": "Kantenverhalten",
+    "value": 1
+   },
+   {
+    "index": 11,
+    "name": "Steuerelemente",
+    "value": false
+   },
+   {
+    "index": 12,
+    "name": "_ Overlay Mode",
+    "value": 0
+   },
+   {
+    "index": 13,
+    "name": "_ Overlay Info",
+    "value": false
+   },
+   {
+    "index": 15,
+    "name": "_ Applied Version",
+    "value": 260501.0
+   },
+   {
+    "index": 18,
+    "name": "_ Overlay Enabled",
+    "value": false
+   },
+   {
+    "index": 19,
+    "name": "_ Sequence Width",
+    "value": 0.0
+   },
+   {
+    "index": 20,
+    "name": "_ Sequence Height",
+    "value": 0.0
+   },
+   {
+    "index": 21,
+    "name": "_ Sequence Pixel Ratio",
+    "value": 0.0
+   }
+  ],
+  "quelle": "Gauß In.prfpset"
+ },
+ "gauss_out": {
+  "id": "gauss_out",
+  "match_name": "AE.Impact_Blur_FX",
+  "display": "Gaußscher Weichzeichner",
+  "anchor": "end",
+  "params": [
+   {
+    "index": 0,
+    "name": "Es ist ein Fehler aufgetreten.",
+    "value": false
+   },
+   {
+    "index": 1,
+    "name": "Steuerelemente",
+    "value": false
+   },
+   {
+    "index": 3,
+    "name": "Parameter",
+    "value": 0.0
+   },
+   {
+    "index": 4,
+    "name": "Winkel",
+    "value": 45.0
+   },
+   {
+    "index": 5,
+    "name": "Stärke",
+    "value": 0.0,
+    "keyframes": [
+     [
+      -0.5167,
+      15.0
+     ],
+     [
+      -0.0167,
+      0.0
+     ]
+    ]
+   },
+   {
+    "index": 6,
+    "name": "Linienstärke",
+    "value": 89.0
+   },
+   {
+    "index": 7,
+    "name": "Einheitlicher Weichzeichner",
+    "value": true
+   },
+   {
+    "index": 8,
+    "name": "Chromatische Aberration",
+    "value": 100.0
+   },
+   {
+    "index": 9,
+    "name": "Kantenverhalten",
+    "value": 1
+   },
+   {
+    "index": 11,
+    "name": "Steuerelemente",
+    "value": false
+   },
+   {
+    "index": 12,
+    "name": "_ Overlay Mode",
+    "value": 0
+   },
+   {
+    "index": 13,
+    "name": "_ Overlay Info",
+    "value": false
+   },
+   {
+    "index": 15,
+    "name": "_ Applied Version",
+    "value": 260501.0
+   },
+   {
+    "index": 18,
+    "name": "_ Overlay Enabled",
+    "value": false
+   },
+   {
+    "index": 19,
+    "name": "_ Sequence Width",
+    "value": 0.0
+   },
+   {
+    "index": 20,
+    "name": "_ Sequence Height",
+    "value": 0.0
+   },
+   {
+    "index": 21,
+    "name": "_ Sequence Pixel Ratio",
+    "value": 0.0
+   }
+  ],
+  "quelle": "Gauß Out.prfpset"
+ },
+ "karte_in": {
+  "id": "karte_in",
+  "match_name": "AE.ADBE Geometry2",
+  "display": "Transformieren",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    },
+    "keyframes": [
+     [
+      0.0,
+      {
+       "point": [
+        0.5,
+        -0.5027777552604675
+       ]
+      }
+     ],
+     [
+      0.5,
+      {
+       "point": [
+        0.5,
+        0.5
+       ]
+      }
+     ]
+    ]
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   },
+   {
+    "index": 11,
+    "name": "Sampling",
+    "value": 0
+   }
+  ],
+  "quelle": "KarteIN.prfpset"
+ },
+ "karte_out": {
+  "id": "karte_out",
+  "match_name": "AE.ADBE Geometry2",
+  "display": "Transformieren",
+  "anchor": "end",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    },
+    "keyframes": [
+     [
+      -0.5167,
+      {
+       "point": [
+        0.5,
+        0.5
+       ]
+      }
+     ],
+     [
+      -0.0167,
+      {
+       "point": [
+        0.5,
+        -0.5009258985519409
+       ]
+      }
+     ]
+    ]
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   },
+   {
+    "index": 11,
+    "name": "Sampling",
+    "value": 0
+   }
+  ],
+  "quelle": "KarteOUT.prfpset"
+ },
+ "kreis_in": {
+  "id": "kreis_in",
+  "match_name": "AE.ADBE Circle",
+  "display": "Kreis",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Mittig",
+    "value": {
+     "point": [
+      0.5043402910232544,
+      0.4475308656692505
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Radius",
+    "value": 0.0,
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.3333,
+      1300.0
+     ]
+    ]
+   },
+   {
+    "index": 2,
+    "name": "Kante",
+    "value": 0
+   },
+   {
+    "index": 3,
+    "name": "Kontextregler",
+    "value": 10.0
+   },
+   {
+    "index": 4,
+    "name": "Weiche Kante",
+    "value": false
+   },
+   {
+    "index": 5,
+    "name": "Weiche Kante außen",
+    "value": 100.0
+   },
+   {
+    "index": 6,
+    "name": "Weiche Kante innen",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Weiche Kante innen",
+    "value": false
+   },
+   {
+    "index": 9,
+    "name": "Farbe",
+    "value": {
+     "argb16": [
+      65280,
+      65280,
+      65280,
+      65280
+     ]
+    }
+   },
+   {
+    "index": 10,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 11,
+    "name": "Transfermodus",
+    "value": 2
+   }
+  ],
+  "quelle": "KreisIN.prfpset"
+ },
+ "kreis_out": {
+  "id": "kreis_out",
+  "match_name": "AE.ADBE Circle",
+  "display": "Kreis",
+  "anchor": "end",
+  "params": [
+   {
+    "index": 0,
+    "name": "Mittig",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Radius",
+    "value": 1300.0,
+    "keyframes": [
+     [
+      -0.35,
+      1300.0
+     ],
+     [
+      -0.0167,
+      0.0
+     ]
+    ]
+   },
+   {
+    "index": 2,
+    "name": "Kante",
+    "value": 0
+   },
+   {
+    "index": 3,
+    "name": "Kontextregler",
+    "value": 10.0
+   },
+   {
+    "index": 4,
+    "name": "Weiche Kante",
+    "value": false
+   },
+   {
+    "index": 5,
+    "name": "Weiche Kante außen",
+    "value": 100.0
+   },
+   {
+    "index": 6,
+    "name": "Weiche Kante innen",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Weiche Kante innen",
+    "value": false
+   },
+   {
+    "index": 9,
+    "name": "Farbe",
+    "value": {
+     "argb16": [
+      65280,
+      65280,
+      65280,
+      65280
+     ]
+    }
+   },
+   {
+    "index": 10,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 11,
+    "name": "Transfermodus",
+    "value": 2
+   }
+  ],
+  "quelle": "KreisOUT.prfpset"
+ },
+ "pop_in": {
+  "id": "pop_in",
+  "match_name": "AE.ADBE Geometry",
+  "display": "Transformieren",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 0.0,
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.2,
+      125.0
+     ],
+     [
+      0.4,
+      83.0
+     ],
+     [
+      0.6,
+      100.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   }
+  ],
+  "quelle": "PopIn.prfpset"
+ },
+ "pop_out": {
+  "id": "pop_out",
+  "match_name": "AE.ADBE Geometry",
+  "display": "Transformieren",
+  "anchor": "end",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0,
+    "keyframes": [
+     [
+      -0.6,
+      100.0
+     ],
+     [
+      -0.4,
+      83.0
+     ],
+     [
+      -0.2,
+      125.0
+     ],
+     [
+      0.0,
+      0.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   }
+  ],
+  "quelle": "PopOut.prfpset"
+ },
+ "right_in": {
+  "id": "right_in",
+  "match_name": "AE.ADBE Geometry2",
+  "display": "Transform",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Anchor Point",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    },
+    "keyframes": [
+     [
+      0.0,
+      {
+       "point": [
+        1.5,
+        0.5
+       ]
+      }
+     ],
+     [
+      0.5,
+      {
+       "point": [
+        0.5,
+        0.5
+       ]
+      }
+     ]
+    ]
+   },
+   {
+    "index": 3,
+    "name": "Scale Height",
+    "value": 100.0
+   },
+   {
+    "index": 4,
+    "name": "Scale Width",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Skew",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Skew Axis",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Rotation",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Opacity",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Shutter Angle",
+    "value": 0.0
+   },
+   {
+    "index": 11,
+    "name": "Sampling",
+    "value": 0
+   }
+  ],
+  "quelle": "RIGHT IN.prfpset"
+ },
+ "trans_in": {
+  "id": "trans_in",
+  "match_name": "AE.ADBE Geometry2",
+  "display": "Transformieren",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0,
+    "keyframes": [
+     [
+      0.0,
+      100.0
+     ],
+     [
+      0.3333,
+      500.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   },
+   {
+    "index": 11,
+    "name": "Sampling",
+    "value": 0
+   }
+  ],
+  "quelle": "TransIN.prfpset"
+ },
+ "trans_out": {
+  "id": "trans_out",
+  "match_name": "AE.ADBE Geometry2",
+  "display": "Transformieren",
+  "anchor": "end",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0,
+    "keyframes": [
+     [
+      -0.35,
+      500.0
+     ],
+     [
+      -0.0167,
+      100.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   },
+   {
+    "index": 11,
+    "name": "Sampling",
+    "value": 0
+   }
+  ],
+  "quelle": "TransOUT.prfpset"
+ },
+ "zoom_langsam": {
+  "id": "zoom_langsam",
+  "match_name": "AE.ADBE Geometry",
+  "display": "Transformieren",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0,
+    "keyframes": [
+     [
+      0.0,
+      100.0
+     ],
+     [
+      60.0,
+      130.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   }
+  ],
+  "quelle": "Zoom langsam (0.5).prfpset"
+ },
+ "zoom_schnell": {
+  "id": "zoom_schnell",
+  "match_name": "AE.ADBE Geometry",
+  "display": "Transformieren",
+  "anchor": "start",
+  "params": [
+   {
+    "index": 0,
+    "name": "Ankerpunkt",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 1,
+    "name": "Position",
+    "value": {
+     "point": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "index": 3,
+    "name": "Skalierungshöhe",
+    "value": 100.0,
+    "keyframes": [
+     [
+      0.0,
+      100.0
+     ],
+     [
+      120.0,
+      240.0
+     ]
+    ]
+   },
+   {
+    "index": 4,
+    "name": "Skalierungsbreite",
+    "value": 100.0
+   },
+   {
+    "index": 5,
+    "name": "Verzerren",
+    "value": 0.0
+   },
+   {
+    "index": 6,
+    "name": "Achse der Verzerrung",
+    "value": 0.0
+   },
+   {
+    "index": 7,
+    "name": "Drehung",
+    "value": 0.0
+   },
+   {
+    "index": 8,
+    "name": "Deckkraft",
+    "value": 100.0
+   },
+   {
+    "index": 10,
+    "name": "Verschlusswinkel",
+    "value": 0.0
+   }
+  ],
+  "quelle": "Zoom schnell (1.0).prfpset"
+ }
+}
