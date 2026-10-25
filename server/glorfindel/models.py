@@ -59,6 +59,7 @@ class Scene(BaseModel):
     standbild: Literal["ende", "start", "aus"] = "ende"
     kommentar: list[CommentBlock] = Field(default_factory=list)
     fixiert: bool = False  # "dramaturgisch fixieren"
+    gruppe: str = ""       # Szenengruppe (mehrere Shots/Messeinheiten gehören zu einer Szene des Videos); leer = keine
     status: SceneStatus = "neu"
     geaendert_von: str = ""
     geaendert_am: str = ""
@@ -95,4 +96,5 @@ class Project(BaseModel):
     reference_source: str = ""
     ablauf: list[str] = Field(default_factory=list)  # manuelle Gesamtreihenfolge der Szenen (leer = nach Strängen)
     dialog_sprache: str = "auto"
+    gruppen: list[dict] = Field(default_factory=list)  # Szenengruppen: [{id, titel, farbe}]
     einheiten_migriert: bool = False  # Szenen = Messeinheiten (Bereich), Segmente frei: Altdaten einmalig umgestellt

@@ -129,7 +129,10 @@ export function toolbar(ta, { onPreview } = {}) {
     color, b('A', 'Markierten Text in der gewählten Farbe', () => colorize(ta, color.value)), b('▮', 'Markierten Text in der gewählten Farbe hervorheben', () => colorize(ta, color.value, true)),
     h('span', { class: 'rt-sep' }),
     b('✕', 'Formatierung entfernen (Auswahl, sonst ganzer Text)', () => clearFormat(ta)));
-  if (onPreview) bar.append(h('span', { class: 'grow' }), b('Vorschau', 'Formatierten Text ansehen', onPreview));
+  if (onPreview) {
+    const pv = b('Vorschau', 'Formatierten Text ansehen / zurück zum Bearbeiten', () => { pv.textContent = onPreview() ? 'Bearbeiten' : 'Vorschau'; });
+    bar.append(h('span', { class: 'grow' }), pv);
+  }
   ta.addEventListener('keydown', (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
     const k = e.key.toLowerCase();

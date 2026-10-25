@@ -106,7 +106,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                   alignment: dict | None = None, assets: dict[str, dict] | None = None,
                   maps: dict[str, dict] | None = None, free_blocks: list[dict] | None = None,
                   still_names: dict[str, str] | None = None, version: int = 1,
-                  episode_fps: float = 23.976, speaker_filter: set[str] | None = None) -> dict:
+                  episode_fps: float = 23.976, speaker_filter: set[str] | None = None, group_titles: dict[str, str] | None = None) -> dict:
     seq = template["sequence"]
     tm, tr = template["timing"], template["tracks"]
     tl = Timeline(seq["fps"])
@@ -225,12 +225,16 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         amazon_clip["end"] = max(amazon_clip["end"], still_end)
         return still_end
 
+    last_group = ""
     for n, sc in enumerate(scenes, 1):
         # ---- Serienmaterial ----
         s_start = t
         if not sc.segmente:
             tl.warnings.append(f"{sc.titel or sc.id}: noch kein Serienmaterial (Segment) gesetzt")
-        tl.mark(t, f"Szene {n:02d}: {sc.titel or sc.id}" + (f" [{sc.strang}]" if sc.strang else ""))
+        if sc.gruppe and sc.gruppe != last_group:
+            tl.mark(t, f"Szenengruppe: {(group_titles or {}).get(sc.gruppe) or sc.gruppe}", "gruppe")
+        last_group = sc.gruppe
+        tl.mark(t, f"Shot {n:02d}: {sc.titel or sc.id}" if sc.gruppe else f"Szene {n:02d}: {sc.titel or sc.id}" + (f" [{sc.strang}]" if sc.strang else ""))
         amazon_clip = tl.add(tr["credit_amazon"], "credit", s_start, s_start, slot="credit_amazon", text="© amazon studios", scene=sc.id)
         plan = set(still_plan(sc))
         by_seg: dict[int, list] = {}

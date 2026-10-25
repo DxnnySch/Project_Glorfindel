@@ -310,7 +310,7 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     pkg = rough_cut.build_package(
         scenes, slug=ep.p.slug, template=template, th=ep.settings.thresholds,
         alignment=load_alignment(ep), assets=load_assets(ep), maps=load_maps(ep), free_blocks=ep.free_blocks(),
-        version=version, episode_fps=pr.fps, speaker_filter=speakers)
+        version=version, episode_fps=pr.fps, speaker_filter=speakers, group_titles={g["id"]: g.get("titel", "") for g in pr.gruppen})
     ref = ep.source(pr.reference_source)
     rec_paths = {r["id"]: r["path"] for r in load_alignment(ep)["recordings"]}
     for tr in pkg["tracks"].values():

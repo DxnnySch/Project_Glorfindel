@@ -280,3 +280,13 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .rt-view strong { font-weight: 700; } .rt-view s { opacity: .7; }
 
 .map-viewport { position: relative; overflow: hidden; border-radius: var(--radius); background: #000; } .map-viewport .map-canvas { border-radius: 0; will-change: transform; }
+
+/* ---- Szenengruppen ---- */
+.group-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+.group-head { display: flex; flex-wrap: nowrap; align-items: center; gap: 2px; padding: 6px 8px 6px 4px; background: var(--panel-2); border-left: 4px solid var(--accent); border-bottom: 1px solid var(--line); }
+.group-head .group-title { flex: 1 1 auto; min-width: 0; text-overflow: ellipsis; font-weight: 600; background: transparent; border: 1px solid transparent; padding: 3px 6px; }
+.group-head .group-title:hover, .group-head .group-title:focus { border-color: var(--line); background: var(--bg); }
+.scene-item.grouped { margin-left: 10px; }
+.scene-pick { width: 15px; height: 15px; margin: 0 6px 0 0; flex: none; cursor: pointer; opacity: .45; } .scene-item:hover .scene-pick, .scene-pick:checked { opacity: 1; }
+
+.group-head .btn.sm { padding: 3px 5px; } .group-head .chip { flex: none; }

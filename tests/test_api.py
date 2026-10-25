@@ -238,3 +238,20 @@ def test_frame_capture_makes_a_map_from_the_video(client):
     again = client.post("/api/ep/3/1/frame", json={"source": "q1", "t": 3.0}).json()
     assert again["map"]["id"] == "map_02"
     assert client.post("/api/ep/3/1/frame", json={"source": "zzz", "t": 1}).status_code == 404
+
+
+def test_group_shots_into_scenes(client):
+    client.post("/api/episodes", json={"season": 3, "episode": 1})
+    ids = [client.post("/api/ep/3/1/scenes", json={"titel": f"Shot {i}"}).json()["id"] for i in range(1, 4)]
+    r = client.post("/api/ep/3/1/scenes-group", json={"ids": ids[:2], "titel": "Ankunft"}).json()
+    assert r["gruppe"]["titel"] == "Ankunft" and r["gruppe"]["id"] == "g_01"
+    scs = {s["id"]: s for s in client.get("/api/ep/3/1/scenes").json()}
+    assert scs[ids[0]]["gruppe"] == scs[ids[1]]["gruppe"] == "g_01" and scs[ids[2]]["gruppe"] == ""
+    # vorhandene Gruppe erweitern, umbenennen
+    client.post("/api/ep/3/1/scenes-group", json={"ids": [ids[2]], "gruppe": "g_01"})
+    assert client.put("/api/ep/3/1/groups/g_01", json={"titel": "Ankunft in Lindon"}).json()["titel"] == "Ankunft in Lindon"
+    assert {s["gruppe"] for s in client.get("/api/ep/3/1/scenes").json()} == {"g_01"}
+    # auflösen
+    assert client.delete("/api/ep/3/1/groups/g_01").status_code == 200
+    assert {s["gruppe"] for s in client.get("/api/ep/3/1/scenes").json()} == {""} and client.get("/api/ep/3/1/groups").json() == []
+    assert client.post("/api/ep/3/1/scenes-group", json={"ids": ["sz_99"]}).status_code == 404

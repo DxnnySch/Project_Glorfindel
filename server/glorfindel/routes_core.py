@@ -389,6 +389,82 @@ def restore_scene(sid: str, ep: Episode = Depends(ep_of)):
     return ep.restore_scene(sid).model_dump(by_alias=True)
 
 
+class GroupBody(BaseModel):
+    ids: list[str]
+    titel: str = ""
+    gruppe: str | None = None        # vorhandene Gruppe erweitern statt neue anlegen
+
+
+@router.get("/ep/{season}/{episode}/groups")
+def get_groups(ep: Episode = Depends(ep_of)):
+    return ep.project().gruppen
+
+
+@router.post("/ep/{season}/{episode}/scenes-group")
+def group_scenes(body: GroupBody, ep: Episode = Depends(ep_of)):
+    """Mehrere Shots (Messeinheiten) zu einer Szenengruppe zusammenfassen."""
+    ids = [i for i in dict.fromkeys(body.ids)]
+    if not ids:
+        raise HTTPException(400, "Keine Szenen gewählt.")
+    scs = {s.id: s for s in ep.scenes()}
+    unknown = [i for i in ids if i not in scs]
+    if unknown:
+        raise HTTPException(404, f"Unbekannte Szenen: {', '.join(unknown)}")
+    pr = ep.project()
+    palette = ["#e9b44c", "#4da3e0", "#4cc38a", "#d96ad0", "#ef6b5b", "#7ee0a0"]
+    if body.gruppe:
+        g = next((x for x in pr.gruppen if x["id"] == body.gruppe), None)
+        if g is None:
+            raise HTTPException(404, "Gruppe unbekannt")
+    else:
+        n = 1
+        while any(x["id"] == f"g_{n:02d}" for x in pr.gruppen):
+            n += 1
+        g = {"id": f"g_{n:02d}", "titel": body.titel.strip() or f"Szene {n}", "farbe": palette[(n - 1) % len(palette)]}
+        pr.gruppen.append(g)
+    for i in ids:
+        sc = scs[i]
+        sc.gruppe = g["id"]
+        ep.save_scene(sc, f"Szene {i} zu Gruppe {g['titel']}")
+    # leere Gruppen verwerfen
+    used = {s.gruppe for s in ep.scenes() if s.gruppe}
+    pr.gruppen = [x for x in pr.gruppen if x["id"] in used]
+    ep.save_project(pr)
+    return {"gruppe": g, "gruppen": pr.gruppen, "ids": ids}
+
+
+class GroupEdit(BaseModel):
+    titel: str | None = None
+    farbe: str | None = None
+
+
+@router.put("/ep/{season}/{episode}/groups/{gid}")
+def edit_group(gid: str, body: GroupEdit, ep: Episode = Depends(ep_of)):
+    pr = ep.project()
+    g = next((x for x in pr.gruppen if x["id"] == gid), None)
+    if g is None:
+        raise HTTPException(404, "Gruppe unbekannt")
+    if body.titel is not None:
+        g["titel"] = body.titel
+    if body.farbe is not None:
+        g["farbe"] = body.farbe
+    ep.save_project(pr)
+    return g
+
+
+@router.delete("/ep/{season}/{episode}/groups/{gid}")
+def ungroup(gid: str, ep: Episode = Depends(ep_of)):
+    """Gruppe auflösen: die Shots bleiben, nur die Zuordnung entfällt."""
+    for sc in ep.scenes():
+        if sc.gruppe == gid:
+            sc.gruppe = ""
+            ep.save_scene(sc, f"Szene {sc.id} aus Gruppe gelöst")
+    pr = ep.project()
+    pr.gruppen = [x for x in pr.gruppen if x["id"] != gid]
+    ep.save_project(pr)
+    return {"ok": True}
+
+
 @router.post("/ep/{season}/{episode}/scenes-reorder")
 def reorder(body: Reorder, ep: Episode = Depends(ep_of)):
     ep.renumber(body.order)

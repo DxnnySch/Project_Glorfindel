@@ -233,17 +233,26 @@ Seit Version 0.2 kann die App **direkt in Premiere arbeiten**, statt eine XML-Da
 **Einrichten (einmalig):** Ansicht **Premiere** → „Panel einrichten“, die Rückfrage bestätigen, Premiere neu starten, **Fenster → Erweiterungen → „Glorfindel Bridge“** öffnen. In der App steht dann „Mit Premiere verbunden“. Das Panel muss geöffnet bleiben.
 
 **Rohschnitt bauen:** „In Premiere bauen“. Die App
-1. macht aus der Referenz eine **konforme Fassung** (konstante Bildrate, ohne Balken) – dieselbe Datei liegt in Premiere und liefert die Standbilder, deshalb passen Bild und Standbild genau,
+1. macht aus der Referenz eine **konforme Fassung** (konstante Bildrate, ohne Balken; liegt die HQ-Datei nur zeitlich versetzt, ist die Referenz gleich auf deren Zeitachse verschoben) – dieselbe Datei liegt in Premiere und liefert die Standbilder, deshalb passen Bild und Standbild genau,
 2. erzeugt die Standbilder, die Credit-Grafiken und eine Sequenz-Vorgabe mit allen Spuren,
-3. baut in deinem geöffneten Projekt eine **neue Sequenz „Rohschnitt … vN“**: Szenen aus einer verschachtelten Episoden-Sequenz (V1, Ton A4), Standbilder, Sprecher (A2/A3), Pause/Play (V7), Artworks mit Zuschnitt, Schatten, Zoom und Fancy In/Out (V3/V4), Credits (V9/V10/V13), Blur am Standbild und Marker.
+3. baut in deinem geöffneten Projekt eine **neue Sequenz „Rohschnitt … vN“**: Szenen aus einer verschachtelten Episoden-Sequenz (V1, Ton A4), Standbilder, Sprecher (A2/A3), Pause/Play (V7), Artworks in je einer **verschachtelten Sequenz** (Bild + Maske + Spurmaske-Key; Schatten, Zoom, Fancy In/Out liegen auf der Sequenz, V3/V4), Karten mit Ein-/Ausfahrt, Schwarzstreifen (V8), Credits (V9/V10/V13), Gauß In/Out als Einstellungsebene (V2) und Marker.
 
 Nach dem Bau zeigt die App, was **nicht** gebaut werden konnte, und Hinweise. Bestehende Sequenzen werden nie verändert.
 
-**Proxy ↔ HQ:** Nach „HQ-Conform“ (Ansicht Kontrolle) genügt **„Auf HQ umschalten“**: Die App tauscht nur die Datei der Episoden-Sequenz und ersetzt die Standbilder unter **gleichem Namen am gleichen Ort** (Sicherung des Proxy-Stands, Rückweg jederzeit). Alle Clips, Effekte, Animationen und alles, was du von Hand geändert hast, bleibt.
+**Proxy ↔ HQ:** **„Auf HQ umschalten“** tauscht nur die Datei der Episoden-Sequenz und ersetzt die Standbilder durch Bilder aus der HQ-Datei (eigener Ordner, nichts wird überschrieben, Rückweg jederzeit). Alle Clips, Effekte, Animationen und alles, was du von Hand geändert hast, bleibt. Ist die HQ-Datei nur zeitlich verschoben (Normalfall: ein Ankerpunkt), wird sie **unverändert** eingesetzt – ein HQ-Conform ist dann nicht nötig. Nur bei Tempounterschieden braucht es weiterhin den „HQ-Conform“ in der Kontrolle.
 
 **Diagnose:** Der **Selbsttest** prüft in einem Test-Fach, ob Effekte, Farben und Keyframes in deiner Premiere-Version so ankommen wie geplant (und räumt auf). Mit **„Aktive Sequenz auslesen“** siehst du Spuren, Clips und Effekte zum Vergleich mit dem Ursprungsschnitt.
 
-**Grenzen:** Premiere erlaubt Plugins keine zusätzlichen Spuren, Textgrafiken, Einstellungsebenen oder Audio-Blenden „Konstante Leistung“. Darum: eigene Sequenz-Vorgabe, Credits als Bild mit Transparenz (nicht als Text editierbar), Blur direkt am Standbild, Audio-Blenden von Hand.
+**Grenzen:** Premiere erlaubt Plugins keine zusätzlichen Spuren, Textgrafiken, neue Einstellungsebenen oder Audio-Blenden „Konstante Leistung“. Darum: eigene Sequenz-Vorgabe, Credits als Bild mit Transparenz (nicht als Text editierbar), Audio-Blenden von Hand. Für **Gauß In/Out** legst du einmal im Projekt **Datei → Neu → Einstellungsebene** an (Name „Einstellungsebene“); die App setzt sie dann auf V2. Fehlt sie, liegt der Weichzeichner ersatzweise direkt am Standbild.
+
+**Effekte und Artwork-Ausschnitt wählen:** unter **Einstellungen → Premiere-Rohschnitt** (Zoom schnell/langsam, Fancy, Karten-Animation, Artwork-Größe, Maske). Die Effekte werden direkt aus deinen `.prfpset`-Vorgaben gelesen. Bei einzelnen Artworks wählt die App die Maske nach dem Bildformat (Querformat → „Maske“, Quadrat/Hochformat → „Maske Quadrat“) und zeigt möglichst viel vom Bild. Optional kann ein ScaDS-Bildmodell das Hauptmotiv erkennen (Einstellungen → KI-Hilfen → „Automatischer Bildausschnitt“, sendet verkleinerte Artwork-Bilder an ScaDS.AI).
+
+## 13c. Szenen zusammenfassen, Formatierung, Karten
+
+- **Shots zu Szenen zusammenfassen:** Im Szenen-Editor Shots links per Häkchen wählen (Umschalt-Klick für einen Bereich), **„Zusammenfassen“**, Titel eingeben. Die Szene erscheint als Gruppe in der Liste (zuklappbar, umbenennbar, auflösbar) und setzt im Premiere-Schnitt einen Marker. Die Shots selbst bleiben unverändert.
+- **Kommentare formatieren:** Über dem Kommentar steht eine Leiste: fett, kursiv, unterstrichen, durchgestrichen, Überschrift, Listen, Einrücken, Textfarbe und Hervorhebung (Strg+B/I/U gehen auch). „Vorschau“ zeigt das Ergebnis. Die Formatierung dient dir beim Sprechen; für Wortzählung, Abgleich und Bild-Einblendungen zählt nur der reine Text.
+- **Karteneditor:** Jedes Element hat **Anfang (ab) und Ende (bis)**; leer = bleibt bis zum Schluss. Mit dem **Mausrad zoomen**, mit Leertaste oder mittlerer/rechter Maustaste halten und ziehen verschieben.
+- **Bild aus dem Video markieren:** Im Szenen-Editor speichert das Bildsymbol in der Player-Leiste das aktuelle Bild (volle Auflösung) und öffnet es im Karteneditor. In der Ansicht **Karten** gibt es dasselbe über **„Karte aus Videobild“**.
 
 ## 14. Protokoll und Konflikte
 

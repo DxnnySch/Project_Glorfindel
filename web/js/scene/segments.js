@@ -108,6 +108,7 @@ export function createSegments(E) {
         const on = view.hidden;
         view.hidden = !on; mt.el.hidden = on;
         if (on) view.replaceChildren(render(b.markup || b.text));
+        return on;
       } });
       rich = h('div', { class: 'rt-wrap' }, bar, mt.el, view);
     }

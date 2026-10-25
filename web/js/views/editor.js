@@ -1,5 +1,5 @@
 // Szenen-Editor (Segment-Workflow): Liste mit Status auf einen Blick, Player + Dialog, Segmentkarten mit Kommentaren, Autosave.
-import { h, $, clear, btn, icon, toast, modal, confirmBox, busy, fmtDur, fmtTC, debounce, empty, lightLabel, remember, thumbOfAsset, thumbOfMap } from '../ui.js';
+import { h, $, clear, btn, icon, toast, modal, confirmBox, busy, fmtDur, fmtTC, debounce, empty, lightLabel, remember, thumbOfAsset, thumbOfMap, field } from '../ui.js';
 import { api, epUrl } from '../api.js';
 import { S, refSource, strandOf } from '../state.js';
 import { createPlayer, segColor } from '../scene/player.js';
@@ -82,6 +82,46 @@ export async function render(main, ctx) {
   };
   const anchorsOf = (s) => s.kommentar.flatMap((b) => b.anker || []);
   const thumbFor = (a) => { const it = a.karte ? maps.find((m) => m.id === a.karte) : assets.find((x) => x.id === a.asset); return it ? (a.karte ? thumbOfMap(it) : thumbOfAsset(it)) : null; };
+  // ---------- Szenengruppen: mehrere Shots zu einer Szene des Videos zusammenfassen ----------
+  const checked = new Set();
+  let lastChecked = null;
+  const groups = () => (S.data.project.gruppen ||= []);
+  const groupOf = (id) => groups().find((g) => g.id === id);
+  const groupBar = h('div', { class: 'group-bar', hidden: true });
+  async function reloadGroups() {
+    scenes = await api.get(epUrl(ep, '/scenes')); scenes.forEach(normalize);
+    S.data.project.gruppen = await api.get(epUrl(ep, '/groups'));
+    sel = scenes.find((x) => x.id === sel?.id) || sel; drawList(); if (sel) { drawHead(); }
+  }
+  async function groupChecked() {
+    const ids = scenes.filter((x) => checked.has(x.id)).map((x) => x.id);
+    if (!ids.length) return;
+    if (dirty && sel) await save.now();
+    let target = '', titel = '';
+    const existing = h('select', { onChange: (e) => { target = e.target.value; } }, h('option', { value: '' }, 'Neue Szene anlegen …'), groups().map((g) => h('option', { value: g.id }, g.titel)));
+    const name = h('input', { type: 'text', placeholder: 'Titel der Szene (z. B. „Ankunft in Lindon“)', onInput: (e) => { titel = e.target.value; } });
+    modal({ title: `${ids.length} Shot${ids.length > 1 ? 's' : ''} zu einer Szene zusammenfassen`, body: h('div', { class: 'col' },
+      h('p', { class: 'help' }, 'Die Shots bleiben unverändert (Messeinheiten, Segmente, Kommentare). Die Gruppe fasst sie in der Liste zusammen und setzt im Premiere-Schnitt einen Marker „Szenengruppe“.'),
+      groups().length ? field('Zu vorhandener Szene hinzufügen', existing) : null, field('Oder neue Szene', name)),
+    actions: [{ label: 'Abbrechen' }, { label: 'Zusammenfassen', kind: 'primary', onClick: async () => {
+      try { await api.post(epUrl(ep, '/scenes-group'), { ids, titel, gruppe: target || null }); checked.clear(); lastChecked = null; await reloadGroups(); toast('Zusammengefasst.', 'ok'); }
+      catch (e) { toast(e.message, 'err'); return false; } } }] });
+  }
+  function drawGroupBar() {
+    groupBar.hidden = !checked.size;
+    groupBar.replaceChildren(h('span', { class: 'help grow', style: { whiteSpace: 'nowrap' } }, `${checked.size} gewählt`), btn('Zusammenfassen', { size: 'sm', kind: 'primary', icon: 'edit', title: 'Die gewählten Shots zu einer Szene zusammenfassen', onClick: groupChecked }), btn('', { size: 'sm', kind: 'ghost', icon: 'x', title: 'Auswahl aufheben', onClick: () => { checked.clear(); drawList(); } }));
+  }
+  const collapsed = (ui.collapsed ||= {});
+  function groupHeader(g, members) {
+    const dur = members.reduce((u, x) => u + (x.bereich ? x.bereich[1] - x.bereich[0] : 0), 0);
+    const title = h('input', { type: 'text', class: 'group-title', value: g.titel, title: 'Titel der Szene', onClick: (e) => e.stopPropagation(),
+      onChange: async (e) => { g.titel = e.target.value; try { await api.put(epUrl(ep, `/groups/${g.id}`), { titel: g.titel }); } catch (err) { toast(err.message, 'err'); } } });
+    return h('div', { class: 'group-head', style: { borderLeftColor: g.farbe || 'var(--accent)' } },
+      btn('', { size: 'sm', kind: 'ghost', icon: collapsed[g.id] ? 'chevron' : 'down', title: collapsed[g.id] ? 'Aufklappen' : 'Zuklappen', onClick: () => { collapsed[g.id] = !collapsed[g.id]; drawList(); } }),
+      title, h('span', { class: 'chip faint', title: `${members.length} Shots, zusammen ${fmtDur(dur)} in der Episode` }, `${members.length}`),
+      btn('', { size: 'sm', kind: 'ghost', icon: 'check', title: 'Alle Shots der Szene auswählen', onClick: () => { members.forEach((m) => checked.add(m.id)); drawList(); } }),
+      btn('', { size: 'sm', kind: 'ghost', icon: 'x', title: 'Szene auflösen (die Shots bleiben)', onClick: async () => { try { await api.del(epUrl(ep, `/groups/${g.id}`)); await reloadGroups(); } catch (e) { toast(e.message, 'err'); } } }));
+  }
   let listBody = null;
   function drawList() {
     if (!listEl.firstChild) {
@@ -90,22 +130,33 @@ export async function render(main, ctx) {
         ...S.data.strands.map((x) => h('option', { value: `st:${x.id}` }, `Strang: ${x.name}`)), ...Object.entries(STATUS).map(([k, v]) => h('option', { value: `status:${k}` }, `Status: ${v}`)));
       fsel.value = ui.filt;
       listEl.append(h('div', { class: 'scene-list-head' }, h('div', { class: 'row' }, h('b', { class: 'grow', title: 'Szenen sind die Messeinheiten aus der Szenenerkennung. Ins Video kommen nur Segmente.' }, 'Szenen'), h('span', { class: 'help', id: 'scene-count' })), h('div', { class: 'col gap-s', style: { marginTop: '8px' } }, search, fsel)));
-      listBody = h('div'); listEl.append(listBody);
+      listBody = h('div'); listEl.append(groupBar, listBody);
       listEl.addEventListener('scroll', () => { ui.listScroll = listEl.scrollTop; });
     }
     clear(listBody);
     const shown = scenes.filter(matches);
     $('#scene-count', listEl).textContent = shown.length === scenes.length ? `${scenes.length}` : `${shown.length} von ${scenes.length}`;
+    drawGroupBar();
+    let prevGroup = '';
     shown.forEach((s) => {
+      const g = s.gruppe && groupOf(s.gruppe);
+      if (g && s.gruppe !== prevGroup) listBody.append(groupHeader(g, scenes.filter((x) => x.gruppe === g.id)));
+      prevGroup = s.gruppe || '';
+      if (g && collapsed[g.id]) return;
       const i = scenes.indexOf(s), st = strandOf(s.strang), light = s.report?.light || 'grau';
       const nPh = s.kommentar.filter((b) => b.sprecher === 'philipp').length, nDa = s.kommentar.filter((b) => b.sprecher === 'danny').length;
       const anchors = anchorsOf(s);
       const unused = !s.segmente.length && !(s.beruehrt || []).length && !s.kommentar.length, touched = (s.beruehrt || []).length;
-      const el = h('div', { class: `scene-item ${sel?.id === s.id ? 'active' : ''} ${unused ? 'unused' : ''}`, draggable: 'true', style: { borderLeftColor: st?.color || 'transparent' },
+      const pick = h('input', { type: 'checkbox', class: 'scene-pick', checked: checked.has(s.id), title: 'Zum Zusammenfassen auswählen (Umschalt-Klick: Bereich)',
+        onClick: (e) => { e.stopPropagation(); const on = e.target.checked; const li = shown.indexOf(s);
+          if (e.shiftKey && lastChecked != null) { const [a, b] = [lastChecked, li].sort((x, y) => x - y); shown.slice(a, b + 1).forEach((x) => (on ? checked.add(x.id) : checked.delete(x.id))); } else (on ? checked.add(s.id) : checked.delete(s.id));
+          lastChecked = li; drawList(); } });
+      const el = h('div', { class: `scene-item ${sel?.id === s.id ? 'active' : ''} ${unused ? 'unused' : ''} ${g ? 'grouped' : ''}`, draggable: 'true', style: { borderLeftColor: g?.farbe || st?.color || 'transparent' },
         onClick: () => select(s.id),
         onDragstart: (e) => { e.dataTransfer.setData('text/plain', s.id); },
         onDragover: (e) => { e.preventDefault(); el.classList.add('dragover'); }, onDragleave: () => el.classList.remove('dragover'),
         onDrop: async (e) => { e.preventDefault(); el.classList.remove('dragover'); const from = e.dataTransfer.getData('text/plain'); if (from && from !== s.id) await move(from, s.id); } },
+      pick,
       h('span', { class: 'no', title: s.nr ? `Szene ${s.nr} (Messeinheit der Szenenerkennung)${s.ausgabe ? ` · Position im Video: ${s.ausgabe}` : ''}` : '' }, String(s.nr || s.ausgabe || i + 1).padStart(2, '0')),
       h('div', { class: 'grow' }, h('div', { class: 't' }, s.titel || '(ohne Titel)'),
         h('small', {}, h('span', { class: `dot ${light}`, title: lightLabel[light] || 'kein Material' }), st ? st.name : 'ohne Strang', '·', STATUS[s.status] || s.status, s.fixiert ? icon('lock') : null,
@@ -170,12 +221,12 @@ export async function render(main, ctx) {
     const fix = h('label', { class: 'check', title: 'Diese Szene behält ihre Position im Ablauf, auch wenn Stränge umsortiert werden' }, h('input', { type: 'checkbox', checked: s.fixiert, onChange: (e) => { s.fixiert = e.target.checked; touch(); drawList(); } }), 'Position fixiert');
     const titleAi = S.settings._scads_key_present && S.settings.llm.enabled ? btn('', { icon: 'sparkle', kind: 'ghost', title: 'KI: Titel vorschlagen', onClick: async () => {
       try { const r = await busy('KI formuliert einen Titel …', api.post('/api/llm/scene-title', { text: s.kommentar.map((b) => b.text).join(' ') })); if (r.titel) { s.titel = r.titel; touch(); drawHead(); drawList(); } else toast('Kein Titelvorschlag erhalten.', 'info'); } catch (e) { toast(e.message, 'err'); } } }) : null;
-    head.append(h('div', { class: 'row' }, h('div', { class: 'grow' }, title), titleAi,
+    head.append(...[h('div', { class: 'row' }, h('div', { class: 'grow' }, title), titleAi,
       btn('', { icon: 'up', kind: 'ghost', title: 'Szene nach oben (Alt+Umschalt+↑)', onClick: () => moveTo(s.id, scenes.indexOf(sel) - 1) }),
       btn('', { icon: 'down', kind: 'ghost', title: 'Szene nach unten (Alt+Umschalt+↓)', onClick: () => moveTo(s.id, scenes.indexOf(sel) + 1) }),
       s.bereich ? null : btn('', { icon: 'trash', kind: 'ghost danger', title: 'Lose Szene löschen (rückgängig machbar)', onClick: () => removeScene(s) })),
     s.bereich ? h('div', { class: 'help scene-unit', style: { marginTop: '6px' } }, icon('info'), ` Szene ${s.nr || ''} · ${fmtTC(s.bereich[0])} – ${fmtTC(s.bereich[1])} (${(s.bereich[1] - s.bereich[0]).toFixed(0)} s) · Messeinheit der Szenenerkennung, wird nicht gelöscht. Ins Video kommen nur Segmente: ein Segment kann eine Szene sein, mehrere Szenen überspannen oder nur einen Teil ausmachen.`) : null,
-    h('div', { class: 'row wrap meta-row', style: { marginTop: '8px' } }, strandSel, statusSel, standbild, fix, h('span', { class: 'grow' }), pills, stateEl));
+    h('div', { class: 'row wrap meta-row', style: { marginTop: '8px' } }, strandSel, statusSel, standbild, fix, h('span', { class: 'grow' }), pills, stateEl)].filter(Boolean));
     drawPills();
   }
   async function removeScene(s) {
