@@ -41,7 +41,10 @@ def create_app(state: AppState | None = None) -> FastAPI:
                 o_port, h_port = o_full.rsplit(":", 1)[-1] if o_full.count(":") and not o_full.endswith("]") else "", h_full.rsplit(":", 1)[-1] if h_full.count(":") and not h_full.endswith("]") else ""
                 if o not in LOCAL_HOSTS or (o_port.isdigit() and h_port.isdigit() and o_port != h_port):
                     return JSONResponse({"detail": "Fremde Herkunft abgelehnt"}, status_code=403)
-        return await call_next(request)
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"          # Oberfläche immer neu prüfen: nach Updates keine veralteten Seiten
+        return response
 
     from pydantic import ValidationError
 

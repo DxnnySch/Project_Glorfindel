@@ -54,3 +54,10 @@ def test_premiere_effects_endpoint_lists_library(tmp_path, monkeypatch):
     assert r.status_code == 200
     ids = {e["id"] for e in r.json()["effekte"]}
     assert {"drop_shadow", "fancy_in", "fancy_out", "zoom_schnell", "zoom_langsam", "karte_in", "karte_out"} <= ids
+
+
+def test_static_files_are_revalidated(tmp_path, monkeypatch):
+    monkeypatch.setenv("GLORFINDEL_HOME", str(tmp_path))
+    c = TestClient(create_app())
+    assert c.get("/static/js/main.js").headers["cache-control"] == "no-cache"
+    assert c.get("/").headers["cache-control"] == "no-cache"
