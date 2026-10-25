@@ -175,4 +175,53 @@ async function probeBin(ppro) {
   return out;
 }
 
-module.exports = { probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };
+/** Fehlersuche: Clip auf mehrere Arten in eine Test-Sequenz setzen, um zu sehen, was Premiere akzeptiert. Räumt alles wieder auf. */
+async function probePlace(ppro, { png, preset }) {
+  const BIN = 'GL-Probe-Clip';
+  const { txp, getProj, invalidate, norm } = require('./core');
+  const media = require('./media');
+  const out = [];
+  await media.ensureBin(ppro, await getProj(ppro), BIN);
+  await media.importFiles(ppro, await getProj(ppro), [png], BIN);
+  const pngName = png.split(/[\/]/).pop();
+  const rawItem = async () => (await (await media.getBin(ppro, await getProj(ppro), BIN)).getItems()).find((i) => i.name === pngName);
+  const TT = (sec) => ppro.TickTime.createWithSeconds(sec);
+  const variants = {
+    'roh, V1, A -1': (ed, item) => ed.createOverwriteItemAction(item, TT(0), 0, -1),
+    'roh, V1, A 0': (ed, item) => ed.createOverwriteItemAction(item, TT(0), 0, 0),
+    'roh, V13, A -1': (ed, item) => ed.createOverwriteItemAction(item, TT(2), 12, -1),
+    'roh, V13, A 0': (ed, item) => ed.createOverwriteItemAction(item, TT(2), 12, 0),
+    'ClipProjectItem, V1, A -1': (ed, item) => ed.createOverwriteItemAction(ppro.ClipProjectItem.cast(item), TT(0), 0, -1),
+    'roh, V1, A 99': (ed, item) => ed.createOverwriteItemAction(item, TT(0), 0, 99),
+    'insert roh, V1, A -1': (ed, item) => ed.createInsertProjectItemAction(item, TT(0), 0, -1, false),
+  };
+  for (const [name, mk] of Object.entries(variants)) {
+    const r = { variante: name };
+    let guid = null;
+    try {
+      const seq = await (await getProj(ppro)).createSequenceWithPresetPath('GL-Probe-Seq', preset);
+      guid = String(seq.guid); invalidate();
+      const project = await getProj(ppro);
+      const ed = ppro.SequenceEditor.getEditor((await project.getSequences()).find((x) => String(x.guid) === guid));
+      const item = await rawItem();
+      await txp(ppro, 'GL-Probe', (add) => add(mk(ed, item)));
+      r.ergebnis = 'angenommen';
+      const s3 = (await (await getProj(ppro)).getSequences()).find((x) => String(x.guid) === guid);
+      const counts = [];
+      for (let i = 0; i < 14; i++) { const n = (await s3.getVideoTrack(i)).getTrackItems(ppro.Constants.TrackItemType.CLIP, false).length; if (n) counts.push('V' + (i + 1) + ':' + n); }
+      r.spuren = counts.join(' ') || 'keine Clips';
+    } catch (e) { r.fehler = errText(e); invalidate(); }
+    try {
+      if (guid) { const project = await getProj(ppro); const sq = (await project.getSequences()).find((x) => String(x.guid) === guid); if (sq) { await project.deleteSequence(sq); invalidate(); } }
+    } catch (e) { r.aufraeumen = errText(e); }
+    out.push(r);
+  }
+  try {
+    const project = await getProj(ppro); const root = await project.getRootItem();
+    const b = (await root.getItems()).find((i) => i.name === BIN);
+    if (b) await txp(ppro, 'GL-Probe aufräumen', (add) => add(root.createRemoveItemAction(b)));
+  } catch (e) { out.push({ variante: 'aufräumen', fehler: errText(e) }); }
+  return out;
+}
+
+module.exports = { probePlace, probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };
