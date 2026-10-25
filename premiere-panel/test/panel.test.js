@@ -167,6 +167,18 @@ test('HQ-Tausch: nur die Datei wechselt, Clips bleiben; Standbilder werden neu g
   assert.match(bad.fehler[0].fehler, /Datei nicht gefunden/);
 });
 
+test('HQ-Tausch ist wiederholbar: bereits getauschte Dateien gelten als erledigt', async () => {
+  const { ppro, project } = newEnv();
+  await runPlan(ppro, clone(PLAN));
+  const stills = PLAN.media.filter((m) => m.kind === 'still').map((m) => m.path);
+  const swaps = stills.map((p) => ({ from: p, to: p.replace('/Videoelemente/', '/Videoelemente_HQ/') }));
+  const first = await media.swapMedia(ppro, project, { swaps });
+  assert.equal(first.getauscht.length, stills.length);
+  const again = await media.swapMedia(ppro, project, { swaps });
+  assert.deepEqual(again.fehler, []);
+  assert.equal(again.schon.length, stills.length);
+});
+
 test('Auslesen: Projekt und Sequenz mit Effekten, Parametern und Keyframes', async () => {
   const { ppro, project } = newEnv();
   await runPlan(ppro, clone(PLAN));

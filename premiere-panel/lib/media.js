@@ -77,18 +77,22 @@ async function allMedia(ppro, project) {
  * Nach jedem Tausch sind Objekte ungültig, daher wird je Datei frisch gesucht.
  */
 async function swapMedia(ppro, project, { swaps = [], refresh = [] }, emit) {
-  const report = { getauscht: [], fehler: [], neu_geladen: 0 };
+  const report = { getauscht: [], schon: [], fehler: [], neu_geladen: 0 };
   for (const s of swaps) {
     try {
       await retryStale(async () => {
-        const item = (await allMedia(ppro, project)).get(norm(s.from));
-        if (!item) throw new Error('im Projekt nicht gefunden');
+        const all = await allMedia(ppro, project);
+        const item = all.get(norm(s.from));
+        if (!item) {
+          if (all.has(norm(s.to))) { report.schon.push(s.to); return; }       // nach einem abgebrochenen Tausch: schon erledigt
+          throw new Error('im Projekt nicht gefunden');
+        }
         if (item.canChangeMediaPath && !(await item.canChangeMediaPath())) throw new Error('Pfad dieses Elements lässt sich nicht ändern');
         const ok = await item.changeMediaFilePath(s.to, true);
         invalidate();
         if (ok === false) throw new Error('Premiere hat den Tausch abgelehnt');
       });
-      report.getauscht.push({ von: s.from, nach: s.to });
+      if (!report.schon.includes(s.to)) report.getauscht.push({ von: s.from, nach: s.to });
     } catch (e) {
       report.fehler.push({ von: s.from, fehler: errText(e) });
     }

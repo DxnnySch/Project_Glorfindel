@@ -183,6 +183,11 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
         raise ValueError("Die konforme HQ-Datei fehlt. Zuerst unter „Kontrolle“ Anker setzen und „HQ-Conform“ ausführen.")
     if st.get("active") == to:
         raise ValueError(f"Premiere arbeitet bereits mit der {'HQ-' if to == 'hq' else 'Proxy-'}Fassung.")
+    if to == "hq":
+        hq_fps = media.probe(Path(st["hq"]))["fps"] or 0.0
+        if abs(hq_fps - EPISODE_FPS) > 0.01:
+            raise ValueError(f"Die HQ-Datei hat {hq_fps:.3f} statt {EPISODE_FPS:.3f} Bildern pro Sekunde (ältere Conform-Version). "
+                             "Bitte unter „Kontrolle“ den HQ-Conform noch einmal ausführen; dann lässt Premiere den Tausch zu.")
     pg.plan([("Verbindung prüfen", 0.5), ("HQ-Standbilder erzeugen" if to == "hq" else "Standbilder vorbereiten", 8), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
     pg.step(0)
     if not hub.connected:

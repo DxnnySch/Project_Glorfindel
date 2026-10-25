@@ -111,7 +111,7 @@ def test_swap_uses_parallel_folder_and_never_overwrites(ep):
     sdir = Path(premiere_ops.load_state(ep)["stills_dir"])
     proxy_still = _gray(sdir / "1.png").copy()
     proxy_bytes = (sdir / "1.png").read_bytes()
-    hq = make_video(premiere_ops.pdir(ep) / "HQ_conform.mp4", "green", seconds=30, fps=24, size="1920x800")
+    hq = make_video(premiere_ops.pdir(ep) / "HQ_conform.mp4", "green", seconds=30, fps=24000 / 1001, size="1920x800")
     premiere_ops.remember_hq(ep, str(hq))
     hub2 = FakeHub()
     premiere_ops.swap(ep, "hq", hub=hub2)
@@ -150,10 +150,19 @@ def test_swap_errors_are_clear(ep):
     premiere_ops.build_in_premiere(ep, Path(__file__).resolve().parents[1] / "vorlagen", hub=FakeHub())
     with pytest.raises(ValueError, match="HQ-Datei fehlt"):
         premiere_ops.swap(ep, "hq", hub=FakeHub())
-    hq = make_video(premiere_ops.pdir(ep) / "HQ.mp4", "green", seconds=30, fps=24, size="1920x800")
+    hq = make_video(premiere_ops.pdir(ep) / "HQ.mp4", "green", seconds=30, fps=24000 / 1001, size="1920x800")
     premiere_ops.remember_hq(ep, str(hq))
     with pytest.raises(BridgeError, match="Tausch"):
         h = FakeHub()
         h.call = lambda op, args=None, timeout=60, on_event=None: {"fehler": [{"von": "x", "fehler": "abgelehnt"}], "getauscht": []}
         premiere_ops.swap(ep, "hq", hub=h)
     assert premiere_ops.load_state(ep)["active"] == "proxy"                         # Zustand nur bei Erfolg geändert
+
+
+def test_swap_refuses_hq_with_wrong_frame_rate(ep):
+    """Eine HQ-Datei mit anderer Bildrate als die Referenz (ältere Conform-Version) wird mit klarer Anweisung abgelehnt."""
+    premiere_ops.build_in_premiere(ep, Path(__file__).resolve().parents[1] / "vorlagen", hub=FakeHub())
+    hq = make_video(premiere_ops.pdir(ep) / "HQ_bad.mp4", "green", seconds=30, fps=26.826, size="1920x800")
+    premiere_ops.remember_hq(ep, str(hq))
+    with pytest.raises(ValueError, match="Bildern pro Sekunde"):
+        premiere_ops.swap(ep, "hq", hub=FakeHub())
