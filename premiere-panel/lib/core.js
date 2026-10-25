@@ -38,12 +38,16 @@ async function getProj(ppro) {
 
 /** Eine Transaktion ausführen; `build(add)` fügt Aktionen hinzu. Wirft, wenn Premiere sie ablehnt. Danach sind alle Objekte ungültig. */
 function tx(project, undoName, build) {
-  const ok = project.executeTransaction((compound) => {
-    build((action) => {
-      if (action == null) throw new Error('Aktion konnte nicht erzeugt werden');
-      if (compound.addAction(action) === false) throw new Error('Aktion wurde nicht angenommen');
-    });
-  }, undoName);
+  // Premiere verlangt „locked access“ für jede Änderung (gemessen mit probe.bin: sonst „Requires locked access“ bzw. ungültige Objekte).
+  let ok;
+  project.lockedAccess(() => {
+    ok = project.executeTransaction((compound) => {
+      build((action) => {
+        if (action == null) throw new Error('Aktion konnte nicht erzeugt werden');
+        if (compound.addAction(action) === false) throw new Error('Aktion wurde nicht angenommen');
+      });
+    }, undoName);
+  });
   invalidate();
   if (ok === false) throw new Error('Transaktion „' + undoName + '“ wurde von Premiere abgelehnt');
 }

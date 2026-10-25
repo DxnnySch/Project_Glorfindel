@@ -130,11 +130,11 @@ async function probeBin(ppro) {
       const project = await getProject();
       const root = await project.getRootItem();
       for (const it of await root.getItems()) {
-        if (it.name !== NAME) continue;
+        if (!String(it.name).startsWith(NAME)) continue;
         const p2 = await getProject();
         const r2 = await p2.getRootItem();
-        const b = (await r2.getItems()).find((i) => i.name === NAME);
-        p2.executeTransaction((c) => { c.addAction(r2.createRemoveItemAction(b)); }, 'GL-Probe entfernen');
+        const b = (await r2.getItems()).find((i) => String(i.name).startsWith(NAME));
+        p2.lockedAccess(() => { p2.executeTransaction((c) => { c.addAction(r2.createRemoveItemAction(b)); }, 'GL-Probe entfernen'); });
       }
     } catch (e) { out.push({ variante: 'aufräumen', fehler: errText(e) }); }
   };

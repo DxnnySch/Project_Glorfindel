@@ -219,7 +219,9 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
     async setActiveSequence(s) { project.active = unwrap(s); return true; },
     async openSequence() { return true; },
     async save() { project.saved++; return true; },
+    lockedAccess(cb) { project.locked = true; try { cb(); } finally { project.locked = false; } },
     executeTransaction(cb, undo) {
+      if (!project.locked) throw new Error('Requires locked access');
       const actions = [];
       cb({ addAction(a) { if (!(a instanceof Action)) throw new Error('keine Aktion'); actions.push(a); return true; } });
       calls.push(['tx', undo, actions.length]);
