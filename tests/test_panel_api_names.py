@@ -12,7 +12,7 @@ OWN = {
     "paramList", "findParam", "toPproValue", "setParam", "addEffect", "builtin", "setMotion", "setFade", "addCrop", "plainValue", "projectDump",
     "readComponents", "sequenceDump", "methodsOf", "introspect", "selftest", "makeHandlers", "findServer", "projectInfo", "session", "onMessage",
     "run", "stop", "safe", "fn", "addAction", "ensureBin", "handlers", "log", "onStatus", "send", "start", "setStatus", "show", "setup",
-    "race", "finally", "probeSwap", "canChangeMediaPath", "pairs", "find", "fn", "isAdjustmentLayer", "adjustmentItem", "nestedItem", "buildNested", "locator", "bars_png", "rawByPath", "probePlace", "mk", "createInsertProjectItemAction", "placeClip", "getItem", "probeBin", "lockedAccess", "getProj", "invalidate", "txp", "withTimeout", "getBin", "builtinIndex", "componentAt", "retryStale", "isStale", "fresh", "locate", "getProject", "refresh", "resolveMatchName", "sequenceByGuid", "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
+    "race", "finally", "itemsByPath", "cands", "scope", "probeSwap", "canChangeMediaPath", "pairs", "find", "fn", "isAdjustmentLayer", "adjustmentItem", "nestedItem", "buildNested", "locator", "bars_png", "rawByPath", "probePlace", "mk", "createInsertProjectItemAction", "placeClip", "getItem", "probeBin", "lockedAccess", "getProj", "invalidate", "txp", "withTimeout", "getBin", "builtinIndex", "componentAt", "retryStale", "isStale", "fresh", "locate", "getProject", "refresh", "resolveMatchName", "sequenceByGuid", "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
 }
 JS = {
     "map", "filter", "find", "findIndex", "includes", "push", "slice", "join", "split", "replace", "startsWith", "endsWith", "toLowerCase", "toFixed",

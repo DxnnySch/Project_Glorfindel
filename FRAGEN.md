@@ -68,6 +68,7 @@ mit Szenen, Skript und Aufnahme und brauchen kein Panel.
 ---
 ## Log (von mir)
 - 2026-10-22: Datei angelegt.
+- Antworten erhalten (15:20): F1 → Fokus auf Profi-Optik + einfache Installation/Bedienung (wird umgesetzt). F4 → ScaDS-Whisper wird als wählbares Transkriptions-Backend ergänzt (Heft: „nie Audio senden“ → nur auf deine Anweisung, in den Einstellungen sichtbar gekennzeichnet). F6 → keine Co-Author-Zeilen in Commits.
 - 2026-10-24: Premiere-Bridge gebaut (Panel, Plan, Tausch Proxy↔HQ, Standbild-Genauigkeit). Fragen F9–F11 offen.
 - Antworten erhalten (15:20): F1 → Fokus auf Profi-Optik + einfache Installation/Bedienung (wird umgesetzt). F4 → ScaDS-Whisper wird als wählbares Transkriptions-Backend ergänzt (Heft: „nie Audio senden“ → nur auf deine Anweisung, in den Einstellungen gekennzeichnet). F6 → keine Co-Author-Zeilen in Commits.
 - 2026-10-22 15:10: Kern (Store, Zeitmodell, Conform, Word, Rohschnitt, Abgleich inkl. Stichpunkte) fertig, 54 Tests grün.

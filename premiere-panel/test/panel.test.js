@@ -12,6 +12,7 @@ const dump = require('../lib/dump');
 const { selftest } = require('../lib/selftest');
 const { Bridge } = require('../lib/bridge');
 const fx = require('../lib/effects');
+const { getProj } = require('../lib/core');
 
 const PLAN = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'plan.json'), 'utf8'));
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -297,4 +298,21 @@ test('Gauß In/Out: mit Einstellungsebene im Projekt liegt es auf V2, ohne Einst
   const rep2 = await runPlan(without.ppro, clone(PLAN));
   assert.ok(rep2.warnings.some((w) => /Keine Einstellungsebene/.test(w)));
   assert.equal(trackItems(mainSeq(without.project), 'video', 1).length, 0);
+});
+
+test('Tausch: nur im Fach dieses Baus; gleiche Datei in mehreren Fächern bleibt in älteren Ständen unberührt', async () => {
+  const { ppro, project } = newEnv();
+  const f = 'F:/Test/ref.mp4';
+  for (const bin of ['Bau v1', 'Bau v2']) {
+    await media.ensureBin(ppro, await getProj(ppro), bin);
+    await media.importFiles(ppro, await getProj(ppro), [f], bin);
+  }
+  const rep = await media.swapMedia(ppro, project, { swaps: [{ from: f, to: 'F:/HQ/hq.mp4' }], bin: 'Bau v2' });
+  assert.deepEqual(rep.fehler, []);
+  const inBin = async (bin) => [...(await media.mediaByPath(ppro, await media.getBin(ppro, await getProj(ppro), bin))).keys()];
+  assert.deepEqual(await inBin('Bau v2'), ['f:/hq/hq.mp4']);
+  assert.deepEqual(await inBin('Bau v1'), ['f:/test/ref.mp4']);
+  const all = await media.swapMedia(ppro, project, { swaps: [{ from: f, to: 'F:/HQ/hq1.mp4' }] });      // ohne Fach: ganzes Projekt
+  assert.deepEqual(all.fehler, []);
+  assert.deepEqual(await inBin('Bau v1'), ['f:/hq/hq1.mp4']);
 });

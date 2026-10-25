@@ -71,28 +71,53 @@ async function allMedia(ppro, project) {
   return mediaByPath(ppro, await (await fresh(ppro)).getRootItem());
 }
 
+/** Alle Elemente eines Ordners je Dateipfad (dieselbe Datei kann mehrfach im Projekt liegen, z. B. nach mehreren Bauten). */
+async function itemsByPath(ppro, folder) {
+  const map = new Map();
+  for (const it of await walkItems(ppro, folder)) {
+    const clip = asClip(ppro, it);
+    if (!clip) continue;
+    try {
+      if (await clip.isSequence()) continue;
+      const p = await clip.getMediaFilePath();
+      if (p) { const k = norm(p); if (!map.has(k)) map.set(k, []); map.get(k).push(clip); }
+    } catch (e) { /* Platzhalter ohne Datei */ }
+  }
+  return map;
+}
+
 /**
  * Dateien austauschen: `swaps` = [{from, to}]. Betroffene Clips, Effekte und Schnitte bleiben erhalten, weil nur die Datei
- * des Projektelements wechselt. `refresh` = Pfade/Ordner, deren Elemente neu geladen werden.
- * Nach jedem Tausch sind Objekte ungültig, daher wird je Datei frisch gesucht.
+ * des Projektelements wechselt. `bin`: nur im Fach dieses Baus suchen (ältere Baustände mit derselben Datei bleiben unberührt).
+ * `refresh` = Pfade/Ordner, deren Elemente neu geladen werden. Nach jedem Tausch sind Objekte ungültig, daher wird je Datei frisch gesucht.
  */
-async function swapMedia(ppro, project, { swaps = [], refresh = [] }, emit) {
+async function swapMedia(ppro, project, { swaps = [], refresh = [], bin = null }, emit) {
   const report = { getauscht: [], schon: [], fehler: [], neu_geladen: 0 };
+  const scope = async () => {
+    const proj = await fresh(ppro);
+    const folder = bin ? await getBin(ppro, proj, bin) : null;
+    return folder || (await proj.getRootItem());
+  };
   for (const s of swaps) {
     try {
-      await retryStale(async () => {
-        const all = await allMedia(ppro, project);
-        const item = all.get(norm(s.from));
-        if (!item) {
-          if (all.has(norm(s.to))) { report.schon.push(s.to); return; }       // nach einem abgebrochenen Tausch: schon erledigt
-          throw new Error('im Projekt nicht gefunden');
-        }
-        if (item.canChangeMediaPath && !(await item.canChangeMediaPath())) throw new Error('Pfad dieses Elements lässt sich nicht ändern');
-        const ok = await item.changeMediaFilePath(s.to, true);
-        invalidate();
-        if (ok === false) throw new Error('Premiere hat den Tausch abgelehnt');
-      });
-      if (!report.schon.includes(s.to)) report.getauscht.push({ von: s.from, nach: s.to });
+      let done = 0, firstFail = null, seen = 0;
+      for (let guard = 0; guard < 20; guard++) {
+        const all = await itemsByPath(ppro, await scope());
+        const cands = all.get(norm(s.from)) || [];
+        if (guard === 0) { seen = cands.length; if (!cands.length && all.has(norm(s.to))) { report.schon.push(s.to); break; } }
+        if (!cands.length) break;
+        const item = cands[0];
+        try {
+          if (item.canChangeMediaPath && !(await item.canChangeMediaPath())) throw new Error('Pfad dieses Elements lässt sich nicht ändern');
+          const ok = await retryStale(async () => item.changeMediaFilePath(s.to, true));
+          invalidate();
+          if (ok === false) throw new Error('Premiere hat den Tausch abgelehnt');
+          done++;
+        } catch (e) { firstFail = errText(e); invalidate(); break; }
+      }
+      if (!done && !report.schon.includes(s.to)) throw new Error(firstFail || 'im Projekt nicht gefunden');
+      if (firstFail) report.warnungen = (report.warnungen || []).concat(s.from + ': ' + firstFail + ' (' + seen + ' Element(e) mit dieser Datei)');
+      if (done) report.getauscht.push({ von: s.from, nach: s.to, elemente: done });
     } catch (e) {
       report.fehler.push({ von: s.from, fehler: errText(e) });
     }
@@ -113,4 +138,4 @@ async function swapMedia(ppro, project, { swaps = [], refresh = [] }, emit) {
   return report;
 }
 
-module.exports = { getBin, ensureBin, importFiles, mediaByPath, rawByPath, allMedia, swapMedia };
+module.exports = { itemsByPath, getBin, ensureBin, importFiles, mediaByPath, rawByPath, allMedia, swapMedia };

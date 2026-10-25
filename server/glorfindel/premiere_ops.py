@@ -97,7 +97,7 @@ def ensure_reference(ep: Episode, pg=None, offset: float = 0.0) -> Path:
     return dst
 
 
-def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, float] | None = None, pg=None) -> dict[str, float]:
+def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, float] | None = None, pg=None, reuse: bool = False) -> dict[str, float]:
     """Standbilder (letztes Bild je Segment) aus genau dieser Datei ziehen. Rückgabe: Dateiname → Zeit in der Episode."""
     pg = as_progress(pg)
     times = times if times is not None else pipeline.still_times(scenes, fps)
@@ -105,6 +105,9 @@ def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, f
     fps = info["fps"] or EPISODE_FPS
     for i, (name, t) in enumerate(times.items()):
         pg.sub(i, len(times), f"Standbild {name} bei {media.fmt_clock(t)}", "Standbilder")
+        target = out_dir / name
+        if reuse and target.exists() and target.stat().st_size > 0 and target.stat().st_mtime >= media_file.stat().st_mtime:
+            continue                                         # nach abgebrochenem Tausch schon vorhanden (evtl. von Premiere geöffnet)
         media.extract_still_last_frame(media_file, t, fps, out_dir / name, (info["width"], info["height"]))
     pg.sub(len(times), len(times), "alle Standbilder fertig", "Standbilder")
     return times
@@ -247,12 +250,12 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
     hq_dir = stills_dir.with_name(stills_dir.name + "_HQ")          # Parallelordner: nichts wird überschrieben, Premiere kann nichts sperren
     pg.step(1)
     if to == "hq":
-        stills_from_file(None, Path(st["hq"]), hq_dir, times=st["stills"], pg=pg)
+        stills_from_file(None, Path(st["hq"]), hq_dir, times=st["stills"], pg=pg, reuse=True)
         swaps = [{"from": st["ref_cfr"], "to": st["hq"]}] + [{"from": str(stills_dir / n), "to": str(hq_dir / n)} for n in st["stills"]]
     else:
         swaps = [{"from": st["hq"], "to": st["ref_cfr"]}] + [{"from": str(hq_dir / n), "to": str(stills_dir / n)} for n in st["stills"]]
     pg.step(2)
-    report = hub.call("media.swap", {"swaps": swaps, "refresh": []}, timeout=600)
+    report = hub.call("media.swap", {"swaps": swaps, "refresh": [], "bin": f"Glorfindel {st['sequence']}" if st.get("sequence") else None}, timeout=600)
     if report.get("fehler"):
         raise BridgeError("Tausch in Premiere unvollständig: " + "; ".join(f"{f.get('von') or f.get('datei')}: {f['fehler']}" for f in report["fehler"]))
     pg.step(3)

@@ -196,3 +196,16 @@ def test_direct_hq_needs_no_conform(ep):
     premiere_ops.swap(ep, "hq", hub=hub2)                                       # ohne vorherigen Conform
     assert hub2.calls[0][1]["swaps"][0] == {"from": st["ref_cfr"], "to": str(hq)}
     assert (ep.p.stills / "Bridge_v1_HQ" / "1.png").exists()
+
+
+def test_swap_can_be_repeated_without_touching_existing_hq_stills(ep):
+    premiere_ops.build_in_premiere(ep, Path(__file__).resolve().parents[1] / "vorlagen", hub=FakeHub())
+    hq = make_video(premiere_ops.pdir(ep) / "HQ_ok.mp4", "green", seconds=30, fps=24000 / 1001, size="1920x800")
+    premiere_ops.remember_hq(ep, str(hq))
+    premiere_ops.swap(ep, "hq", hub=FakeHub())
+    still = ep.p.stills / "Bridge_v1_HQ" / "1.png"
+    first = still.read_bytes()
+    mtime = still.stat().st_mtime_ns
+    st = premiere_ops.load_state(ep); st["active"] = "proxy"; premiere_ops.save_state(ep, st)      # Tausch war abgebrochen
+    premiere_ops.swap(ep, "hq", hub=FakeHub())
+    assert still.read_bytes() == first and still.stat().st_mtime_ns == mtime                      # nicht neu geschrieben (Premiere hält die Datei offen)
