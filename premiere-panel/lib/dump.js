@@ -184,7 +184,10 @@ async function probePlace(ppro, { png, preset }) {
   await media.ensureBin(ppro, await getProj(ppro), BIN);
   await media.importFiles(ppro, await getProj(ppro), [png], BIN);
   const pngName = png.split(/[\/]/).pop();
-  const rawItem = async () => (await (await media.getBin(ppro, await getProj(ppro), BIN)).getItems()).find((i) => i.name === pngName);
+  const rawItem = async () => {
+    const all = await (await media.getBin(ppro, await getProj(ppro), BIN)).getItems();
+    return all.find((i) => i.name === pngName) || all[0];
+  };
   const TT = (sec) => ppro.TickTime.createWithSeconds(sec);
   const variants = {
     'roh, V1, A -1': (ed, item) => ed.createOverwriteItemAction(item, TT(0), 0, -1),
@@ -204,6 +207,7 @@ async function probePlace(ppro, { png, preset }) {
       const project = await getProj(ppro);
       const ed = ppro.SequenceEditor.getEditor((await project.getSequences()).find((x) => String(x.guid) === guid));
       const item = await rawItem();
+      r.info = { item: item ? item.name : null, sequenz: !!ed, itemTyp: item ? Object.getPrototypeOf(item).constructor.name : null };
       await txp(ppro, 'GL-Probe', (add) => add(mk(ed, item)));
       r.ergebnis = 'angenommen';
       const s3 = (await (await getProj(ppro)).getSequences()).find((x) => String(x.guid) === guid);
