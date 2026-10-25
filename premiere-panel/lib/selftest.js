@@ -7,7 +7,7 @@
 const { tt, tx, txp, errText, norm, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
-const { trackItemAt, sequenceByGuid } = require('./plan');
+const { trackItemAt, sequenceByGuid, placeClip } = require('./plan');
 
 const BIN = 'Glorfindel-Selbsttest';
 const FILTER_RE = /Crop|Zuschn|Roughen|Kanten|Shadow|Schatten|Geometry|Transform|Gaussian|Blur|Weichz|Opacity|Motion/i;
@@ -52,11 +52,10 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
   });
   await step('Clip setzen und Länge ändern', async () => {
     if (!haveItem) throw new Error('kein Test-Bild');
-    const project = await getProject();
-    const bin = await media.getBin(ppro, project, BIN);
-    const item = (await media.mediaByPath(ppro, bin)).get(norm(png));
-    const editor = ppro.SequenceEditor.getEditor(await sequenceByGuid(ppro, project, seqGuid));
-    await txp(ppro, 'Test', (add) => add(editor.createOverwriteItemAction(item, tt(ppro, 2), 12, -1)));
+    await placeClip(ppro, seqGuid, async () => {
+      const bin = await media.getBin(ppro, await getProject(), BIN);
+      return (await media.mediaByPath(ppro, bin)).get(norm(png));
+    }, 2, 12, -1);
     haveClip = true;
     const ti = await locate();
     await txp(ppro, 'Test', (add) => add(ti.createSetEndAction(tt(ppro, 7))));

@@ -64,7 +64,7 @@ test('Artwork: Zuschnitt, Skalierung, Effektkette wie im Ursprungsschnitt, Farbe
   const main = mainSeq(project);
   const art = PLAN.clips.find((c) => c.kind === 'artwork' && c.scale === 100);
   const ti = [...trackItems(main, 'video', 2), ...trackItems(main, 'video', 3)].find((t) => Math.abs(t.start - art.start) < 0.004);
-  assert.deepEqual(compNames(ti), ['Bewegung', 'Deckkraft', 'ADBE Crop', 'AE.ADBE Drop Shadow', 'AE.ADBE Geometry', 'AE.ADBE Roughen Edges', 'AE.ADBE Roughen Edges']);
+  assert.deepEqual(compNames(ti), ['Bewegung', 'Deckkraft', 'AE.ADBE AECrop', 'AE.ADBE Drop Shadow', 'AE.ADBE Geometry2', 'AE.ADBE Roughen Edges', 'AE.ADBE Roughen Edges']);
   const [motion, , crop, shadow, geo, out, inn] = ti.chain.comps;
   assert.equal(param(crop, 'Links').value, 25);
   assert.equal(param(crop, 'Rechts').value, 25);
@@ -170,8 +170,8 @@ test('Selbsttest: prüft alles, räumt vollständig auf und berührt keine vorha
   assert.equal(rep.findings.colorMode, 'unit');
   assert.deepEqual(rep.findings.keyframeTimes, [0, 0.5]);
   assert.equal(rep.findings.keyframeOrigin, 'clipanfang');
-  assert.equal(rep.findings.cropMatch, 'ADBE Crop', 'Zuschneiden-Name zur Laufzeit gefunden');
-  assert.ok(rep.findings.filters.some((f) => f.match === 'ADBE Crop' && f.display === 'Zuschneiden'));
+  assert.equal(rep.findings.cropMatch, 'AE.ADBE AECrop', 'Zuschneiden-Name zur Laufzeit gefunden');
+  assert.ok(rep.findings.filters.some((f) => f.match === 'AE.ADBE AECrop' && f.display === 'Zuschneiden'));
   assert.ok(rep.findings.cropParams.includes('Links') && rep.findings.roughParams.includes('Rahmen'));
   assert.equal(project.sequences.length, 0, 'Test-Sequenz entfernt');
   assert.equal((await (await project.getRootItem()).getItems()).length, 0, 'Test-Fach entfernt');

@@ -15,7 +15,8 @@ const NAMES = {
 
 // Mögliche interne Namen je Effekt; der echte wird zur Laufzeit über die Liste der installierten Effekte bestimmt.
 const FILTER_HINTS = {
-  'AE.ADBE Crop': { alt: ['ADBE Crop', 'AE.ADBE Crop'], display: ['Crop', 'Zuschneiden'] },
+  'AE.ADBE Crop': { alt: ['AE.ADBE AECrop', 'ADBE Crop'], display: ['Zuschneiden', 'Crop'] },
+  'AE.ADBE Geometry': { alt: ['AE.ADBE Geometry2'], display: ['Transformieren', 'Transform'] },
 };
 
 async function listComponents(chain) {

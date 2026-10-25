@@ -45,13 +45,13 @@ class Color {
 }
 class Action { constructor(run, label) { this.run = run; this.label = label; } }
 
-const DISPLAY = { 'ADBE Crop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner' };
+const DISPLAY = { 'AE.ADBE AECrop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry2': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner' };
 const PARAMS = {
-  'ADBE Crop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
+  'AE.ADBE AECrop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
   'AE.ADBE Roughen Edges': [['Kantenart', 'num', 1], ['Konturfarbe', 'color', null], ['Rahmen', 'num', 8], ['Kantenschärfe', 'num', 0], ['Fraktaleinfluss', 'num', 1], ['Skalieren', 'num', 100],
     ['Breite oder Höhe dehnen', 'num', 0], ['Offset (Turbulenz)', 'point', null], ['Komplexität', 'num', 10], ['Evolution', 'num', 0]],
   'AE.ADBE Drop Shadow': [['Schattenfarbe', 'color', null], ['Deckkraft', 'num', 50], ['Richtung', 'num', 135], ['Abstand', 'num', 10], ['Weiche Kante', 'num', 5], ['Nur Schatten', 'bool', false]],
-  'AE.ADBE Geometry': [['Ankerpunkt', 'point', null], ['Position', 'point', null], ['Einheitliche Skalierung', 'bool', true], ['Skalierungshöhe', 'num', 100], ['Skalierungsbreite', 'num', 100],
+  'AE.ADBE Geometry2': [['Ankerpunkt', 'point', null], ['Position', 'point', null], ['Einheitliche Skalierung', 'bool', true], ['Skalierungshöhe', 'num', 100], ['Skalierungsbreite', 'num', 100],
     ['Verzerren', 'num', 0], ['Achse der Verzerrung', 'num', 0], ['Drehung', 'num', 0], ['Deckkraft', 'num', 100]],
   'AE.ADBE Gaussian Blur 2': [['Weichzeichnung', 'num', 0], ['Weichzeichnungsdimensionen', 'num', 0], ['Kantenpixel wiederholen', 'bool', false]],
 };
@@ -261,6 +261,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
       getEditor(seq) {
         return {
           createOverwriteItemAction(item, time, v, a) {
+            if (a < 0 && !item.hasAudio) throw new Error('Invalid parameter.');   // wie in Premiere 26.5.2 gemessen: -1 wird abgelehnt
             item = unwrap(item);
             if (!(time instanceof TickTime)) throw new Error('TickTime erwartet');
             return new Action(() => {

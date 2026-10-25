@@ -26,6 +26,26 @@ async function sequenceByGuid(ppro, project, guid) {
   return seq;
 }
 
+/** Clip in die Sequenz setzen. `getItem` liefert das Quellelement frisch. Premiere lehnt je nach Medium einen Audio-Index -1 ab („Invalid parameter“): dann mit 0 versuchen. */
+async function placeClip(ppro, seqGuid, getItem, startSec, videoIdx, audioIdx) {
+  const tries = audioIdx < 0 ? [audioIdx, 0] : [audioIdx];
+  const errors = [];
+  for (const a of tries) {
+    try {
+      const item = await getItem();
+      if (!item) throw new Error('Quelle fehlt');
+      const project = await getProj(ppro);
+      const editor = ppro.SequenceEditor.getEditor(await sequenceByGuid(ppro, project, seqGuid));
+      await txp(ppro, 'Clip setzen', (add) => add(editor.createOverwriteItemAction(item, tt(ppro, startSec), videoIdx, a)));
+      return;
+    } catch (e) {
+      errors.push('Spur V' + (videoIdx + 1) + ', Audio-Index ' + a + ': ' + errText(e));
+      invalidate();
+    }
+  }
+  throw new Error(errors.join(' | '));
+}
+
 async function findSequenceItem(ppro, folder, name) {
   for (const it of await walkItems(ppro, folder)) {
     if (it.name !== name) continue;
@@ -151,11 +171,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
         const src = await fresh(key);
         if (!src) throw new Error('Quelle fehlt');
         if (inOut) await txp(ppro, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
-        const p2 = await getProject();
-        const main = await sequenceByGuid(ppro, p2, mainGuid);
-        const editor = ppro.SequenceEditor.getEditor(main);
-        const src2 = await fresh(key);                       // nach der Änderung (In/Out) ist `src` ungültig
-        await txp(ppro, 'Clip setzen', (add) => add(editor.createOverwriteItemAction(src2, tt(ppro, c.start), videoIdx, audioIdx)));
+        await placeClip(ppro, mainGuid, () => fresh(key), c.start, videoIdx, audioIdx);   // nach der Änderung (In/Out) ist `src` ungültig
       }, refresh);
       const ti = await locate();
       if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
@@ -201,4 +217,4 @@ async function runPlan(ppro, plan, emit = () => {}) {
 
 }
 
-module.exports = { runPlan, trackItemAt, findSequenceItem, sequenceByGuid };
+module.exports = { runPlan, placeClip, trackItemAt, findSequenceItem, sequenceByGuid };
