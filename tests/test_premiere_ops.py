@@ -40,11 +40,11 @@ def seg(a, b):
     return Segment(**{"in": a, "out": b})
 
 
-def make_video(path, color, seconds=30, fps=30, size="640x360"):
+def make_video(path, color, seconds=30, fps=30, size="640x360", acodec="aac"):
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c={color}:s={size}:r={fps}:d={seconds}",
                     "-f", "lavfi", "-i", f"sine=frequency=300:duration={seconds}", "-vf", "drawbox=x=0:y=0:w=640:h=40:color=black:t=fill,drawbox=x=0:y=320:w=640:h=40:color=black:t=fill" if size == "640x360" else "null",
-                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(path)], check=True)
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", acodec, "-shortest", str(path)], check=True)
     return path
 
 
@@ -172,7 +172,7 @@ def test_direct_hq_needs_no_conform(ep):
     """HQ mit nativer Bildrate und reiner Verschiebung: Referenz liegt auf der HQ-Zeitachse, die HQ-Datei wird unverändert eingesetzt."""
     from glorfindel import media
     from glorfindel.models import Anchor
-    hq = make_video(ep.p.root / "Filme" / "hq24.mp4", "green", seconds=40, fps=24, size="1920x1080")
+    hq = make_video(ep.p.root / "Filme" / "hq24.mp4", "green", seconds=40, fps=24, size="1920x1080", acodec="eac3")
     src = ep.import_source(hq, role="hq")
     ep.set_anchors(src.id, [Anchor(ref=10.0, src=12.5)])                         # HQ-Zeit = Referenzzeit + 2,5 s
     root = Path(__file__).resolve().parents[1] / "vorlagen"
@@ -184,6 +184,7 @@ def test_direct_hq_needs_no_conform(ep):
     ref = Path(st["ref_cfr"])
     info = media.probe(ref)
     assert info["fps"] == pytest.approx(24.0, abs=0.01) and info["duration"] == pytest.approx(30 + 2.5, abs=0.3)
+    assert info["acodec"] == "eac3"                                              # Dolby-Ton der HQ-Datei: Premiere tauscht sonst nicht
     media.extract_frame(ref, 1.0, ep.p.root / "f_black.png")
     media.extract_frame(ref, 4.0, ep.p.root / "f_red.png")
     assert np.asarray(Image.open(ep.p.root / "f_black.png").convert("L")).mean() < 5            # davor Schwarz
@@ -209,3 +210,11 @@ def test_swap_can_be_repeated_without_touching_existing_hq_stills(ep):
     st = premiere_ops.load_state(ep); st["active"] = "proxy"; premiere_ops.save_state(ep, st)      # Tausch war abgebrochen
     premiere_ops.swap(ep, "hq", hub=FakeHub())
     assert still.read_bytes() == first and still.stat().st_mtime_ns == mtime                      # nicht neu geschrieben (Premiere hält die Datei offen)
+
+
+def test_swap_refuses_dolby_hq_against_aac_reference(ep):
+    premiere_ops.build_in_premiere(ep, Path(__file__).resolve().parents[1] / "vorlagen", hub=FakeHub())
+    hq = make_video(premiere_ops.pdir(ep) / "HQ_dolby.mp4", "green", seconds=30, fps=24000 / 1001, size="1920x800", acodec="eac3")
+    premiere_ops.remember_hq(ep, str(hq))
+    with pytest.raises(ValueError, match="Dolby"):
+        premiere_ops.swap(ep, "hq", hub=FakeHub())

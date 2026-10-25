@@ -91,7 +91,7 @@ def probe(path: Path | str) -> dict:
         "duration": dur, "fps": fps,
         "width": int((v or {}).get("width", 0)), "height": int((v or {}).get("height", 0)),
         "has_audio": a is not None, "has_video": v is not None,
-        "vcodec": (v or {}).get("codec_name", ""),
+        "vcodec": (v or {}).get("codec_name", ""), "acodec": (a or {}).get("codec_name", ""),
     }
 
 

@@ -109,9 +109,23 @@ async function swapMedia(ppro, project, { swaps = [], refresh = [], bin = null }
         const item = cands[0];
         try {
           if (item.canChangeMediaPath && !(await item.canChangeMediaPath())) throw new Error('Pfad dieses Elements lässt sich nicht ändern');
-          const ok = await retryStale(async () => item.changeMediaFilePath(s.to, true));
+          let ok = await retryStale(async () => item.changeMediaFilePath(s.to, true));
           invalidate();
-          if (ok === false) throw new Error('Premiere hat den Tausch abgelehnt');
+          if (ok === false) {                                    // andere Wege versuchen (Details für die Fehlersuche sammeln)
+            const tried = ['override=true'];
+            const again = (await itemsByPath(ppro, await scope())).get(norm(s.from)) || [];
+            if (again[0]) {
+              const proj = await fresh(ppro);
+              let pr; proj.lockedAccess(() => { pr = again[0].changeMediaFilePath(s.to, true); });
+              ok = await pr; invalidate(); tried.push('lockedAccess');
+            }
+            if (ok === false) {
+              const info = [];
+              const c2 = ((await itemsByPath(ppro, await scope())).get(norm(s.from)) || [])[0];
+              if (c2) { for (const [k, f] of [['offline', () => c2.isOffline()], ['canChange', () => c2.canChangeMediaPath()]]) { try { info.push(k + '=' + (await f())); } catch (e) { info.push(k + '=?'); } } }
+              throw new Error('Premiere hat den Tausch abgelehnt (' + tried.join(', ') + '; ' + cands.length + ' Element(e) im Fach' + (bin ? ' „' + bin + '“' : '') + '; ' + info.join(', ') + ')');
+            }
+          }
           done++;
         } catch (e) { firstFail = errText(e); invalidate(); break; }
       }

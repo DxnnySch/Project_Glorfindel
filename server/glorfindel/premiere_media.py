@@ -29,8 +29,19 @@ FONT_CANDIDATES = [
 ]
 
 
+# Premiere lässt Dateien mit Dolby-Ton (AC-3/E-AC-3) in einer Sequenz nur gegen Dateien mit demselben Tonformat austauschen (gemessen mit probe.swap):
+# Hat die HQ-Datei E-AC-3, bekommt die Referenz ebenfalls E-AC-3 (Kanalzahl egal).
+AUDIO = {"aac": ["-c:a", "aac", "-b:a", "192k"], "eac3": ["-c:a", "eac3", "-b:a", "192k"]}
+DOLBY = ("ac3", "eac3")
+
+
+def audio_for(codec: str) -> str:
+    """Tonformat der Referenz passend zum Ton der HQ-Datei."""
+    return "eac3" if (codec or "").lower() in DOLBY else "aac"
+
+
 def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fps: float = EPISODE_FPS,
-                      size: tuple[int, int] = EPISODE_SIZE, crf: int = 17, offset: float = 0.0, on_progress=None) -> Path:
+                      size: tuple[int, int] = EPISODE_SIZE, crf: int = 17, offset: float = 0.0, audio_codec: str = "aac", on_progress=None) -> Path:
     """Referenz in konstante Bildrate bringen, Letterbox abschneiden, auf Episodengröße bringen.
     `offset` (Sekunden, auf das Bildraster gerundet) verschiebt die Zeitachse: positiv = Schwarz davor, negativ = Anfang abschneiden.
     So kann die Referenz auf der Zeitachse der HQ-Datei liegen und die HQ-Datei später unverändert eingesetzt werden."""
@@ -51,7 +62,7 @@ def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fp
     af = ["-af", f"adelay={round(offset * 1000)}:all=1"] if offset > 0 else []
     cmd = [media._bin("ffmpeg"), "-y", "-v", "error", *pre, "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf), *af,
            "-fps_mode", "cfr", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-g", "48", "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
+           *AUDIO[audio_codec], "-ar", "48000", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
     try:
         dur = media.probe(src)["duration"]
     except Exception:  # noqa: BLE001

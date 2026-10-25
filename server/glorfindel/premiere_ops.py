@@ -11,7 +11,7 @@ from . import media, pipeline, prfpset, rough_cut, store
 from .bridge import HUB, BridgeError
 from .config import app_dir
 from .timemap import TimeMap
-from .premiere_media import EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png
+from .premiere_media import audio_for, EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png
 from .premiere_plan import PlanEnv, build_plan, load_recipes, with_library
 from .premiere_preset import make_sequence_preset
 from .progress import as_progress
@@ -76,7 +76,7 @@ def _sync_episode_fps(ep: Episode, fps: float) -> None:
         ep.save_project(pr)
         store.log_change(ep.p.gl, ep.settings.user, f"Bildrate der Folge von {old:.3f} auf {fps:.3f} fps gestellt (native Bildrate der HQ-Datei)")
 
-def ensure_reference(ep: Episode, pg=None, offset: float = 0.0) -> Path:
+def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aac") -> Path:
     """Konforme Referenz (konstante Bildrate, zugeschnitten, ggf. auf der Zeitachse der HQ-Datei): die Datei in Premiere, aus der die Standbilder stammen."""
     pg = as_progress(pg)
     pr = ep.project()
@@ -86,13 +86,13 @@ def ensure_reference(ep: Episode, pg=None, offset: float = 0.0) -> Path:
     srcfile = ep.source_path(src)
     dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR.mp4"
     side = dst.with_suffix(".json")
-    want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop}
+    want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop, "audio": audio}
     if dst.exists() and dst.stat().st_mtime >= srcfile.stat().st_mtime and store.read_json(side, {}) == want:
         pg.fraction(1.0, "konforme Referenz ist aktuell")
         return dst
     extra = f", um {offset:.3f} s auf die Zeitachse der HQ-Datei verschoben" if offset else ""
     pg.fraction(0.0, f"{src.path.rsplit('/', 1)[-1]} → konstante Bildrate {pr.fps:.3f} fps, {EPISODE_SIZE[0]}×{EPISODE_SIZE[1]}{extra}")
-    conform_reference(srcfile, dst, crop=src.crop, fps=pr.fps, offset=offset, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
+    conform_reference(srcfile, dst, crop=src.crop, fps=pr.fps, offset=offset, audio_codec=audio, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
     store.write_json(side, want)
     return dst
 
@@ -185,7 +185,8 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     if direct:
         _sync_episode_fps(ep, direct["fps"])
     off = direct["offset"] if direct else 0.0
-    ref = ensure_reference(ep, pg, off)
+    audio = audio_for(media.probe(direct["file"]).get("acodec", "")) if direct else "aac"
+    ref = ensure_reference(ep, pg, off, audio)
     pg.step(2)
     res = pipeline.build_rough_cut(ep, templates_dir, with_stills=False, by_strand=by_strand, progress=None)
     pkg = json.loads(Path(res["json"]).read_text(encoding="utf-8"))
@@ -242,6 +243,10 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
         if abs(hq_fps - ref_fps) > 0.01:
             raise ValueError(f"Die HQ-Datei hat {hq_fps:.3f} statt {ref_fps:.3f} Bildern pro Sekunde wie die Referenz in Premiere. "
                              "Bitte unter „Kontrolle“ den HQ-Conform noch einmal ausführen (oder den Rohschnitt neu bauen); dann lässt Premiere den Tausch zu.")
+        a_hq, a_ref = media.probe(Path(st["hq"])).get("acodec", ""), media.probe(Path(st["ref_cfr"])).get("acodec", "")
+        if audio_for(a_hq) != audio_for(a_ref):
+            raise ValueError(f"Die HQ-Datei hat Dolby-Ton ({a_hq}), die Referenz in Premiere {a_ref}: Premiere lässt diesen Tausch nicht zu. "
+                             "Bitte den Rohschnitt neu bauen – die Referenz bekommt dann dasselbe Tonformat wie die HQ-Datei.")
     pg.plan([("Verbindung prüfen", 0.5), ("HQ-Standbilder erzeugen" if to == "hq" else "Standbilder vorbereiten", 8), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
     pg.step(0)
     if not hub.connected:

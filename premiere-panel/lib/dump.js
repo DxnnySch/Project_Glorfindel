@@ -287,4 +287,29 @@ async function probeSwap(ppro, { pairs }) {
   return out;
 }
 
-module.exports = { probeSwap, probePlace, probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };
+/** Fehlersuche: alle Projektelemente zu den angegebenen Dateien samt Fach, Zustand und Tausch-Möglichkeit. */
+async function probeItems(ppro, { paths }) {
+  const { getProj, norm, asClip, errText } = require('./core');
+  const want = (paths || []).map(norm);
+  const out = [];
+  const visit = async (folder, trail) => {
+    for (const it of await folder.getItems()) {
+      if (it.type === ppro.ProjectItem.TYPE_BIN) { await visit(ppro.FolderItem.cast(it), trail.concat(it.name)); continue; }
+      const c = asClip(ppro, it);
+      if (!c) continue;
+      const row = { name: it.name, fach: trail.join(' / ') };
+      try { row.sequenz = await c.isSequence(); } catch (e) { row.sequenz = 'Fehler'; }
+      if (row.sequenz === true) continue;
+      try { row.pfad = await c.getMediaFilePath(); } catch (e) { row.pfad = null; }
+      if (!row.pfad || !want.includes(norm(row.pfad))) continue;
+      for (const [k, fn] of [['offline', () => c.isOffline()], ['canChange', () => c.canChangeMediaPath()], ['canProxy', () => c.canProxy()]]) {
+        try { row[k] = await fn(); } catch (e) { row[k] = 'Fehler: ' + errText(e); }
+      }
+      out.push(row);
+    }
+  };
+  await visit(await (await getProj(ppro)).getRootItem(), []);
+  return out;
+}
+
+module.exports = { probeItems, probeSwap, probePlace, probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };

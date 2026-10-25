@@ -77,7 +77,7 @@ class CallBody(BaseModel):
 @router.post("/bridge/call")
 def call(body: CallBody):
     """Einzelne Operation (nur lesende/Diagnose-Operationen über die Oberfläche; Bauen/Tauschen laufen als Jobs)."""
-    if body.op not in ("ping", "info", "introspect", "selftest", "project.dump", "sequence.dump", "template.inspect", "probe.bin", "probe.place", "probe.swap"):
+    if body.op not in ("ping", "info", "introspect", "selftest", "project.dump", "sequence.dump", "template.inspect", "probe.bin", "probe.place", "probe.swap", "probe.items"):
         raise HTTPException(400, "Diese Operation läuft nur als Auftrag.")
     try:
         return {"data": HUB.call(body.op, body.args, timeout=min(body.timeout, 300))}
