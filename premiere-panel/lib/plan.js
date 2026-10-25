@@ -85,12 +85,13 @@ async function runPlan(ppro, plan, emit = () => {}) {
       }
     }
   };
-  const fresh = async (key) => {
+  // `raw`: unverändertes ProjectItem (so verlangt es SequenceEditor/createSequenceFromMedia; ein ClipProjectItem wird mit „Invalid parameter“ abgelehnt)
+  const fresh = async (key, raw = false) => {
     if (!names[key]) return null;
     const project = await getProject();
     const bin = await media.getBin(ppro, project, plan.bin);
     const it = (await bin.getItems()).find((i) => i.name === names[key]);
-    return it ? asClip(ppro, it) : null;
+    return it ? (raw ? it : asClip(ppro, it)) : null;
   };
 
   // ---- 2. Pause/Play aus der After-Effects-Komposition ----
@@ -109,7 +110,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   const epMedia = plan.media.find((m) => m.kind === 'episode');
   await refresh();
   await guarded(report, 'Episoden-Sequenz', async () => {
-    const epClip = await fresh(epMedia.id);
+    const epClip = await fresh(epMedia.id, true);
     if (!epClip) throw new Error('Episoden-Medium fehlt');
     const project = await getProject();
     const bin = await media.getBin(ppro, project, plan.bin);
@@ -171,7 +172,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
         const src = await fresh(key);
         if (!src) throw new Error('Quelle fehlt');
         if (inOut) await txp(ppro, 'In/Out', (add) => add(src.createSetInOutPointsAction(tt(ppro, inOut[0]), tt(ppro, inOut[1]))));
-        await placeClip(ppro, mainGuid, () => fresh(key), c.start, videoIdx, audioIdx);   // nach der Änderung (In/Out) ist `src` ungültig
+        await placeClip(ppro, mainGuid, () => fresh(key, true), c.start, videoIdx, audioIdx);   // nach der Änderung (In/Out) ist `src` ungültig
       }, refresh);
       const ti = await locate();
       if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));

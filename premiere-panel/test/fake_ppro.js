@@ -248,7 +248,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
     Constants: { TrackItemType: { EMPTY: 0, CLIP: 1, TRANSITION: 2 }, MediaType: { ANY: 0, DATA: 1, VIDEO: 2, AUDIO: 3 } },
     ProjectItem: { TYPE_BIN: 2, TYPE_CLIP: 1, TYPE_ROOT: 3 },
     FolderItem: { cast: (i) => { if (!(i instanceof FolderItem)) throw new Error('kein Fach'); return i; } },
-    ClipProjectItem: { cast: (i) => { if (!(i instanceof ClipItem)) throw new Error('kein Clip'); return i; } },
+    ClipProjectItem: { cast: (i) => { if (!(i instanceof ClipItem)) throw new Error('kein Clip'); return new Proxy(i, { get: (t, k, r) => (k === 'isCast' ? true : Reflect.get(t, k, r)) }); } },
     Marker: { MARKER_TYPE_COMMENT: 'Comment' },
     Markers: { async getMarkers(seq) { return { createAddMarkerAction: (name, type, start, dur, comments) => new Action(() => seq.markers.push({ name, type, start: start.seconds, comments }), 'marker') }; } },
     VideoFilterFactory: {
@@ -262,6 +262,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
         return {
           createOverwriteItemAction(item, time, v, a) {
             if (a < 0 && !item.hasAudio) throw new Error('Invalid parameter.');   // wie in Premiere 26.5.2 gemessen: -1 wird abgelehnt
+            if (item.isCast) throw new Error('Invalid parameter.');   // wie in Premiere 26.5.2 gemessen: nur rohe ProjectItems
             item = unwrap(item);
             if (!(time instanceof TickTime)) throw new Error('TickTime erwartet');
             return new Action(() => {

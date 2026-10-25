@@ -56,6 +56,16 @@ async function mediaByPath(ppro, folder) {
   return map;
 }
 
+/** Unverändertes ProjectItem zu einem Dateipfad (für Schnitt-Aktionen; die Umwandlung in ClipProjectItem wird dort abgelehnt). */
+async function rawByPath(ppro, folder, path) {
+  for (const it of await walkItems(ppro, folder)) {
+    const clip = asClip(ppro, it);
+    if (!clip) continue;
+    try { if (!(await clip.isSequence()) && norm(await clip.getMediaFilePath()) === norm(path)) return it; } catch (e) { /* Platzhalter */ }
+  }
+  return null;
+}
+
 /** Alle Medien des Projekts (für Tausch und Neuladen). */
 async function allMedia(ppro, project) {
   return mediaByPath(ppro, await (await fresh(ppro)).getRootItem());
@@ -99,4 +109,4 @@ async function swapMedia(ppro, project, { swaps = [], refresh = [] }, emit) {
   return report;
 }
 
-module.exports = { getBin, ensureBin, importFiles, mediaByPath, allMedia, swapMedia };
+module.exports = { getBin, ensureBin, importFiles, mediaByPath, rawByPath, allMedia, swapMedia };

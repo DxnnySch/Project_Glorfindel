@@ -54,7 +54,7 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     if (!haveItem) throw new Error('kein Test-Bild');
     await placeClip(ppro, seqGuid, async () => {
       const bin = await media.getBin(ppro, await getProject(), BIN);
-      return (await media.mediaByPath(ppro, bin)).get(norm(png));
+      return media.rawByPath(ppro, bin, png);
     }, 2, 12, -1);
     haveClip = true;
     const ti = await locate();
