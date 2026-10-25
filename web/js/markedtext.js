@@ -1,6 +1,7 @@
 // Kommentartext mit farbiger Markierung der Wortbereiche, in denen ein Bild/eine Karte eingeblendet wird.
 // Technik: Textarea über einer gleich formatierten Spiegel-Ebene, die die markierten Wörter hinterlegt.
 import { h } from './ui.js';
+import { wordTokens } from './richtext.js';
 
 export const ANCHOR_COLORS = ['#e9b44c', '#4da3e0', '#4cc38a', '#d96ad0', '#ef6b5b', '#7ee0a0'];
 export const colorOf = (i) => ANCHOR_COLORS[i % ANCHOR_COLORS.length];
@@ -14,24 +15,24 @@ export function markedTextarea({ value, placeholder, rows = 3, anchors, onInput,
   function grow() { ta.style.height = 'auto'; ta.style.height = `${Math.max(ta.scrollHeight, rows * 24)}px`; mirror.style.height = ta.style.height; }
   function refresh() {
     const text = ta.value, list = anchors?.() || [];
-    // Wortgrenzen bestimmen: jedes Token (Wort mit Whitespace davor) bekommt seine Marken
-    const toks = [...text.matchAll(/(\s*)(\S+)/g)];
+    // Wörter des reinen Sprechtextes (Formatierungszeichen zählen nicht); jedes Wort bekommt seine Marken
+    const toks = wordTokens(text);
     const frag = document.createDocumentFragment();
-    let last = 0;
-    toks.forEach((m, wi) => {
+    let pos = 0;
+    toks.forEach((t, wi) => {
       const hits = list.map((a, ai) => ({ a, ai })).filter(({ a }) => a.einheit !== 'stichpunkt' && wi >= a.von && (a.bis == null || wi < a.bis));
-      if (m[1]) frag.append(document.createTextNode(m[1]));
+      if (t.start > pos) frag.append(document.createTextNode(text.slice(pos, t.start)));
       const span = document.createElement('span');
-      span.textContent = m[2];
+      span.textContent = text.slice(t.start, t.end);
       if (hits.length) {
         const c = colorOf(hits[0].ai);
         span.style.cssText = `background:${c}55;box-shadow:inset 0 -3px 0 ${c};border-radius:3px`;
         if (hits.some(({ a }) => a.von === wi)) span.classList.add('mt-start');
       }
       frag.append(span);
-      last = m.index + m[0].length;
+      pos = t.end;
     });
-    frag.append(document.createTextNode(text.slice(last) + '​'));
+    frag.append(document.createTextNode(text.slice(pos) + '​'));
     mirror.replaceChildren(frag);
   }
   refresh();

@@ -5,6 +5,7 @@ import re
 from typing import Literal
 
 from .config import Thresholds
+from . import richtext
 from .models import CommentBlock, Scene, Strand
 
 Light = Literal["gruen", "gelb", "rot"]
@@ -116,6 +117,11 @@ def parse_bullets(text: str) -> list[str]:
 
 def normalize_block(block: CommentBlock) -> CommentBlock:
     """Erkennt Stichpunkt-Eingaben im Textfeld und stellt Modus/Felder konsistent her."""
+    if block.markup:
+        if block.modus == "text" and richtext.has_markup(block.markup):
+            block.text = richtext.plain(block.markup)           # Formatierung gewinnt; Aufzählungen bleiben Fließtext
+            return block
+        block.markup = ""
     if block.modus == "text":
         bullets = parse_bullets(block.text)
         if bullets:

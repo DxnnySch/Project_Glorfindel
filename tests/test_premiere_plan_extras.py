@@ -1,6 +1,8 @@
 """Pause/Play-Dateien, Schwarzstreifen, Artwork-Sequenzen, Karten-Animation, Amazon-Credit vs. Künstler-Credit."""
 import subprocess
 
+import pytest
+
 from PIL import Image
 
 from glorfindel import premiere_media
@@ -119,6 +121,11 @@ def test_autoframe_picks_masks_and_keeps_subject_visible():
     # Bild deckt die sichtbare Maske: Bildhälfte (in Bildschirmpixeln) ≥ Maskenhälfte
     s = fr["image_scale"] / 100
     assert 800 * s >= 1150 and 1200 * s >= 1000
+    # möglichst viel Bild: der Ausschnitt ist der größte mit dem Seitenverhältnis der Maske
+    assert (y1 - y0) * 1200 == pytest.approx(800 / (920 / 800), abs=2) and (x1 - x0) == pytest.approx(1.0, abs=1e-3)
+    # Bild fast im Seitenverhältnis der Maske: (fast) alles bleibt sichtbar
+    full = autoframe.frame_image((600, 500), "Maske Quadrat.png", 1150, {"x0": 0.4, "y0": 0.3, "x1": 0.6, "y1": 0.6})
+    assert full["region"][2] - full["region"][0] > 0.95 and full["region"][3] - full["region"][1] > 0.99
     # ohne Motiv: mittiger Ausschnitt
     mid = autoframe.frame_image((1920, 1080), "Maske.png", 1536, None)
     assert mid["image_position"][0] == 0.5 and mid["mask_scale"] == 80.0

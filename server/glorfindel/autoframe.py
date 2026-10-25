@@ -82,28 +82,25 @@ def pick_mask(size: tuple[int, int]) -> str:
     return "Maske.png" if h and w / h >= LANDSCAPE_MIN_RATIO else "Maske Quadrat.png"
 
 
-def frame_image(size: tuple[int, int], mask: str, shown_w: float, box: dict | None, margin: float = 0.10,
+def frame_image(size: tuple[int, int], mask: str, shown_w: float, box: dict | None,
                 center: tuple[float, float] = (0.5, 0.5)) -> dict:
     """Ausschnitt eines Artworks hinter der Maske.
 
     `shown_w`: gewünschte Breite der sichtbaren Maskenfläche auf dem Bildschirm (px bei 1920×1080). Die Maske wird darauf skaliert, das Bild so,
-    dass der gewählte Bildausschnitt genau die Fläche füllt (keine leeren Ränder). Der Ausschnitt hat das Seitenverhältnis der Maske, enthält
-    das Hauptmotiv samt Rand (wenn das Bild es hergibt) und liegt innerhalb des Bildes. `center`: Mitte der Maske im Rahmen (normiert).
+    dass der gewählte Bildausschnitt genau die Fläche füllt (keine leeren Ränder). Der Ausschnitt hat das Seitenverhältnis der Maske und zeigt
+    so viel vom Bild wie möglich und – wenn angeschnitten werden muss – das Hauptmotiv, und liegt innerhalb des Bildes. `center`: Mitte der Maske im Rahmen (normiert).
     Rückgabe: mask_scale/image_scale in %, mask_position/image_position normiert (Position des Bildmittelpunkts)."""
     w, h = size
     vw, vh = VISIBLE_PX[mask]
     ar = vw / vh
     mask_scale = shown_w / vw * 100
-    # größtmöglicher Ausschnitt im Seitenverhältnis der Maske, der noch ins Bild passt
-    max_w = min(w, h * ar)
-    bw, bh = ((box["x1"] - box["x0"]) * w, (box["y1"] - box["y0"]) * h) if box else (0.0, 0.0)
-    cx, cy = (((box["x0"] + box["x1"]) / 2) * w, ((box["y0"] + box["y1"]) / 2) * h) if box else (w / 2, h / 2)
-    # Ausschnitt: so klein wie möglich (Motiv groß), aber das Motiv mit Rand muss hineinpassen; sonst der größtmögliche
-    need_w = max(bw * (1 + margin), bh * (1 + margin) * ar)
-    rw = min(max(need_w, 0.0), max_w) if box else max_w
-    rw = max(rw, min(max_w, w * 0.45))                      # nicht übertrieben nah heranzoomen
+    # Möglichst viel vom Bild zeigen: der größtmögliche Ausschnitt im Seitenverhältnis der Maske, der noch ins Bild passt.
+    # Nur wenn das Bild dabei angeschnitten wird, entscheidet das Hauptmotiv: Der Ausschnitt wird um dessen Mitte gelegt
+    # (und im Bild gehalten), sodass der wichtigste Teil sichtbar bleibt.
+    rw = min(w, h * ar)
     rh = rw / ar
-    rx = min(max(cx - rw / 2, 0.0), w - rw)                 # Ausschnitt um das Motiv zentrieren, im Bild halten
+    cx, cy = (((box["x0"] + box["x1"]) / 2) * w, ((box["y0"] + box["y1"]) / 2) * h) if box else (w / 2, h / 2)
+    rx = min(max(cx - rw / 2, 0.0), w - rw)
     ry = min(max(cy - rh / 2, 0.0), h - rh)
     s = shown_w / rw                                        # Bildpixel → Bildschirmpixel
     ox = center[0] * FRAME_PX[0] + (w / 2 - (rx + rw / 2)) * s    # Bildmitte relativ zur Maskenmitte

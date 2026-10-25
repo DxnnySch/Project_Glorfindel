@@ -1,0 +1,58 @@
+[
+  {
+    "markup": "Das ist **fett** und *kursiv*.",
+    "plain": "Das ist fett und kursiv."
+  },
+  {
+    "markup": "__unterstrichen__ und ~~weg~~",
+    "plain": "unterstrichen und weg"
+  },
+  {
+    "markup": "Ein [roter Satz]{#e0524d} hier",
+    "plain": "Ein roter Satz hier"
+  },
+  {
+    "markup": "[Marker]{bg:#ffee00} bleibt",
+    "plain": "Marker bleibt"
+  },
+  {
+    "markup": "[keine Farbe] bleibt wörtlich",
+    "plain": "[keine Farbe] bleibt wörtlich"
+  },
+  {
+    "markup": "# Titel\nText",
+    "plain": "Titel\nText"
+  },
+  {
+    "markup": "- eins\n- zwei",
+    "plain": "eins\nzwei"
+  },
+  {
+    "markup": "1. erstens\n2) zweitens",
+    "plain": "erstens\nzweitens"
+  },
+  {
+    "markup": ">> eingerückt **fett**",
+    "plain": "eingerückt fett"
+  },
+  {
+    "markup": "Mitte - ein Gedankenstrich bleibt",
+    "plain": "Mitte - ein Gedankenstrich bleibt"
+  },
+  {
+    "markup": "",
+    "plain": ""
+  },
+  {
+    "markup": "> - [Das]{#e0524d} **ist** ein Satz.",
+    "plain": "Das ist ein Satz."
+  },
+  {
+    "markup": ">> 1. Punkt",
+    "plain": "Punkt"
+  },
+  {
+    "markup": "Zeile eins\n\n  - eingerückte Liste",
+    "plain": "Zeile eins\n\neingerückte Liste"
+  }
+]

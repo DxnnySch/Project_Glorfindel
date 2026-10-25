@@ -267,3 +267,14 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .scene-item.unused { opacity: .55; } .scene-item.unused:hover, .scene-item.unused.active { opacity: 1; }
 .seg-tools { padding: 4px 0 10px; } .seg-foreign { margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
 .scene-unit { display: flex; gap: 6px; align-items: flex-start; } .scene-unit svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+
+/* ---- Formatierter Kommentar ---- */
+.rt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 10px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.rt-btn { min-width: 28px; height: 26px; padding: 0 7px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; cursor: pointer; font-size: 13px; }
+.rt-btn:hover { border-color: var(--accent); }
+.rt-sw { min-width: 18px; width: 18px; height: 18px; padding: 0; border-radius: 50%; }
+.rt-color { width: 28px; height: 26px; padding: 0; border: 1px solid var(--line); background: none; border-radius: 6px; cursor: pointer; }
+.rt-sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.rt-preview { padding: 12px 14px; font-size: 15px; line-height: 1.65; }
+.rt-view ul, .rt-view ol { margin: 4px 0 4px 22px; padding: 0; } .rt-view h4, .rt-view h5, .rt-view h6 { margin: 8px 0 4px; }
+.rt-view strong { font-weight: 700; } .rt-view s { opacity: .7; }

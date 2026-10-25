@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import model_validator, BaseModel, Field
 
 SCHEMA_VERSION = 1
 
@@ -31,8 +31,16 @@ class LlmSettings(BaseModel):
     models: dict[str, str] = Field(default_factory=dict)  # Funktion -> Modell; leer = automatisch
     features: dict[str, bool] = Field(default_factory=lambda: {
         "transcript_fix": True, "name_check": True, "image_suggest": True,
-        "map_suggest": True, "scene_titles": True, "autoframe": True,
+        "map_suggest": True, "scene_titles": True, "autoframe": False,
     })
+
+    @model_validator(mode="after")
+    def _fill_features(self):
+        """Neue Funktionen in älteren Einstellungsdateien ergänzen (mit ihrem Standardwert)."""
+        defaults = type(self).model_fields["features"].default_factory()
+        for k, v in defaults.items():
+            self.features.setdefault(k, v)
+        return self
 
 
 class Thresholds(BaseModel):

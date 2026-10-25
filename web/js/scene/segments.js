@@ -3,6 +3,7 @@ import { h, btn, icon, toast, modal, field, confirmBox, busy, fmtTC, parseTC, th
 import { api } from '../api.js';
 import { S } from '../state.js';
 import { markedTextarea, colorOf, wordsOf } from '../markedtext.js';
+import { hasMarkup, plain, wordTokens, toolbar, render } from '../richtext.js';
 import { pickMedia } from '../pickers.js';
 import { openMapEditor } from '../mapeditor.js';
 import { segColor } from './player.js';
@@ -54,9 +55,9 @@ export function createSegments(E) {
   function selectionOf(b, ta) {
     if (b.modus === 'stichpunkte') return { von: Math.max(0, ta ? ta.value.slice(0, ta.selectionStart).split('\n').length - 1 : 0), bis: null };
     if (!ta) return { von: 0, bis: null };
-    const wc = (s) => (s.trim() ? s.trim().split(/\s+/).length : 0);
-    const von = wc(ta.value.slice(0, ta.selectionStart)), n = wc(ta.value.slice(ta.selectionStart, ta.selectionEnd));
-    return { von: Math.min(von, Math.max(0, wordsOf(ta.value).length - 1)), bis: n ? von + n : null };
+    const toks = wordTokens(ta.value), a = ta.selectionStart, e = ta.selectionEnd;
+    const von = toks.filter((t) => t.end <= a).length, n = toks.filter((t) => t.end > a && t.start < e).length;
+    return { von: Math.min(von, Math.max(0, toks.length - 1)), bis: n ? von + n : null };
   }
   async function addMedia(b, ta) {
     const sel = selectionOf(b, ta);
@@ -76,7 +77,7 @@ export function createSegments(E) {
       modal({ title: 'Namensprüfung', body: h('div', { class: 'col' }, r.map((x, i) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: true, onChange: (e) => (e.target.checked ? picked.add(i) : picked.delete(i)) }), h('span', {}, `„${x.falsch}“ → „${x.richtig}“`)))),
         actions: [{ label: 'Abbrechen' }, { label: 'Übernehmen', kind: 'primary', onClick: () => {
           const fix = (s) => r.reduce((acc, x, i) => (picked.has(i) ? acc.split(x.falsch).join(x.richtig) : acc), s);
-          if (b.modus === 'stichpunkte') b.stichpunkte = b.stichpunkte.map(fix); else b.text = fix(b.text);
+          if (b.modus === 'stichpunkte') b.stichpunkte = b.stichpunkte.map(fix); else { b.text = fix(b.text); b.markup = ''; }
           E.touch(); redraw(); } }] });
     } catch (e) { toast(e.message, 'err'); }
   }
@@ -92,22 +93,30 @@ export function createSegments(E) {
   // ---- Kommentarblock ----
   function blockEl(s, b, si) {
     const isB = b.modus === 'stichpunkte';
-    let mt = null, ta = null;
+    let mt = null, ta = null, rich = null;
     const info = h('span', { class: 'help' });
     const upd = () => { const n = isB ? b.stichpunkte.length : wordsOf(b.text).length; info.textContent = isB ? `${n} Stichpunkte` : `${n} Wörter · ca. ${(n / S.settings.thresholds.words_per_second).toFixed(0)} s`; };
     if (isB) {
       ta = h('textarea', { rows: 4, class: 'bullets-ta', placeholder: 'Ein Stichpunkt pro Zeile – wird frei ausformuliert gesprochen', value: b.stichpunkte.join('\n'),
         onInput: (e) => { b.stichpunkte = e.target.value.split('\n').map((l) => l.replace(/^\s*[-•*]\s*/, '').trim()).filter(Boolean); upd(); E.touch(); } });
     } else {
-      mt = markedTextarea({ value: b.text, rows: 3, placeholder: 'Kommentar zu diesem Segment …', anchors: () => b.anker || [], onInput: (v) => { b.text = v; upd(); E.touch(); }, onFocus: () => { E.focusBlock = b; } });
+      mt = markedTextarea({ value: b.markup || b.text, rows: 3, placeholder: 'Kommentar zu diesem Segment … (Formatierung: Leiste oben, z. B. Strg+B für fett)', anchors: () => b.anker || [],
+        onInput: (v) => { if (hasMarkup(v)) { b.markup = v; b.text = plain(v); } else { b.markup = ''; b.text = v; } upd(); E.touch(); }, onFocus: () => { E.focusBlock = b; } });
       ta = mt.textarea;
+      const view = h('div', { class: 'rt-preview', hidden: true });
+      const bar = toolbar(ta, { onPreview: () => {
+        const on = view.hidden;
+        view.hidden = !on; mt.el.hidden = on;
+        if (on) view.replaceChildren(render(b.markup || b.text));
+      } });
+      rich = h('div', { class: 'rt-wrap' }, bar, mt.el, view);
     }
     upd();
     const spk = h('div', { class: 'seg' }, ['philipp', 'danny'].map((k) => h('button', { class: b.sprecher === k ? 'on' : '', onClick: () => { b.sprecher = k; E.touch(); redraw(); } }, k === 'philipp' ? 'Philipp' : 'Danny')));
     const mode = h('div', { class: 'seg' }, [['text', 'Text'], ['stichpunkte', 'Stichpunkte']].map(([k, l]) => h('button', { class: b.modus === k ? 'on' : '', onClick: () => {
       if (k === b.modus) return;
       if (k === 'stichpunkte') { b.stichpunkte = b.text.split(/\n|(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean); b.text = ''; } else { b.text = b.stichpunkte.join(' '); b.stichpunkte = []; }
-      b.modus = k; b.anker = []; E.touch(); redraw(); } }, l)));
+      b.modus = k; b.anker = []; b.markup = ''; E.touch(); redraw(); } }, l)));
     const segSel = (s.segmente.length > 1) ? h('select', { class: 'seg-move', title: 'Zu welchem Segment gehört der Kommentar?', onChange: (e) => { b.segment = +e.target.value; E.touch(); redraw(); } }, s.segmente.map((g, i) => h('option', { value: i, selected: i === si }, `Segment ${i + 1}`))) : null;
     const chips = (b.anker || []).map((a, ai) => h('div', { class: 'achip', style: { borderLeftColor: colorOf(ai) }, title: 'Klicken: Bereich ändern' , onClick: () => rangeDialog(b, a) },
       thumbOf(a) ? h('img', { src: thumbOf(a), loading: 'lazy' }) : h('div', { class: 'achip-noimg' }, icon(a.karte ? 'map' : 'image')),
@@ -117,7 +126,7 @@ export function createSegments(E) {
     return h('div', { class: `block ${b.sprecher}` },
       h('div', { class: 'block-head' }, spk, mode, segSel, h('span', { class: 'grow' }), info,
         btn('', { icon: 'trash', kind: 'ghost', size: 'sm', title: 'Kommentar löschen', onClick: async () => { if (await confirmBox('Kommentar löschen?', 'Dieser Kommentar wird entfernt.', 'Löschen', true)) { s.kommentar = s.kommentar.filter((x) => x !== b); E.touch(); redraw(); } } })),
-      mt ? mt.el : ta,
+      rich || ta,
       h('div', { class: 'block-foot' }, ...chips, btn('Bild / Karte einblenden', { size: 'sm', icon: 'image', title: 'Wörter im Text markieren, dann klicken: ab dort wird das Bild eingeblendet', onClick: () => addMedia(b, ta) }),
         h('span', { class: 'grow' }),
         b.gesprochen ? h('span', { class: 'help', title: b.gesprochen }, icon('mic'), ' aufgenommen') : null,

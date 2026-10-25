@@ -40,7 +40,8 @@ class AssetRef(BaseModel):
 class CommentBlock(BaseModel):
     sprecher: Speaker = "philipp"
     modus: Literal["text", "stichpunkte"] = "text"  # Stichpunkte: wird frei ausformuliert gesprochen
-    text: str = ""
+    text: str = ""          # reiner Sprechtext (Wortzählung, Abgleich, Anker)
+    markup: str = ""        # formatierte Fassung (kleines Markdown); leer = nicht formatiert. Wenn gesetzt, ist `text` = plain(markup)
     stichpunkte: list[str] = Field(default_factory=list)
     gesprochen: str = ""  # nach dem Abgleich: tatsächlich gesprochener Text (Transkript)
     anker: list[AssetRef] = Field(default_factory=list)

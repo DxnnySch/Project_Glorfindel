@@ -157,5 +157,6 @@ def adopt_spoken(block, result: dict) -> None:
             a.bis = starts.get(a.bis, n_words) if a.bis is not None else None
             a.einheit = "wort"
     block.text = result["gesprochen"]
+    block.markup = ""
     block.gesprochen = result["gesprochen"]
     block.modus = "text"

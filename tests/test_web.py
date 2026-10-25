@@ -61,3 +61,19 @@ def test_static_files_are_revalidated(tmp_path, monkeypatch):
     c = TestClient(create_app())
     assert c.get("/static/js/main.js").headers["cache-control"] == "no-cache"
     assert c.get("/").headers["cache-control"] == "no-cache"
+
+
+def test_all_web_scripts_parse():
+    """Syntaxfehler in einer Oberflächen-Datei würden die ganze Seite lahmlegen."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    import pytest
+
+    if shutil.which("node") is None:
+        pytest.skip("Node nicht installiert")
+    web = Path(__file__).resolve().parents[1] / "web" / "js"
+    for f in sorted(web.rglob("*.js")):
+        r = subprocess.run(["node", "--check", str(f)], capture_output=True)
+        assert r.returncode == 0, f"{f.name}: {r.stderr.decode('utf-8', 'replace')[:300]}"
