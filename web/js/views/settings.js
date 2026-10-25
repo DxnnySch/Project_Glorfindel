@@ -17,7 +17,22 @@ export async function render(main) {
   };
   const theme = h('select', { onChange: (e) => { localStorage.setItem('gl-theme', e.target.value); document.documentElement.dataset.theme = e.target.value; } },
     [['dark', 'Dunkel'], ['light', 'Hell']].map(([v, l]) => h('option', { value: v, selected: (localStorage.getItem('gl-theme') || 'dark') === v }, l)));
-  const th = s.thresholds, llm = s.llm;
+  const th = s.thresholds, llm = s.llm, pr = s.premiere;
+  // Premiere-Rohschnitt: Effekte je Artwork/Karte aus den .prfpset-Vorgaben wählen
+  const ORDER = ['drop_shadow', 'zoom_schnell', 'zoom_langsam', 'fancy_out', 'fancy_in'];
+  const effectGroup = (key, box, effekte) => {
+    box.replaceChildren(...effekte.map((e) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: pr[key].includes(e.id), onChange: (ev) => {
+      const on = new Set(pr[key]); ev.target.checked ? on.add(e.id) : on.delete(e.id);
+      const rank = (id) => (ORDER.includes(id) ? ORDER.indexOf(id) : ORDER.length + effekte.findIndex((x) => x.id === id));
+      pr[key] = [...on].sort((a, b) => rank(a) - rank(b));
+    } }), e.name)));
+  };
+  const artBox = h('div', { class: 'grid g2' }, h('span', { class: 'help' }, 'Effekte werden geladen …'));
+  const mapBox = h('div', { class: 'grid g2' });
+  const presetInfo = h('div', { class: 'help' });
+  api.get('/api/premiere/effects').then((r) => { effectGroup('artwork_effects', artBox, r.effekte); effectGroup('map_effects', mapBox, r.effekte.filter((e) => e.id !== 'drop_shadow'));
+    presetInfo.textContent = `Die Effekte stammen aus den .prfpset-Vorgaben in ${r.ordner} – Änderungen daran gelten beim nächsten Bau.`; })
+    .catch(() => { artBox.textContent = 'Effekte konnten nicht geladen werden.'; });
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Einstellungen'), h('p', {}, 'Diese Einstellungen gelten nur für diesen Rechner und werden nicht über OneDrive geteilt.')), btn('Speichern', { kind: 'primary', icon: 'check', onClick: save })),
     !S.settings.onedrive_root ? h('div', { class: 'banner info', style: { marginBottom: '16px' } }, icon('info'), 'Willkommen! Wähle zuerst den OneDrive-Stammordner, in dem „Mythen-Archiv“ und „Videomaterial“ liegen.') : null,
@@ -42,6 +57,12 @@ export async function render(main) {
           h('div', { class: 'help' }, S.settings._scads_key_present ? '✔ API-Schlüssel gefunden.' : '⚠ Kein API-Schlüssel (.env mit SCADS_API_KEY) – KI-Funktionen sind inaktiv.'),
           btn('Verbindung testen', { size: 'sm', icon: 'refresh', onClick: async () => { try { const r = await busy('Verbindung zu ScaDS.AI wird getestet …', api.get('/api/llm/status'), 'Modelle werden abgefragt'); toast(r.key ? (r.models.length ? `Verbunden – ${r.models.length} Modelle verfügbar.` : `Schlüssel da, aber keine Antwort: ${r.error || 'unbekannt'}`) : 'Kein API-Schlüssel gefunden.', r.models.length ? 'ok' : 'warn', 7000); } catch (e) { toast(e.message, 'err'); } } }),
           check('KI-Funktionen aktiv', llm, 'enabled'), ...Object.keys(llm.features).map((k) => check({ transcript_fix: 'Transkript-Nachkorrektur', name_check: 'Namensprüfung', image_suggest: 'Bild-Suchbegriffe', map_suggest: 'Kartenvorschläge', scene_titles: 'Szenentitel' }[k] || k, llm.features, k))),
+        h('div', { class: 'card col' }, h('h2', {}, 'Premiere-Rohschnitt'),
+          h('p', { class: 'help' }, 'Gilt für „Rohschnitt in Premiere bauen“. Wähle, welche Effekte jedes Bild/Artwork und jede Karte bekommt (z. B. „Zoom langsam“ statt „Zoom schnell“).'),
+          field('Effekte auf Bildern/Artworks', artBox), field('Effekte auf Karten', mapBox), presetInfo,
+          h('div', { class: 'grid g2' }, field('Kantenlänge eines Artworks (px)', inp('art_size_px', pr, 'number')),
+            field('Maske', h('select', { onChange: (e) => { pr.mask = e.target.value; } }, [['Maske Quadrat.png', 'Abgerundetes Quadrat'], ['Maske.png', 'Vollbild']].map(([v, l]) => h('option', { value: v, selected: pr.mask === v }, l))))),
+          field('Pause-Animation (relativ zum Stamm; Play entsteht rückwärts daraus)', inp('pause_mov', pr)), field('Ordner mit den Premiere-Vorgaben (.prfpset)', inp('presets_dir', pr))),
         h('div', { class: 'card col' }, h('h2', {}, 'Längenampel & Sprechtempo'),
           h('div', { class: 'grid g2' }, field('Max. Segmentlänge (s)', inp('max_segment_s', th, 'number')), field('Warnschwelle (Anteil)', inp('warn_ratio', th, 'number')),
             field('Ziel-Serienanteil', inp('target_series_share', th, 'number')), field('Wörter pro Sekunde', inp('words_per_second', th, 'number')), field('Sekunden pro Stichpunkt', inp('bullet_seconds', th, 'number'))),

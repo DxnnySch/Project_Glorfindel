@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import hmac
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -81,6 +83,16 @@ def call(body: CallBody):
         return {"data": HUB.call(body.op, body.args, timeout=min(body.timeout, 300))}
     except BridgeError as e:
         raise HTTPException(409, str(e))
+
+
+@router.get("/premiere/effects")
+def premiere_effects(state: AppState = Depends(st)):
+    """Wählbare Effekte für Artworks/Karten (aus den .prfpset-Vorgaben, sonst mitgelieferter Stand)."""
+    s = state.settings
+    lib = premiere_ops.library_for(Path(s.onedrive_root or "."), s.premiere.presets_dir, state.templates_dir())
+    rows = [{"id": "drop_shadow", "name": "Schlagschatten", "quelle": "Ursprungsschnitt"}]
+    rows += [{"id": k, "name": v.get("quelle", k).rsplit(".", 1)[0], "quelle": "Vorgabe"} for k, v in lib.items() if k not in ("zoom",)]
+    return {"effekte": rows, "ordner": str(Path(s.onedrive_root or ".") / s.premiere.presets_dir)}
 
 
 # ---------- Abläufe pro Folge ----------

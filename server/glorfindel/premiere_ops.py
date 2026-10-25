@@ -88,14 +88,18 @@ def _image_size(p: Path):
         return None
 
 
-def _library(ep: Episode, templates_dir: Path) -> dict:
+def library_for(root: Path, presets_dir: str, templates_dir: Path) -> dict:
     """Effekt-Bibliothek: direkt aus dem Vorgaben-Ordner (immer aktuell), sonst der mitgelieferte Stand."""
-    folder = ep.p.root / ep.settings.premiere.presets_dir
+    folder = Path(root) / presets_dir
     lib = prfpset.effect_library(folder) if folder.exists() else {}
     if lib:
         return lib
     snap = templates_dir / "effekt_bibliothek.json"
     return json.loads(snap.read_text(encoding="utf-8")) if snap.exists() else {}
+
+
+def _library(ep: Episode, templates_dir: Path) -> dict:
+    return library_for(ep.p.root, ep.settings.premiere.presets_dir, templates_dir)
 
 
 def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, stills_dir: Path, nested_preset: Path | None = None) -> PlanEnv:

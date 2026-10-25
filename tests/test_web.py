@@ -45,3 +45,12 @@ def test_help_images_exist():
     assert len(imgs) >= 10
     for i in imgs:
         assert (help_dir / i).is_file(), f"Bild fehlt: {i}"
+
+
+def test_premiere_effects_endpoint_lists_library(tmp_path, monkeypatch):
+    monkeypatch.setenv("GLORFINDEL_HOME", str(tmp_path))
+    c = TestClient(create_app())
+    r = c.get("/api/premiere/effects")
+    assert r.status_code == 200
+    ids = {e["id"] for e in r.json()["effekte"]}
+    assert {"drop_shadow", "fancy_in", "fancy_out", "zoom_schnell", "zoom_langsam", "karte_in", "karte_out"} <= ids

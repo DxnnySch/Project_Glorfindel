@@ -72,6 +72,7 @@ export async function render(main, ctx) {
     fill(buildCard, 
       h('div', { class: 'card-head' }, icon('scissors'), h('h2', { class: 'grow' }, 'Rohschnitt in Premiere bauen')),
       h('p', { class: 'muted' }, 'Erzeugt in deinem geöffneten Premiere-Projekt eine neue Sequenz („Rohschnitt … vN“, bestehende bleiben unberührt) mit Szenen aus einer verschachtelten Episoden-Sequenz, Standbildern, Sprecher-Spuren, Pause/Play, Artworks mit Fancy In/Out, Credits und Markern – wie im Ursprungsschnitt.'),
+      h('p', { class: 'help' }, 'Effekte (Zoom schnell/langsam, Fancy In/Out, Karten-Animation …) und Artwork-Größe wählst du unter ', h('a', { href: '#/settings' }, 'Einstellungen → Premiere-Rohschnitt'), '.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: ui.strand, onChange: (e) => { ui.strand = e.target.checked; } }), 'Reihenfolge nach Strängen / Ablauf'),
       h('div', { class: 'row gap-s' }, btn('In Premiere bauen', { kind: 'primary', icon: 'play', disabled: !ok, onClick: build }),
         !bridge.connected ? h('span', { class: 'help' }, 'Zuerst Premiere verbinden.') : !ok ? h('span', { class: 'help' }, 'Noch keine Segmente im Szenen-Editor markiert.') : null),
