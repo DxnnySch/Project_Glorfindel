@@ -120,4 +120,59 @@ async function introspect(ppro) {
   return out;
 }
 
-module.exports = { projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };
+/** Fehlersuche: Test-Fach auf mehrere Arten anlegen (und wieder entfernen), um zu sehen, welche Art Premiere akzeptiert. */
+async function probeBin(ppro) {
+  const NAME = 'GL-Probe';
+  const out = [];
+  const getProject = () => ppro.Project.getActiveProject();
+  const cleanup = async () => {
+    try {
+      const project = await getProject();
+      const root = await project.getRootItem();
+      for (const it of await root.getItems()) {
+        if (it.name !== NAME) continue;
+        const p2 = await getProject();
+        const r2 = await p2.getRootItem();
+        const b = (await r2.getItems()).find((i) => i.name === NAME);
+        p2.executeTransaction((c) => { c.addAction(r2.createRemoveItemAction(b)); }, 'GL-Probe entfernen');
+      }
+    } catch (e) { out.push({ variante: 'aufräumen', fehler: errText(e) }); }
+  };
+  const variants = {
+    'A: Projekt, Wurzel, Transaktion': async () => {
+      const project = await getProject(); const root = await project.getRootItem();
+      return project.executeTransaction((c) => { c.addAction(root.createBinAction(NAME, true)); }, 'A');
+    },
+    'B: wie A, aber in lockedAccess': async () => {
+      const project = await getProject(); const root = await project.getRootItem();
+      let r; project.lockedAccess(() => { r = project.executeTransaction((c) => { c.addAction(root.createBinAction(NAME, true)); }, 'B'); });
+      return r;
+    },
+    'C: Wurzel erst in der Transaktion holen (ohne await davor)': async () => {
+      const project = await getProject();
+      const root = await project.getRootItem();
+      const action = root.createBinAction(NAME, true);
+      return project.executeTransaction((c) => { c.addAction(action); }, 'C');
+    },
+    'D: Projekt per getActiveProject, Aktion außerhalb der Transaktion erzeugt, Wurzel über Projekt-Eigenschaft': async () => {
+      const project = await getProject();
+      const root = await project.getRootItem();
+      const bin = root.createBinAction(NAME, false);
+      return project.executeTransaction((c) => c.addAction(bin), 'D');
+    },
+  };
+  for (const [name, fn] of Object.entries(variants)) {
+    const r = { variante: name };
+    try { r.ergebnis = String(await fn()); } catch (e) { r.fehler = errText(e); }
+    try {
+      const project = await getProject();
+      const root = await project.getRootItem();
+      r.angelegt = (await root.getItems()).some((i) => i.name === NAME);
+    } catch (e) { r.pruefung = errText(e); }
+    out.push(r);
+    await cleanup();
+  }
+  return out;
+}
+
+module.exports = { probeBin, projectDump, sequenceDump, introspect, methodsOf, plainValue, readComponents };

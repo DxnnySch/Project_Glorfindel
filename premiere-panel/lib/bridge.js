@@ -27,12 +27,13 @@ function makeHandlers(ppro) {
       const project = await ppro.Project.getActiveProject();
       return media.swapMedia(ppro, project, { swaps: [], refresh: args.paths || [] }, emit);
     },
+    'probe.bin': async () => dump.probeBin(ppro),
     'project.save': async () => { const p = await ppro.Project.getActiveProject(); await p.save(); return { saved: true }; },
   };
 }
 
 class Bridge {
-  constructor({ ppro, WebSocketImpl, fetchImpl, hostInfo = {}, version = '0.3.3', log = () => {}, onStatus = () => {} }) {
+  constructor({ ppro, WebSocketImpl, fetchImpl, hostInfo = {}, version = '0.3.4', log = () => {}, onStatus = () => {} }) {
     this.ppro = ppro;
     this.WS = WebSocketImpl;
     this.fetch = fetchImpl;

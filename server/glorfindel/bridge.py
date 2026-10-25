@@ -19,7 +19,7 @@ from .config import app_dir
 PROTOCOL = 1
 # Operationen, die der Server aufrufen darf (das Panel akzeptiert ebenfalls nur diese)
 OPS = {"ping", "info", "introspect", "selftest", "project.dump", "sequence.dump", "plan.run", "media.swap", "media.refresh",
-       "project.save", "template.inspect"}
+       "project.save", "template.inspect", "probe.bin"}
 
 
 class BridgeError(RuntimeError):
