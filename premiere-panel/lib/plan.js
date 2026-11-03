@@ -3,10 +3,11 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate } = require('./core');
+const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate, isStale: isStaleErr } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const trans = require('./transitions');
+const mogrt = require('./mogrt');
 
 const TOL = 0.004; // Sekunden: so genau muss ein gesetzter Clip auf dem geplanten Zeitpunkt liegen
 
@@ -224,6 +225,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   const total = plan.clips.length;
   let done = 0;
   let transWarned = false;
+  let mogrtOk = true;                                  // nach dem ersten Fehler einer Vorlage kommen alle Credits als PNG
   const countOk = (k) => { report.placed[k] = (report.placed[k] || 0) + 1; };
   for (const c of plan.clips) {
     done++;
@@ -240,8 +242,20 @@ async function runPlan(ppro, plan, emit = () => {}) {
         if (!ti) throw new Error('gesetzter Clip nicht auf der Spur gefunden');
         return ti;
       };
+      let usedMogrt = false;
       await retryStale(async () => {
         const project = await getProject();
+        if (c.mogrt && mogrtOk) {
+          try {
+            await mogrt.insertTemplate(ppro, project, await sequenceByGuid(ppro, project, mainGuid), { path: c.mogrt.path, start: c.start, track: c.track });
+            usedMogrt = true;
+            return;
+          } catch (e) {
+            if (isStaleErr(e)) throw e;
+            mogrtOk = false;
+            report.warnings.push('Credit-Vorlage (MOGRT) nicht verwendet: ' + errText(e) + ' – Credits kommen als PNG.');
+          }
+        }
         let key, audioIdx = -1, videoIdx = c.track, inOut = null;
         if (c.kind === 'episode') { key = 'epSeq'; audioIdx = c.audio; inOut = [c.src_in, c.src_out]; }
         else if (c.kind === 'voice') { key = c.media; audioIdx = c.track; videoIdx = 0; inOut = [c.src_in, c.src_out]; }
@@ -264,6 +278,14 @@ async function runPlan(ppro, plan, emit = () => {}) {
       if (c.name) await guarded(report, 'Name ' + c.name, async () => { const t2 = await locate(); await txp(ppro, 'Name', (add) => add(t2.createSetNameAction(c.name))); });
       countOk(c.kind);
       if (isAudio) return;
+      if (usedMogrt) {
+        // Text in die Vorlage schreiben; Doppelbild-Layouts verschieben die Vorlage seitlich
+        await guarded(report, 'Credit-Text ' + c.name, async () => {
+          await retryStale(async () => { await mogrt.setText(ppro, await getProject(), locate, c.mogrt.text, c.mogrt.text_names); }, refresh);
+          if (c.mogrt.dx) await fx.setMotion(ppro, await getProject(), locate, { position: [0.5 + c.mogrt.dx, 0.5] }, ctx);
+          countOk('credit_text');
+        });
+      }
 
       // Effekte je nach Art des Clips
       if (c.kind === 'artwork' && c.crop) {

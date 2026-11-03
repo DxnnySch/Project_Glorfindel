@@ -8,6 +8,7 @@ const { tt, tx, txp, errText, norm, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const trans = require('./transitions');
+const mogrt = require('./mogrt');
 const { trackItemAt, sequenceByGuid, placeClip } = require('./plan');
 
 const BIN = 'Glorfindel-Selbsttest';
@@ -130,6 +131,32 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     const n = await trans.addVideoTransitions(ppro, locate, { ein: 0.42, aus: 0.42 }, { match_name: match }, ctx);
     res.findings.crossDissolve = match;
     return { match, gesetzt: n, audio_uebergaenge_in_api: res.findings.audioTransitions };
+  });
+
+  // Editierbarer Text: Adobes „Basic Title“ einsetzen, Text schreiben und zurücklesen. Bestätigt das Textformat des Parameters.
+  await step('Text-Vorlage (MOGRT)', async () => {
+    const dir = await ppro.SequenceEditor.getInstalledMogrtPath();
+    const path = String(dir).replace(/[\\/]+$/, '') + '/Basic Title.mogrt';
+    res.findings.mogrtPath = path;
+    const seq = await sequenceByGuid(ppro, await getProject(), seqGuid);
+    await mogrt.insertTemplate(ppro, await getProject(), seq, { path, start: 10, track: 11 });
+    const loc = async () => {
+      const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), seqGuid), 'video', 11, 10);
+      if (!ti) throw new Error('Vorlagen-Clip nicht gefunden');
+      return ti;
+    };
+    const name = await mogrt.setText(ppro, await getProject(), loc, 'Glorfindel Test ä');
+    const chain = await (await loc()).getComponentChain();
+    let back = null;
+    for (const c of await fx.listComponents(chain)) for (const p of fx.paramList(c.comp)) {
+      if (p.name !== name) continue;
+      try { const v = (await p.param.getStartValue()).value; if (typeof v === 'string') back = v; } catch (e) { /* weiter */ }
+    }
+    res.findings.mogrtTextParam = name;
+    res.findings.mogrtTextBack = back && back.slice(0, 160);
+    res.findings.mogrtTextIsJson = /^\s*\{/.test(back || '');
+    if (!back || !back.includes('Glorfindel Test')) throw new Error('Text nicht zurückgelesen: ' + String(back).slice(0, 80));
+    return { parameter: name, json: res.findings.mogrtTextIsJson };
   });
 
   // Aufräumen – immer

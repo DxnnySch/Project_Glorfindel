@@ -27,7 +27,7 @@ test('Bau: alle Clips landen auf den richtigen Spuren, ohne Fehler', async () =>
   const events = [];
   const rep = await runPlan(ppro, clone(PLAN), (n, d) => events.push([n, d]));
   assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
-  assert.deepEqual(rep.placed, { episode: 3, still: 2, anim: 3, artwork: 4, credit: 8, voice: 1, bars: 1, marker: PLAN.markers.length });
+  assert.deepEqual(rep.placed, { episode: 3, still: 2, anim: 3, artwork: 4, credit: 8, credit_text: 8, voice: 1, bars: 1, marker: PLAN.markers.length });
   const main = mainSeq(project);
   assert.equal(main.tracks.video.length, 14);
   assert.equal(main.tracks.audio.length, 16);
@@ -386,4 +386,55 @@ test('Serienton: Pegel in dB, wenn Premiere den Pegel so führt (Modus wird am C
   const level = ti.chain.comps.find((k) => k.name === 'Lautstärke').params[1];
   assert.ok(level.kfs.every(([, v]) => v <= 1e-9 && v >= -90 - 1e-9), 'dB-Werte ≤ 0');
   assert.ok(level.kfs.some(([, v]) => v < -20) && level.kfs.some(([, v]) => v === 0));
+});
+
+const creditItems = (main) => main.tracks.video.flatMap((t) => t.items).filter((t) => PLAN.clips.some((c) => c.kind === 'credit' && c.track === t.idx && Math.abs(c.start - t.start) < 0.004));
+
+test('Credits als Text: Vorlage eingesetzt, Text im Textparameter (Textdokument bleibt erhalten), Länge, Name, Übergänge', async () => {
+  const { ppro, project } = newEnv();
+  const rep = await runPlan(ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.equal(rep.placed.credit, PLAN.clips.filter((c) => c.kind === 'credit').length);
+  assert.equal(rep.placed.credit_text, rep.placed.credit, 'alle Credits als editierbarer Text');
+  const main = mainSeq(project);
+  for (const c of PLAN.clips.filter((x) => x.kind === 'credit')) {
+    const ti = trackItems(main, 'video', c.track).find((t) => Math.abs(t.start - c.start) < 0.004);
+    assert.ok(ti, c.name + ' @' + c.start);
+    assert.match(ti.item.name, /^Credit /, 'aus der Vorlage, nicht das PNG');
+    assert.ok(Math.abs(ti.end - c.end) < 0.004, 'Länge');
+    assert.equal(ti.name, c.name);
+    const text = ti.chain.comps.find((k) => k.name === 'Grafikparameter').params.find((p) => p.displayName === 'Text');
+    const doc = JSON.parse(text.value);
+    assert.equal(doc.textEditValue, c.mogrt.text);
+    assert.deepEqual(doc.fontTextRunLength, [c.mogrt.text.length], 'Länge des Textlaufs mitgeführt');
+    assert.equal(doc.fontSizeEditValue, 50, 'übrige Textformatierung unberührt');
+    assert.equal(ti.transitions.length, 2);
+  }
+});
+
+test('Credits als Text: fehlt die Vorlage, wird das PNG gesetzt (mit Hinweis), der Bau läuft weiter', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrts.length = 0;
+  const rep = await runPlan(ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.ok(rep.warnings.some((w) => /Vorlage|MOGRT/i.test(w)), rep.warnings.join('|'));
+  assert.equal(rep.placed.credit, PLAN.clips.filter((c) => c.kind === 'credit').length);
+  assert.equal(rep.placed.credit_text || 0, 0);
+  assert.ok(creditItems(mainSeq(project)).every((t) => /\.png$/.test(t.item.name)));
+});
+
+test('Credits als Text: Doppelbild-Credit wird seitlich verschoben, Einzelbild bleibt am Vorgabeort', async () => {
+  const { ppro, project } = newEnv();
+  await runPlan(ppro, clone(PLAN));
+  const main = mainSeq(project);
+  const shifted = PLAN.clips.filter((c) => c.kind === 'credit' && c.mogrt && c.mogrt.dx !== 0);
+  assert.ok(shifted.length >= 1, 'Plan enthält Doppelbild-Credits');
+  for (const c of shifted) {
+    const ti = trackItems(main, 'video', c.track).find((t) => Math.abs(t.start - c.start) < 0.004);
+    const pos = param(ti.chain.comps.find((k) => k.name === 'Bewegung'), 'Position');
+    assert.ok(Math.abs(pos.value.x - (0.5 + c.mogrt.dx)) < 1e-9 && pos.value.y === 0.5);
+  }
+  const plain = PLAN.clips.find((c) => c.kind === 'credit' && c.mogrt && c.mogrt.dx === 0);
+  const ti = trackItems(main, 'video', plain.track).find((t) => Math.abs(t.start - plain.start) < 0.004);
+  assert.deepEqual([param(ti.chain.comps.find((k) => k.name === 'Bewegung'), 'Position').value.x], [0.5]);
 });

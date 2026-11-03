@@ -203,8 +203,15 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                 art = {"credit_amazon": "amazon", "credit_artwork": "artwork", "credit_musik": "musik"}.get(c.get("slot", ""), "artwork")
                 x = env.doppel.get("links" if c.get("layout") == "doppel_links" else "rechts", {}).get("x")                     if art == "artwork" and c.get("layout") in ("doppel_links", "doppel_rechts") else None
                 png = env.credit(c["text"], art, x)
-                clips.append({"kind": "credit", **base, "art": art, "media": reg(png, "credit"), "name": c["text"],
-                              "fade": c.get("fade", 0.0) or 0.0})
+                clip = {"kind": "credit", **base, "art": art, "media": reg(png, "credit"), "name": c["text"], "fade": c.get("fade", 0.0) or 0.0}
+                mg = (env.premiere.get("credit_mogrt") or {}).get(art)
+                if mg:
+                    # Editierbarer Text: Vorlage (.mogrt) einsetzen, Text als Parameter. Das PNG oben bleibt als Rückfall.
+                    # Die Vorlage trägt Schrift/Ort selbst; nur Doppelbild-Layouts verschieben sie seitlich (Mitte 0,5 = Vorgabeort).
+                    clip["text_modus"] = "mogrt"
+                    clip["mogrt"] = {"path": mg, "text": c["text"], "dx": round(x - 0.5, 4) if x is not None else 0.0,
+                                     "text_names": ["Text", "Titel", "Quelltext", "Source Text"]}
+                clips.append(clip)
             elif typ == "comment":
                 if c.get("placeholder") or not c.get("rec_path"):
                     continue                                        # noch keine Aufnahme: Marker genügt (siehe Warnungen)

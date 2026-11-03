@@ -125,6 +125,18 @@ def _image_size(p: Path):
         return None
 
 
+def discover_credit_mogrts(folder: Path) -> dict[str, str]:
+    """Credit-Vorlagen (editierbarer Text) aus vorlagen/mogrt: „Credit Amazon.mogrt“, „Credit Artwork.mogrt“, „Credit Musik.mogrt“.
+    Fehlt eine, bleibt für diese Art das PNG."""
+    out: dict[str, str] = {}
+    if Path(folder).is_dir():
+        for art in ("amazon", "artwork", "musik"):
+            p = next((f for f in Path(folder).iterdir() if f.suffix.lower() == ".mogrt" and f.stem.lower() == f"credit {art}"), None)
+            if p:
+                out[art] = str(p)
+    return out
+
+
 def library_for(root: Path, presets_dir: str, templates_dir: Path) -> dict:
     """Effekt-Bibliothek: direkt aus dem Vorgaben-Ordner (immer aktuell), sonst der mitgelieferte Stand."""
     folder = Path(root) / presets_dir
@@ -157,6 +169,9 @@ def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, st
         extra["mask_dir"] = str(masks)
         extra["mask_mode"] = s.mask
         extra["landscape_px"] = s.landscape_px
+    credit_mogrt = discover_credit_mogrts(templates_dir / "mogrt")
+    if credit_mogrt:
+        extra["credit_mogrt"] = credit_mogrt
     from .autoframe import subject_box
     from .llm import Llm
     llm = Llm(ep.settings)

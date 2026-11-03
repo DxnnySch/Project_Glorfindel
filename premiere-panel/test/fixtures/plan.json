@@ -2237,6 +2237,18 @@
    "media": "m2",
    "name": "© amazon studios",
    "fade": 0.0,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Amazon.mogrt",
+    "text": "© amazon studios",
+    "dx": 0.0,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2252,6 +2264,18 @@
    "media": "m2",
    "name": "© amazon studios",
    "fade": 0.0,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Amazon.mogrt",
+    "text": "© amazon studios",
+    "dx": 0.0,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2267,6 +2291,18 @@
    "media": "m2",
    "name": "© amazon studios",
    "fade": 0.0,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Amazon.mogrt",
+    "text": "© amazon studios",
+    "dx": 0.0,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2282,6 +2318,18 @@
    "media": "m2",
    "name": "© amazon studios",
    "fade": 0.0,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Amazon.mogrt",
+    "text": "© amazon studios",
+    "dx": 0.0,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2297,6 +2345,18 @@
    "media": "m11",
    "name": "© alan lee",
    "fade": 0.42,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Artwork.mogrt",
+    "text": "© alan lee",
+    "dx": 0.0,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2312,6 +2372,18 @@
    "media": "m12",
    "name": "© alan lee",
    "fade": 0.42,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Artwork.mogrt",
+    "text": "© alan lee",
+    "dx": -0.23,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2327,6 +2399,18 @@
    "media": "m14",
    "name": "© john howe",
    "fade": 0.42,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Artwork.mogrt",
+    "text": "© john howe",
+    "dx": 0.0,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167
@@ -2342,6 +2426,18 @@
    "media": "m15",
    "name": "© john howe",
    "fade": 0.42,
+   "text_modus": "mogrt",
+   "mogrt": {
+    "path": "C:/vorlagen/mogrt/Credit Artwork.mogrt",
+    "text": "© john howe",
+    "dx": 0.23,
+    "text_names": [
+     "Text",
+     "Titel",
+     "Quelltext",
+     "Source Text"
+    ]
+   },
    "uebergang": {
     "ein": 0.4167,
     "aus": 0.4167

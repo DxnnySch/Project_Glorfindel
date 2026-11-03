@@ -45,7 +45,8 @@ def make_plan() -> dict:
                                 "pause_in": 28.7, "play_in": 0.0, "preset": "C:/cache/rohschnitt.sqpreset", "video_tracks": 14, "audio_tracks": 16,
                                 "pause_media": f"{STABLE_ROOT}/Videomaterial/VFX/Pause.mov", "play_media": "C:/cache/anim/Play.mov",
                                 "mask_dir": "C:/vorlagen/masken", "mask_mode": "auto", "landscape_px": 1536, "nested_preset": "C:/cache/artwork.sqpreset", "art_px": 1000,
-                                "bars_png": "C:/cache/anim/Schwarzstreifen.png"},
+                                "bars_png": "C:/cache/anim/Schwarzstreifen.png",
+                                "credit_mogrt": {"amazon": "C:/vorlagen/mogrt/Credit Amazon.mogrt", "artwork": "C:/vorlagen/mogrt/Credit Artwork.mogrt"}},
                       doppel=tpl["doppelbild"])
         plan = build_plan(pkg, env)
         txt = json.dumps(plan, ensure_ascii=False).replace(str(root).replace("\\", "\\\\"), STABLE_ROOT)

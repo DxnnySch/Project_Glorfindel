@@ -72,7 +72,7 @@ const PARAMS = {
 class Param {
   constructor(name, type, init) { this.displayName = name; this.type = type; this.value = init; this.varying = false; this.kfs = []; this.log = []; }
   _check(v) {
-    const ok = { num: typeof v === 'number', bool: typeof v === 'boolean', point: v instanceof PointF, color: v instanceof Color }[this.type];
+    const ok = { str: typeof v === 'string', num: typeof v === 'number', bool: typeof v === 'boolean', point: v instanceof PointF, color: v instanceof Color }[this.type];
     if (!ok) throw new Error('Wert passt nicht zum Parametertyp ' + this.type + ' (' + this.displayName + ')');
   }
   createKeyframe(v) { this._check(v); return { position: new TickTime(0), value: { value: v } }; }
@@ -207,9 +207,9 @@ function kindOfPath(p) {
   return { hasVideo: true, hasAudio: false, length: 5 };            // Standbild: Standardlänge 5 s
 }
 
-function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
+function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen/mogrt/Credit Amazon.mogrt', 'C:/vorlagen/mogrt/Credit Artwork.mogrt', 'C:/Adobe/Motion Graphics Templates/Basic Title.mogrt'] } = {}) {
   const calls = [];
-  const project = { name: 'Test.prproj', path: 'F:/Test.prproj', sequences: [], saved: 0, calls };
+  const project = { name: 'Test.prproj', path: 'F:/Test.prproj', sequences: [], saved: 0, calls, mogrts };
   const root = new FolderItem(project, 'Root', 3);
   project.root = root;
   const findBin = (b) => b || root;
@@ -292,8 +292,25 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
     },
     Project: { async getActiveProject() { HANDLE++; return wrap(project); } },
     SequenceEditor: {
+      async getInstalledMogrtPath() { return 'C:/Adobe/Motion Graphics Templates'; },
       getEditor(seq) {
         return {
+          // wie in der API: wirkt sofort (keine Aktion), braucht „locked access“, liefert die neuen Clips; die Vorlage muss existieren
+          insertMogrtFromPath(path, time, v, a) {
+            if (!project.locked) throw new Error('Requires locked access');
+            if (!(time instanceof TickTime)) throw new Error('TickTime erwartet');
+            if (!(project.mogrts || []).includes(path)) throw new Error('MOGRT nicht gefunden: ' + path);
+            if (v >= seq.tracks.video.length) throw new Error('Videospur ' + (v + 1) + ' existiert nicht');
+            const item = new ClipItem(project, path.split(/[\/]/).pop().replace(/\.mogrt$/i, ''), null, { hasVideo: true, length: 5 });
+            const ti = new TrackItem(seq, 'video', v, item, time.seconds, time.seconds + 5, 0);
+            const tp = new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 }));
+            ti.chain.comps.push(new Component('Grafikparameter', []));
+            ti.chain.comps.at(-1).params.push(tp, new Param('Laufweite', 'num', 0));
+            trim(seq.tracks.video[v], time.seconds, time.seconds + 5);
+            seq.tracks.video[v].items.push(ti);
+            bump();
+            return [ti];
+          },
           createOverwriteItemAction(item, time, v, a) {
             if (a < 0 && !item.hasAudio) throw new Error('Invalid parameter.');   // wie in Premiere 26.5.2 gemessen: -1 wird abgelehnt
             if (item.isCast) throw new Error('Invalid parameter.');   // wie in Premiere 26.5.2 gemessen: nur rohe ProjectItems
