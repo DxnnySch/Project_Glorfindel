@@ -27,3 +27,21 @@ konforme Referenz, Standbilder aus derselben Datei auf dem Episodenraster, Credi
 Auslesen, Selbsttest), Premiere-Ansicht in der Oberfläche, HQ-Tausch mit Rückweg, Projektleser für .prproj.
 **Nicht in echtem Premiere gelaufen** (siehe FRAGEN F10): Parameternamen/Farbformat/Keyframe-Zeitbezug sind per Selbsttest zu bestätigen.
 Offen: MOGRT-Credits, Audio-Blenden, optional verschachtelte Artwork-Sequenzen, Auto-Anker für HQ.
+
+
+## Premiere-Parität (Stand 2026-11-03, Panel 0.5.1)
+Gemessen am echten Schnitt (`scripts/parity_report.py`), Spec `docs/superpowers/specs/2026-11-03-premiere-paritaet-design.md`, Vorgehen: Skill `premiere-paritaet`.
+Umgesetzt und gegen die Premiere-Nachbildung getestet (237 pytest, 24 Node-Tests):
+- **Cross Dissolve 0,42 s** am Anfang/Ende von Artwork, Credits und Karten; Serienclips an den Szenenkanten (Regeln in `premiere_rezepte.json → uebergaenge`, gemessen: 562 im Ursprungsschnitt).
+- **Serienton**: Gleichleistungs-Blenden (1 s an Szenenkanten, 0,2 s an harten Schnitten) als Pegel-Keyframes – die Premiere-API kennt keine Audioübergänge (Ersatz, weiter frei editierbar).
+- **Credits als editierbarer Text** über Vorlagen in `vorlagen/mogrt/` (siehe README dort), sonst PNG.
+
+**Abnahme in Premiere (bitte einmal ausführen, Claude kann Premiere nicht starten):**
+1. Panel neu laden (0.5.1), **Selbsttest** laufen lassen. Zu prüfen: Schritt „Übergänge (Cross Dissolve)“ ok (`findings.crossDissolve`, `audioTransitions` zeigt, ob die API doch Audioübergänge anbietet);
+   Schritt „Text-Vorlage (MOGRT)“ ok (`mogrtTextIsJson`: Textformat des Parameters).
+2. `Credit Amazon/Artwork.mogrt` nach `vorlagen/mogrt/` exportieren (README dort), neu bauen: Credits müssen Textclips sein, Text änderbar.
+3. Am Serienton A4: Pegel-Keyframes sichtbar; Pegel-Werte plausibel (Panel erkennt linear/dB selbst). Falls hörbar falsch: `findings` aus dem Selbsttest an Claude geben.
+4. Der Bau-Bericht listet Warnungen („Übergang … nicht gesetzt“, „Credit-Vorlage … nicht verwendet“) – dann greift der Rückfall (Deckkraft-Blende bzw. PNG).
+
+**Noch offen (aus dem Paritätsbericht):** Zwischenüberschriften (V11, Vorlage `Zwischenüberschriften Serienvideo.mogrt` existiert), Bauchbinde/Instagram-Popups (V12), Mitglieder-Grafiken V5–V7,
+Musik (A10/A11, nicht im Plan), Einstellungsebenen für alle Blur-Stellen (V2: 46), 1:1-Vergleich mit einem echt von der Bridge gebauten Projekt (`--built`).
