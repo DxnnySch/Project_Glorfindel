@@ -7,6 +7,7 @@
 const { tt, tx, txp, errText, norm, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
+const trans = require('./transitions');
 const { trackItemAt, sequenceByGuid, placeClip } = require('./plan');
 
 const BIN = 'Glorfindel-Selbsttest';
@@ -118,6 +119,17 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     for (const sec of [0, 0.2, 2.5]) vals.push({ t: sec, v: await p.getValueAtTime(ppro.TickTime.createWithSeconds(sec)), interpoliert: true });
     res.findings.opacityValues = vals;
     return vals;
+  });
+
+  // Videoübergang (Cross Dissolve) und Angebot an Übergängen: bestätigt, ob die Namen aus dem Ursprungsschnitt in dieser Version gelten
+  await step('Übergänge (Cross Dissolve)', async () => {
+    const names = await ppro.TransitionFactory.getVideoTransitionMatchNames();
+    res.findings.transitions = names.filter((n) => /dissolve|fade|power|gain|blende/i.test(n));
+    res.findings.audioTransitions = names.some((n) => /constant power|konstante leistung/i.test(n));
+    const match = await trans.resolveTransition(ppro, { match_name: 'AE.ADBE Cross Dissolve New' }, ctx);
+    const n = await trans.addVideoTransitions(ppro, locate, { ein: 0.42, aus: 0.42 }, { match_name: match }, ctx);
+    res.findings.crossDissolve = match;
+    return { match, gesetzt: n, audio_uebergaenge_in_api: res.findings.audioTransitions };
   });
 
   // Aufräumen – immer

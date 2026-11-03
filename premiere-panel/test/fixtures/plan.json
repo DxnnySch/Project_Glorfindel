@@ -9,6 +9,27 @@
   "Einstellungsebene",
   "Adjustment Layer"
  ],
+ "transitions": {
+  "video": {
+   "match_name": "AE.ADBE Cross Dissolve New",
+   "dauer": 0.4167,
+   "fuer": [
+    "artwork",
+    "credit",
+    "map"
+   ],
+   "episode": "szenenkanten"
+  },
+  "audio": {
+   "dauer": 1.0,
+   "kurve": "gleichleistung",
+   "fuer": [
+    "episode"
+   ],
+   "schnitt_dauer": 0.2,
+   "hinweis": "Die Premiere-API kennt keine Audioübergänge; die Bridge setzt Lautstärke-Keyframes mit Gleichleistungs-Kurve (Pegel linear 0..1)."
+  }
+ },
  "anim_source": {
   "aep": "F:/OneDrive/Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep",
   "comp": "Play-Pause"
@@ -210,7 +231,90 @@
    "src_in": 100.01658333333333,
    "src_out": 105.980875,
    "audio": 3,
-   "name": "sz_01 Segment"
+   "name": "sz_01 Segment",
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.0
+   },
+   "ton_blende": {
+    "ein": 1.0,
+    "aus": 0.2,
+    "kurve": "gleichleistung",
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.125,
+      0.1951
+     ],
+     [
+      0.25,
+      0.3827
+     ],
+     [
+      0.375,
+      0.5556
+     ],
+     [
+      0.5,
+      0.7071
+     ],
+     [
+      0.625,
+      0.8315
+     ],
+     [
+      0.75,
+      0.9239
+     ],
+     [
+      0.875,
+      0.9808
+     ],
+     [
+      1.0,
+      1.0
+     ],
+     [
+      5.7667,
+      1.0
+     ],
+     [
+      5.7917,
+      0.9808
+     ],
+     [
+      5.8167,
+      0.9239
+     ],
+     [
+      5.8417,
+      0.8315
+     ],
+     [
+      5.8667,
+      0.7071
+     ],
+     [
+      5.8917,
+      0.5556
+     ],
+     [
+      5.9167,
+      0.3827
+     ],
+     [
+      5.9417,
+      0.1951
+     ],
+     [
+      5.966666666666667,
+      0.0
+     ]
+    ]
+   }
   },
   {
    "kind": "episode",
@@ -222,7 +326,90 @@
    "src_in": 119.994875,
    "src_out": 124.99987499999999,
    "audio": 3,
-   "name": "sz_01 Segment"
+   "name": "sz_01 Segment",
+   "uebergang": {
+    "ein": 0.0,
+    "aus": 0.4167
+   },
+   "ton_blende": {
+    "ein": 0.2,
+    "aus": 1.0,
+    "kurve": "gleichleistung",
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.025,
+      0.1951
+     ],
+     [
+      0.05,
+      0.3827
+     ],
+     [
+      0.075,
+      0.5556
+     ],
+     [
+      0.1,
+      0.7071
+     ],
+     [
+      0.125,
+      0.8315
+     ],
+     [
+      0.15,
+      0.9239
+     ],
+     [
+      0.175,
+      0.9808
+     ],
+     [
+      0.2,
+      1.0
+     ],
+     [
+      4.0,
+      1.0
+     ],
+     [
+      4.125,
+      0.9808
+     ],
+     [
+      4.25,
+      0.9239
+     ],
+     [
+      4.375,
+      0.8315
+     ],
+     [
+      4.5,
+      0.7071
+     ],
+     [
+      4.625,
+      0.5556
+     ],
+     [
+      4.75,
+      0.3827
+     ],
+     [
+      4.875,
+      0.1951
+     ],
+     [
+      5.0,
+      0.0
+     ]
+    ]
+   }
   },
   {
    "kind": "still",
@@ -274,7 +461,90 @@
    "src_in": 300.00804166666666,
    "src_out": 304.0120416666666,
    "audio": 3,
-   "name": "sz_02 Segment"
+   "name": "sz_02 Segment",
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   },
+   "ton_blende": {
+    "ein": 1.0,
+    "aus": 1.0,
+    "kurve": "gleichleistung",
+    "keyframes": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.125,
+      0.1951
+     ],
+     [
+      0.25,
+      0.3827
+     ],
+     [
+      0.375,
+      0.5556
+     ],
+     [
+      0.5,
+      0.7071
+     ],
+     [
+      0.625,
+      0.8315
+     ],
+     [
+      0.75,
+      0.9239
+     ],
+     [
+      0.875,
+      0.9808
+     ],
+     [
+      1.0,
+      1.0
+     ],
+     [
+      3.0,
+      1.0
+     ],
+     [
+      3.125,
+      0.9808
+     ],
+     [
+      3.25,
+      0.9239
+     ],
+     [
+      3.375,
+      0.8315
+     ],
+     [
+      3.5,
+      0.7071
+     ],
+     [
+      3.625,
+      0.5556
+     ],
+     [
+      3.75,
+      0.3827
+     ],
+     [
+      3.875,
+      0.1951
+     ],
+     [
+      4.0,
+      0.0
+     ]
+    ]
+   }
   },
   {
    "kind": "still",
@@ -769,7 +1039,11 @@
       }
      ]
     }
-   ]
+   ],
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "artwork",
@@ -1146,7 +1420,11 @@
       }
      ]
     }
-   ]
+   ],
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "artwork",
@@ -1523,7 +1801,11 @@
       }
      ]
     }
-   ]
+   ],
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "artwork",
@@ -1900,7 +2182,11 @@
       }
      ]
     }
-   ]
+   ],
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "anim",
@@ -1950,7 +2236,11 @@
    "art": "amazon",
    "media": "m2",
    "name": "© amazon studios",
-   "fade": 0.0
+   "fade": 0.0,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -1961,7 +2251,11 @@
    "art": "amazon",
    "media": "m2",
    "name": "© amazon studios",
-   "fade": 0.0
+   "fade": 0.0,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -1972,7 +2266,11 @@
    "art": "amazon",
    "media": "m2",
    "name": "© amazon studios",
-   "fade": 0.0
+   "fade": 0.0,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -1983,7 +2281,11 @@
    "art": "amazon",
    "media": "m2",
    "name": "© amazon studios",
-   "fade": 0.0
+   "fade": 0.0,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -1994,7 +2296,11 @@
    "art": "artwork",
    "media": "m11",
    "name": "© alan lee",
-   "fade": 0.42
+   "fade": 0.42,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -2005,7 +2311,11 @@
    "art": "artwork",
    "media": "m12",
    "name": "© alan lee",
-   "fade": 0.42
+   "fade": 0.42,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -2016,7 +2326,11 @@
    "art": "artwork",
    "media": "m14",
    "name": "© john howe",
-   "fade": 0.42
+   "fade": 0.42,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "credit",
@@ -2027,7 +2341,11 @@
    "art": "artwork",
    "media": "m15",
    "name": "© john howe",
-   "fade": 0.42
+   "fade": 0.42,
+   "uebergang": {
+    "ein": 0.4167,
+    "aus": 0.4167
+   }
   },
   {
    "kind": "voice",

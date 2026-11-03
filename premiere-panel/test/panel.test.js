@@ -101,16 +101,15 @@ test('Pause/Play kommen aus eigenen .mov-Dateien (keine After-Effects-Kompositio
   assert.ok(!project.calls.some((c) => c[0] === 'importAEComps'));
 });
 
-test('Credits blenden über die Deckkraft ein und aus; Standbild bekommt den Weichzeichner', async () => {
+test('Credits blenden per Cross Dissolve ein und aus (Deckkraft bleibt unberührt); Standbild bekommt den Weichzeichner', async () => {
   const { ppro, project } = newEnv();
   await runPlan(ppro, clone(PLAN));
   const main = mainSeq(project);
   const credit = PLAN.clips.find((c) => c.kind === 'credit' && c.track === 9);
   const ti = trackItems(main, 'video', 9).find((t) => Math.abs(t.start - credit.start) < 0.004);
   const op = ti.chain.comps.find((c) => c.name === 'Deckkraft').params[0];
-  const dur = credit.end - credit.start;
-  assert.deepEqual(op.kfs.map(([t]) => +t.toFixed(2)), [0, 0.42, +(dur - 0.42).toFixed(2), +dur.toFixed(2)]);
-  assert.deepEqual(op.kfs.map(([, v]) => v), [0, 100, 100, 0]);
+  assert.equal(ti.transitions.length, 2, 'Cross Dissolve am Anfang und Ende');
+  assert.ok(!op.varying, 'keine zusätzliche Deckkraft-Animation');
   const stills = trackItems(main, 'video', 0).filter((t) => t.item.name.endsWith('.png'));
   const blurred = stills.find((t) => t.chain.comps.some((c) => c.name === 'AE.Impact_Blur_FX'));
   assert.ok(blurred, 'Standbild mit Blur');
@@ -315,4 +314,76 @@ test('Tausch: nur im Fach dieses Baus; gleiche Datei in mehreren Fächern bleibt
   const all = await media.swapMedia(ppro, project, { swaps: [{ from: f, to: 'F:/HQ/hq1.mp4' }] });      // ohne Fach: ganzes Projekt
   assert.deepEqual(all.fehler, []);
   assert.deepEqual(await inBin('Bau v1'), ['f:/hq/hq1.mp4']);
+});
+
+test('Übergänge: Überlagerungen bekommen Cross Dissolve an Anfang und Ende, Serienclips nur an den Szenenkanten', async () => {
+  const { ppro, project } = newEnv();
+  const rep = await runPlan(ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const main = mainSeq(project);
+  const all = (kind) => main.tracks.video.flatMap((t) => t.items);
+  const plan = PLAN.clips.filter((c) => c.uebergang);
+  assert.ok(plan.length >= 8, 'Plan enthält Übergänge');
+  for (const c of plan) {
+    const ti = all().find((t) => t.kind === 'video' && Math.abs(t.start - c.start) < 0.004 && t.idx === c.track);
+    assert.ok(ti, c.kind + ' @' + c.start);
+    const want = [c.uebergang.ein && ['start', c.uebergang.ein], c.uebergang.aus && ['end', c.uebergang.aus]].filter(Boolean);
+    assert.equal(ti.transitions.length, want.length, c.kind + ' @' + c.start + ' ' + JSON.stringify(ti.transitions));
+    for (const [side, d] of want) {
+      const tr = ti.transitions.find((x) => x.start === (side === 'start'));
+      assert.ok(tr, side);
+      assert.equal(tr.match, PLAN.transitions.video.match_name);
+      assert.ok(Math.abs(tr.dur - d) < 1e-6 && tr.single === true, 'Dauer ' + tr.dur + ' einseitig');
+    }
+  }
+  assert.equal(rep.effects.uebergang, plan.reduce((n, c) => n + (c.uebergang.ein ? 1 : 0) + (c.uebergang.aus ? 1 : 0), 0));
+});
+
+test('Übergänge: Credits fallen auf Deckkraft-Ein-/Ausblendung zurück, wenn Premiere den Übergang nicht kennt', async () => {
+  const { ppro, project } = newEnv();
+  const p = clone(PLAN);
+  p.transitions.video.match_name = 'AE.ADBE Gibt Es Nicht';
+  const rep = await runPlan(ppro, p);
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.ok(rep.warnings.some((w) => /Übergang/.test(w)), rep.warnings.join('|'));
+  const credit = mainSeq(project).tracks.video.flatMap((t) => t.items).find((t) => t.name.startsWith('© alan lee'));
+  const op = credit.chain.comps.find((c) => c.name === 'Deckkraft').params[0];
+  assert.ok(op.varying && op.kfs.length === 4, 'Rückfall: Deckkraft-Keyframes');
+  assert.equal(credit.transitions.length, 0);
+});
+
+test('Serienton: Gleichleistungs-Blenden als Pegel-Keyframes auf der Tonspur des Serienclips', async () => {
+  const { ppro, project } = newEnv();
+  const rep = await runPlan(ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const main = mainSeq(project);
+  for (const c of PLAN.clips.filter((c) => c.kind === 'episode')) {
+    const ti = trackItems(main, 'audio', c.audio).find((t) => Math.abs(t.start - c.start) < 0.004);
+    assert.ok(ti, 'Ton bei ' + c.start);
+    const level = ti.chain.comps.find((k) => k.name === 'Lautstärke').params.find((q) => q.displayName === 'Pegel');
+    assert.ok(level.varying && level.kfs.length === c.ton_blende.keyframes.length);
+    assert.equal(level.kfs.length, c.ton_blende.keyframes.length);
+    level.kfs.forEach(([t], i) => assert.ok(Math.abs(t - c.ton_blende.keyframes[i][0]) < 1e-3, 'Zeit ' + i));
+    assert.ok(level.kfs.every(([, v]) => v >= 0 && v <= 1), 'lineare Amplitude 0..1');
+    assert.ok(Math.abs(level.kfs[0][1] - (c.ton_blende.ein > 0 ? 0 : 1)) < 1e-9);
+  }
+  assert.equal(rep.effects.ton_blende, PLAN.clips.filter((c) => c.kind === 'episode').length);
+});
+
+test('Serienton: Pegel in dB, wenn Premiere den Pegel so führt (Modus wird am Clip erkannt)', async () => {
+  const { ppro: p2, project: pr2 } = newEnv();
+  const origOverwrite = p2.SequenceEditor.getEditor;
+  p2.SequenceEditor.getEditor = (seq) => {
+    const ed = origOverwrite(seq);
+    const o = ed.createOverwriteItemAction;
+    ed.createOverwriteItemAction = (...a) => { const act = o(...a); const r = act.run; act.run = () => { r(); for (const t of seq.tracks.audio) for (const ti of t.items) ti.chain.comps.find((c) => c.name === 'Lautstärke').params[1].value = 0; }; return act; };
+    return ed;
+  };
+  const rep = await runPlan(p2, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const c = PLAN.clips.find((x) => x.kind === 'episode');
+  const ti = trackItems(mainSeq(pr2), 'audio', c.audio).find((t) => Math.abs(t.start - c.start) < 0.004);
+  const level = ti.chain.comps.find((k) => k.name === 'Lautstärke').params[1];
+  assert.ok(level.kfs.every(([, v]) => v <= 1e-9 && v >= -90 - 1e-9), 'dB-Werte ≤ 0');
+  assert.ok(level.kfs.some(([, v]) => v < -20) && level.kfs.some(([, v]) => v === 0));
 });

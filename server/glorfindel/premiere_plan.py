@@ -6,6 +6,7 @@ Der Plan ist reine Daten (JSON) – das Panel in Premiere führt ihn aus. Alle Z
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -223,6 +224,9 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                     clip["effects"] = fx
                 clips.append(clip)
     _amazon_vs_artist(clips)
+    trans = recipes.get("uebergaenge")
+    if trans:
+        _transitions(clips, trans)
     periods = merge_periods(blur_periods)
     _assign_blur(clips, periods, recipes, warnings)
     _adjust_blur(clips, periods, recipes, env.premiere.get("blur_track", 1))
@@ -236,6 +240,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
         "schema": SCHEMA, "name": pkg["sequence"]["name"], "slug": pkg.get("slug", ""), "fps": fps,
         "episode_sequence": pkg["episode_sequence"], "bin": f"Glorfindel {pkg['sequence']['name']}",
         "adjustment_names": ["Einstellungsebene", "Adjustment Layer"],
+        "transitions": {"video": recipes["uebergaenge"]["video"], "audio": recipes["uebergaenge"]["audio"]} if recipes.get("uebergaenge") else {},
         "anim_source": {"aep": env.premiere.get("aep", ""), "comp": env.premiere.get("comp", "Play-Pause")},
         "preset": {"path": env.premiere.get("preset", ""), "video_tracks": env.premiere.get("video_tracks", 14),
                    "audio_tracks": env.premiere.get("audio_tracks", 16)},
@@ -246,6 +251,71 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
         "stats": {"clips": len(clips), "media": len(media), "duration": pkg.get("duration", 0.0),
                   "by_kind": {k: sum(1 for c in clips if c["kind"] == k) for k in sorted({c["kind"] for c in clips})}},
     }
+
+
+def equal_power_keyframes(dur: float, ein: float, aus: float, steps: int = 8) -> list[list[float]]:
+    """Gleichleistungs-Blende („Konstante Leistung“) als Pegel-Keyframes (linear 0..1, Sekunden ab Clipanfang).
+
+    Ein: sin(0..90°), Aus: cos(0..90°) – Ein² + gespiegeltes Aus² ergibt 1, die Lautheit bleibt über die Blende gleich.
+    Zu kurze Clips: die Blenden schrumpfen auf je die halbe Länge, damit sie sich nicht überlappen."""
+    if dur <= 0 or (ein <= 0 and aus <= 0):
+        return []
+    ein, aus = max(ein, 0.0), max(aus, 0.0)
+    if ein + aus > dur:
+        k = dur / (ein + aus)
+        ein, aus = ein * k, aus * k
+    kfs: list[list[float]] = []
+    if ein > 0:
+        kfs += [[round(ein * i / steps, 4), round(math.sin(math.pi / 2 * i / steps), 4)] for i in range(steps + 1)]
+    else:
+        kfs.append([0.0, 1.0])
+    if aus > 0:
+        start = dur - aus
+        if not kfs or start > kfs[-1][0] + 1e-6:
+            kfs.append([round(start, 4), 1.0])
+        kfs += [[round(start + aus * i / steps, 4), round(math.cos(math.pi / 2 * i / steps), 4)] for i in range(1, steps + 1)]
+    else:
+        kfs.append([round(dur, 4), 1.0])
+    out: list[list[float]] = []
+    for t, g in kfs:                                                 # doppelte Zeitpunkte vermeiden (Premiere lehnt sie ab)
+        t = min(t, dur)                                              # Rundung darf nie hinter das Clipende reichen
+        if not out or t > out[-1][0] + 1e-6:
+            out.append([t, g])
+    return out
+
+
+def _transitions(clips: list[dict], spec: dict) -> None:
+    """Übergänge wie im Ursprungsschnitt: Cross Dissolve am Anfang/Ende von Überlagerungen, bei Serienclips an den Szenenkanten;
+    der Serienton bekommt Gleichleistungs-Blenden (an den Szenenkanten lang, an harten Schnitten innerhalb einer Szene kurz)."""
+    vd = spec.get("video", {})
+    d = float(vd.get("dauer", 0.0))
+    kinds = set(vd.get("fuer", ()))
+    if d > 0:
+        for c in clips:
+            if c["kind"] in kinds:
+                h = min(d, (c["end"] - c["start"]) / 2)
+                if h >= 0.05:
+                    c["uebergang"] = {"ein": round(h, 4), "aus": round(h, 4)}
+    ad = spec.get("audio", {})
+    ad_long, ad_cut = float(ad.get("dauer", 0.0)), float(ad.get("schnitt_dauer", 0.0))
+    eps = sorted((c for c in clips if c["kind"] == "episode"), key=lambda c: (c["track"], c["start"]))
+    for i, c in enumerate(eps):
+        prev = eps[i - 1] if i and eps[i - 1]["track"] == c["track"] else None
+        nxt = eps[i + 1] if i + 1 < len(eps) and eps[i + 1]["track"] == c["track"] else None
+        touch_in = prev is not None and abs(c["start"] - prev["end"]) < 0.05
+        touch_out = nxt is not None and abs(nxt["start"] - c["end"]) < 0.05
+        edge_in = not touch_in or prev["scene"] != c["scene"]
+        edge_out = not touch_out or nxt["scene"] != c["scene"]
+        if vd.get("episode") == "szenenkanten" and d > 0:
+            h = min(d, (c["end"] - c["start"]) / 2)
+            c["uebergang"] = {"ein": round(h, 4) if edge_in else 0.0, "aus": round(h, 4) if edge_out else 0.0}
+        if "episode" in ad.get("fuer", ()) and ad_long > 0:
+            cut_in = touch_in and not edge_in and abs(c["src_in"] - prev["src_out"]) > 0.05
+            cut_out = touch_out and not edge_out and abs(nxt["src_in"] - c["src_out"]) > 0.05
+            ein = ad_long if edge_in else (ad_cut if cut_in else 0.0)
+            aus = ad_long if edge_out else (ad_cut if cut_out else 0.0)
+            kfs = equal_power_keyframes(c["end"] - c["start"], ein, aus)
+            c["ton_blende"] = {"ein": ein, "aus": aus, "kurve": ad.get("kurve", "gleichleistung"), "keyframes": kfs}
 
 
 def _amazon_vs_artist(clips: list[dict]) -> None:

@@ -13,6 +13,7 @@ OWN = {
     "readComponents", "sequenceDump", "methodsOf", "introspect", "selftest", "makeHandlers", "findServer", "projectInfo", "session", "onMessage",
     "run", "stop", "safe", "fn", "addAction", "ensureBin", "handlers", "log", "onStatus", "send", "start", "setStatus", "show", "setup",
     "race", "finally", "probeItems", "again", "c2", "proj", "itemsByPath", "cands", "scope", "probeSwap", "canChangeMediaPath", "pairs", "find", "fn", "isAdjustmentLayer", "adjustmentItem", "nestedItem", "buildNested", "locator", "bars_png", "rawByPath", "probePlace", "mk", "createInsertProjectItemAction", "placeClip", "getItem", "probeBin", "lockedAccess", "getProj", "invalidate", "txp", "withTimeout", "getBin", "builtinIndex", "componentAt", "retryStale", "isStale", "fresh", "locate", "getProject", "refresh", "resolveMatchName", "sequenceByGuid", "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
+    "addVideoTransitions", "setAudioFade", "resolveTransition", "levelMode", "toLevel", "locateA",
 }
 JS = {
     "map", "filter", "find", "findIndex", "includes", "push", "slice", "join", "split", "replace", "startsWith", "endsWith", "toLowerCase", "toFixed",
@@ -24,7 +25,7 @@ JS = {
     "lastIndexOf", "indexOf", "charAt", "substring", "toUpperCase", "isInteger", "parseInt", "parseFloat", "getTime", "toISOString", "call", "apply", "bind",
     "exec", "match", "matchAll", "search", "isFinite", "floor", "ceil", "sign", "pow", "sqrt", "remove", "append", "after", "before", "replaceChildren",
     "querySelector", "querySelectorAll", "classList", "contains", "toggle", "dispatchEvent", "stopPropagation", "getAttribute", "removeAttribute", "clear",
-    "delete", "next", "done", "entries", "clone", "splice", "findLast", "isSequence", "flatMap",
+    "delete", "next", "done", "log10", "entries", "clone", "splice", "findLast", "isSequence", "flatMap",
 }
 
 

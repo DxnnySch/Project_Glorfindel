@@ -439,5 +439,27 @@
   "V10": 100,
   "V11": 12,
   "V12": 5
+ },
+ "uebergaenge": {
+  "quelle": "gemessen am Ursprungsschnitt (scripts/parity_report.py): 562x AE.ADBE Cross Dissolve New, 342x Constant Power",
+  "video": {
+   "match_name": "AE.ADBE Cross Dissolve New",
+   "dauer": 0.4167,
+   "fuer": [
+    "artwork",
+    "credit",
+    "map"
+   ],
+   "episode": "szenenkanten"
+  },
+  "audio": {
+   "dauer": 1.0,
+   "kurve": "gleichleistung",
+   "fuer": [
+    "episode"
+   ],
+   "schnitt_dauer": 0.2,
+   "hinweis": "Die Premiere-API kennt keine Audioübergänge; die Bridge setzt Lautstärke-Keyframes mit Gleichleistungs-Kurve (Pegel linear 0..1)."
+  }
  }
 }

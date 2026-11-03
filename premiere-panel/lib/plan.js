@@ -6,6 +6,7 @@
 const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
+const trans = require('./transitions');
 
 const TOL = 0.004; // Sekunden: so genau muss ein gesetzter Clip auf dem geplanten Zeitpunkt liegen
 
@@ -222,6 +223,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
   // ---- 5. Clips ----
   const total = plan.clips.length;
   let done = 0;
+  let transWarned = false;
   const countOk = (k) => { report.placed[k] = (report.placed[k] || 0) + 1; };
   for (const c of plan.clips) {
     done++;
@@ -276,7 +278,33 @@ async function runPlan(ppro, plan, emit = () => {}) {
         if (r.fehlend.length) report.warnings.push(e.id + ': Parameter nicht gesetzt: ' + r.fehlend.join(', '));
       }
       ctx.offset = 0;
-      if (c.kind === 'credit' && c.fade) await fx.setFade(ppro, await getProject(), locate, dur, c.fade, ctx);
+
+      // Übergänge: Cross Dissolve wie im Ursprungsschnitt. Scheitert das, bleibt die Deckkraft-Blende der Credits als Rückfall.
+      let blended = false;
+      if (c.uebergang && plan.transitions && plan.transitions.video) {
+        try {
+          const n = await trans.addVideoTransitions(ppro, locate, c.uebergang, plan.transitions.video, ctx);
+          report.effects.uebergang = (report.effects.uebergang || 0) + n;
+          blended = true;
+        } catch (e) {
+          if (!transWarned) { transWarned = true; report.warnings.push('Übergang (Cross Dissolve) nicht gesetzt: ' + errText(e) + (c.kind === 'credit' ? ' – Credits blenden stattdessen über die Deckkraft.' : '')); }
+        }
+      }
+      if (c.kind === 'credit' && c.fade && !blended) await fx.setFade(ppro, await getProject(), locate, dur, c.fade, ctx);
+
+      // Serienton: Gleichleistungs-Blende als Pegel-Keyframes (die API kennt keine Audioübergänge)
+      if (c.kind === 'episode' && c.ton_blende && c.ton_blende.keyframes && c.ton_blende.keyframes.length) {
+        await guarded(report, 'Ton-Blende @' + c.start.toFixed(2), async () => {
+          const locateA = async () => {
+            const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), mainGuid), 'audio', c.audio, c.start);
+            if (!ti) throw new Error('Ton des Serienclips nicht auf A' + (c.audio + 1) + ' gefunden');
+            return ti;
+          };
+          ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? (await (await locateA()).getInPoint()).seconds : 0;
+          try { await trans.setAudioFade(ppro, await getProject(), locateA, c.ton_blende.keyframes, ctx); } finally { ctx.offset = 0; }
+          report.effects.ton_blende = (report.effects.ton_blende || 0) + 1;
+        });
+      }
     });
   }
 

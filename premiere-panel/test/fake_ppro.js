@@ -45,6 +45,17 @@ class Color {
 }
 class Action { constructor(run, label) { this.run = run; this.label = label; } }
 
+// Videoübergänge wie in der Premiere-API (d.ts): Übergang aus der Fabrik + AddTransitionOptions; nur Videoclips haben `createAddVideoTransitionAction`.
+const TRANSITIONS = ['AE.ADBE Cross Dissolve New', 'AE.ADBE Dip To Black'];
+class VideoTransition { constructor(match) { this.match = match; } }
+class AddTransitionOptions {
+  constructor() { this.applyToStart = true; this.duration = null; this.singleSided = false; }
+  setApplyToStart(v) { this.applyToStart = !!v; return this; }
+  setDuration(t) { if (!(t instanceof TickTime)) throw new Error('TickTime erwartet'); this.duration = t; return this; }
+  setForceSingleSided(v) { this.singleSided = !!v; return this; }
+  setTransitionAlignment(v) { this.alignment = v; return this; }
+}
+
 const DISPLAY = { 'AE.ADBE AECrop': 'Zuschneiden', 'AE.ADBE Roughen Edges': 'Kanten aufrauen', 'AE.ADBE Drop Shadow': 'Schlagschatten', 'AE.ADBE Geometry2': 'Transformieren', 'AE.ADBE Gaussian Blur 2': 'Gaußscher Weichzeichner (veraltet)', 'AE.Impact_Blur_FX': 'Gaußscher Weichzeichner', 'AE.ADBE Legacy Key Track Matte': 'Spurmaske-Key' };
 const PARAMS = {
   'AE.ADBE AECrop': [['Links', 'num', 0], ['Oben', 'num', 0], ['Rechts', 'num', 0], ['Unten', 'num', 0], ['Zoom', 'bool', false], ['Kantenweichzeichnung', 'num', 0]],
@@ -100,6 +111,8 @@ class Chain {
     this.comps = isVideo ? [new Component('Bewegung', [['Position', 'point'], ['Skalieren', 'num', 100], ['Einheitliche Skalierung', 'bool', true]].map(([a, b, c]) => [a, b, c])),
       new Component('Deckkraft', [['Deckkraft', 'num', 100]])] : [];
     this.comps[0] && (this.comps[0].params[0].value = new PointF(0.5, 0.5));
+    // Audioclips tragen „Lautstärke“ mit Pegel als lineare Amplitude (1 = 0 dB), wie im Projekt gespeichert
+    if (!isVideo) this.comps.push(new Component('Lautstärke', [['Umgehen', 'bool', false], ['Pegel', 'num', 1]]));
   }
   getComponentCount() { return this.comps.length; }
   getComponentAtIndex(i) { return this.comps[i]; }
@@ -107,7 +120,13 @@ class Chain {
 }
 
 class TrackItem {
-  constructor(seq, kind, idx, item, start, end, inPt) { Object.assign(this, { seq, kind, idx, item, start, end, inPt, name: item.name, chain: new Chain(kind === 'video') }); }
+  constructor(seq, kind, idx, item, start, end, inPt) { Object.assign(this, { seq, kind, idx, item, start, end, inPt, name: item.name, chain: new Chain(kind === 'video'), transitions: [] }); }
+  createAddVideoTransitionAction(tr, opts) {
+    if (this.kind !== 'video') throw new Error('createAddVideoTransitionAction gibt es nur für Videoclips');
+    if (!(tr instanceof VideoTransition)) throw new Error('VideoTransition erwartet');
+    if (!(opts instanceof AddTransitionOptions) || !opts.duration) throw new Error('AddTransitionOptions mit Dauer erwartet');
+    return new Action(() => { this.transitions.push({ match: tr.match, start: opts.applyToStart, dur: opts.duration.seconds, single: opts.singleSided }); }, 'transition');
+  }
   async getStartTime() { return new TickTime(this.start); }
   async getEndTime() { return new TickTime(this.end); }
   async getInPoint() { return new TickTime(this.inPt); }
@@ -255,7 +274,11 @@ function create({ presets = {}, aeComps = ['Play-Pause'] } = {}) {
 
   const ppro = {
     TickTime: { createWithSeconds: (s) => { if (typeof s !== 'number' || isNaN(s)) throw new Error('Zahl erwartet'); return new TickTime(s); } },
-    PointF, Color,
+    PointF, Color, AddTransitionOptions,
+    TransitionFactory: {
+      createVideoTransition(match) { if (!TRANSITIONS.includes(match)) throw new Error('Unbekannter Übergang ' + match); return new VideoTransition(match); },
+      async getVideoTransitionMatchNames() { return [...TRANSITIONS]; },
+    },
     Constants: { TrackItemType: { EMPTY: 0, CLIP: 1, TRANSITION: 2 }, MediaType: { ANY: 0, DATA: 1, VIDEO: 2, AUDIO: 3 } },
     ProjectItem: { TYPE_BIN: 2, TYPE_CLIP: 1, TYPE_ROOT: 3 },
     FolderItem: { cast: (i) => { if (!(i instanceof FolderItem)) throw new Error('kein Fach'); return i; } },
