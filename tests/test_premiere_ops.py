@@ -218,3 +218,17 @@ def test_swap_refuses_dolby_hq_against_aac_reference(ep):
     premiere_ops.remember_hq(ep, str(hq))
     with pytest.raises(ValueError, match="Dolby"):
         premiere_ops.swap(ep, "hq", hub=FakeHub())
+
+
+def test_reference_takes_the_film_audio_from_the_hq_file_unchanged(tmp_path):
+    """Selbst kodierter Dolby-Ton wurde von Premiere ohne Ton importiert: liegt die Referenz auf der Zeitachse der HQ-Datei, wird deren Ton übernommen."""
+    from glorfindel import media, premiere_media
+    src = make_video(tmp_path / "screen.mp4", "red", seconds=6, fps=30, size="640x360")
+    hq = make_video(tmp_path / "hq.mp4", "green", seconds=8, fps=24, size="640x360", acodec="eac3")
+    dst = premiere_media.conform_reference(src, tmp_path / "ref.mp4", fps=24.0, size=(640, 360), offset=1.0, audio_codec="eac3", audio_src=hq)
+    info = media.probe(dst)
+    assert info["acodec"] == "eac3" and info["fps"] == pytest.approx(24.0, abs=0.01)
+    assert info["duration"] == pytest.approx(7.0, abs=0.2)                      # 6 s Video + 1 s Schwarz davor; der längere Ton wird abgeschnitten
+    aac = make_video(tmp_path / "hq_aac.mp4", "green", seconds=8, fps=24, size="640x360")
+    dst2 = premiere_media.conform_reference(src, tmp_path / "ref2.mp4", fps=24.0, size=(640, 360), offset=0.0, audio_src=aac)
+    assert media.probe(dst2)["acodec"] == "aac"

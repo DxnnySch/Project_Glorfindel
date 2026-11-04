@@ -76,7 +76,7 @@ def _sync_episode_fps(ep: Episode, fps: float) -> None:
         ep.save_project(pr)
         store.log_change(ep.p.gl, ep.settings.user, f"Bildrate der Folge von {old:.3f} auf {fps:.3f} fps gestellt (native Bildrate der HQ-Datei)")
 
-def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aac") -> Path:
+def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aac", audio_src: Path | None = None) -> Path:
     """Konforme Referenz (konstante Bildrate, zugeschnitten, ggf. auf der Zeitachse der HQ-Datei): die Datei in Premiere, aus der die Standbilder stammen."""
     pg = as_progress(pg)
     pr = ep.project()
@@ -86,13 +86,14 @@ def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aa
     srcfile = ep.source_path(src)
     dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR.mp4"
     side = dst.with_suffix(".json")
-    want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop, "audio": audio}
-    if dst.exists() and dst.stat().st_mtime >= srcfile.stat().st_mtime and store.read_json(side, {}) == want:
+    want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop, "audio": audio, "audio_src": str(audio_src) if audio_src else ""}
+    newest = max(srcfile.stat().st_mtime, audio_src.stat().st_mtime if audio_src else 0)
+    if dst.exists() and dst.stat().st_mtime >= newest and store.read_json(side, {}) == want:
         pg.fraction(1.0, "konforme Referenz ist aktuell")
         return dst
     extra = f", um {offset:.3f} s auf die Zeitachse der HQ-Datei verschoben" if offset else ""
     pg.fraction(0.0, f"{src.path.rsplit('/', 1)[-1]} → konstante Bildrate {pr.fps:.3f} fps, {EPISODE_SIZE[0]}×{EPISODE_SIZE[1]}{extra}")
-    conform_reference(srcfile, dst, crop=src.crop, fps=pr.fps, offset=offset, audio_codec=audio, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
+    conform_reference(srcfile, dst, crop=src.crop, fps=pr.fps, offset=offset, audio_codec=audio, audio_src=audio_src, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
     store.write_json(side, want)
     return dst
 
@@ -209,7 +210,7 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
         _sync_episode_fps(ep, direct["fps"])
     off = direct["offset"] if direct else 0.0
     audio = audio_for(media.probe(direct["file"]).get("acodec", "")) if direct else "aac"
-    ref = ensure_reference(ep, pg, off, audio)
+    ref = ensure_reference(ep, pg, off, audio, Path(direct["file"]) if direct else None)
     pg.step(2)
     res = pipeline.build_rough_cut(ep, templates_dir, with_stills=False, by_strand=by_strand, progress=None)
     pkg = json.loads(Path(res["json"]).read_text(encoding="utf-8"))

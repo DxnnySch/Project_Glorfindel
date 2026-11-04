@@ -428,6 +428,19 @@ test('Credits als Text: Vorlage eingesetzt, Text über das Textobjekt gesetzt (F
   }
 });
 
+test('Credits als Text: lässt sich der Wert nicht lesen („Illegal Parameter type“), wird ein neues Textobjekt geschrieben', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrts.push('C:/vorlagen/mogrt/Credit NoRead.mogrt');
+  const plan = clone(PLAN);
+  for (const c of plan.clips) if (c.mogrt) c.mogrt.path = 'C:/vorlagen/mogrt/Credit NoRead.mogrt';
+  const rep = await runPlan(ppro, plan);
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const c = plan.clips.find((x) => x.kind === 'credit' && x.mogrt);
+  const ti = trackItems(mainSeq(project), 'video', c.track).find((t) => Math.abs(t.start - c.start) < 0.004);
+  assert.equal(ti.chain.comps.find((k) => k.name === 'Grafikparameter').params.find((p) => p.displayName === 'Quelltext').value.getText(), c.mogrt.text);
+  assert.ok(!rep.warnings.some((w) => /Credit-Text konnte nicht/.test(w)), rep.warnings.join('|'));
+});
+
 test('Credits als Text: ältere Vorlagen mit Textdokument (JSON) werden weiter unterstützt', async () => {
   const { ppro, project } = newEnv();
   project.mogrts.push('C:/vorlagen/mogrt/Credit JsonText.mogrt');

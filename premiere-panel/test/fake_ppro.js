@@ -104,7 +104,7 @@ class Param {
     for (let i = 1; i < k.length; i++) if (x <= k[i][0]) { const [a, va] = k[i - 1], [b, vb] = k[i]; return typeof va === 'number' ? va + (vb - va) * (x - a) / (b - a) : va; }
     return k.at(-1)[1];
   }
-  async getStartValue() { const v = this.kfs.length ? this.kfs[0][1] : this.value; return { value: v instanceof MogrtText ? new MogrtText(v.text) : v }; }
+  async getStartValue() { if (this.unreadable) throw new Error('Illegal Parameter type'); const v = this.kfs.length ? this.kfs[0][1] : this.value; return { value: v instanceof MogrtText ? new MogrtText(v.text) : v }; }
 }
 
 class Component {
@@ -283,7 +283,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
 
   const ppro = {
     TickTime: { createWithSeconds: (s) => { if (typeof s !== 'number' || isNaN(s)) throw new Error('Zahl erwartet'); return new TickTime(s); } },
-    PointF, Color, AddTransitionOptions,
+    PointF, Color, AddTransitionOptions, MogrtText,
     TransitionFactory: {
       createVideoTransition(match) { if (!TRANSITIONS.includes(match)) throw new Error('Unbekannter Übergang ' + match); return new VideoTransition(match); },
       async getVideoTransitionMatchNames() { return [...TRANSITIONS]; },
@@ -315,7 +315,8 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
             const ti = new TrackItem(seq, 'video', v, item, time.seconds, time.seconds + 5, 0);
             if (/OhneText/.test(path)) { trim(seq.tracks.video[v], time.seconds, time.seconds + 5); seq.tracks.video[v].items.push(ti); bump(); return [ti]; }   // wie in Premiere 26.5.2 gemessen: Grafik ohne erreichbaren Textparameter
             const legacy = /JsonText/.test(path);                              // ältere Annahme: Textdokument als JSON-Zeichenkette
-            const tp = legacy ? new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 })) : new Param('Quelltext', 'mogrt', new MogrtText('Ihr Titel'));
+            const tp0 = legacy ? new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 })) : new Param('Quelltext', 'mogrt', new MogrtText('Ihr Titel'));
+            const tp = tp0; if (/NoRead/.test(path)) tp.unreadable = true;            // wie gemeldet: getStartValue wirft „Illegal Parameter type“
             ti.chain.comps.push(new Component('Grafikparameter', []));
             ti.chain.comps.at(-1).match = 'AE.ADBE Capsule';
             ti.chain.comps.at(-1).params.push(tp, new Param('Laufweite', 'num', 0));

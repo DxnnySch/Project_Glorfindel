@@ -4,7 +4,7 @@
 
 const { Bridge } = require('./lib/bridge');
 
-const VERSION = '0.5.8';
+const VERSION = '0.5.9';
 const $ = (id) => document.getElementById(id);
 
 function log(text, cls) {

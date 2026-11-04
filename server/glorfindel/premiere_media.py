@@ -41,10 +41,13 @@ def audio_for(codec: str) -> str:
 
 
 def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fps: float = EPISODE_FPS,
-                      size: tuple[int, int] = EPISODE_SIZE, crf: int = 17, offset: float = 0.0, audio_codec: str = "aac", on_progress=None) -> Path:
+                      size: tuple[int, int] = EPISODE_SIZE, crf: int = 17, offset: float = 0.0, audio_codec: str = "aac", audio_src: Path | None = None,
+                      on_progress=None) -> Path:
     """Referenz in konstante Bildrate bringen, Letterbox abschneiden, auf Episodengröße bringen.
     `offset` (Sekunden, auf das Bildraster gerundet) verschiebt die Zeitachse: positiv = Schwarz davor, negativ = Anfang abschneiden.
-    So kann die Referenz auf der Zeitachse der HQ-Datei liegen und die HQ-Datei später unverändert eingesetzt werden."""
+    So kann die Referenz auf der Zeitachse der HQ-Datei liegen und die HQ-Datei später unverändert eingesetzt werden.
+    `audio_src`: Datei, deren Ton unverändert übernommen wird (die HQ-Datei, auf deren Zeitachse die Referenz liegt). So hat der Rohschnitt den echten
+    Filmton, und Premiere liest genau das Tonformat, das auch die HQ-Datei hat (selbst kodierter Dolby-Ton wurde von Premiere ohne Ton importiert)."""
     w, h = size
     offset = round(offset * fps) / fps
     vf = []
@@ -60,9 +63,15 @@ def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fp
     tmp = dst.with_suffix(".part.mp4")
     pre = ["-ss", f"{-offset:.6f}"] if offset < 0 else []
     af = ["-af", f"adelay={round(offset * 1000)}:all=1"] if offset > 0 else []
-    cmd = [media._bin("ffmpeg"), "-y", "-v", "error", *pre, "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf), *af,
-           "-fps_mode", "cfr", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-g", "48", "-pix_fmt", "yuv420p",
-           *AUDIO[audio_codec], "-ar", "48000", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
+    venc = ["-fps_mode", "cfr", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-g", "48", "-pix_fmt", "yuv420p"]
+    if audio_src is not None:
+        acodec = media.probe(audio_src).get("acodec", "")
+        aenc = ["-c:a", "copy"] if acodec.lower() in (*DOLBY, "aac") else [*AUDIO["aac"], "-ar", "48000"]
+        cmd = [media._bin("ffmpeg"), "-y", "-v", "error", *pre, "-i", str(src), "-i", str(audio_src), "-map", "0:v:0", "-map", "1:a:0", "-vf", ",".join(vf),
+               *venc, *aenc, "-shortest", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
+    else:
+        cmd = [media._bin("ffmpeg"), "-y", "-v", "error", *pre, "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", ",".join(vf), *af,
+               *venc, *AUDIO[audio_codec], "-ar", "48000", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
     try:
         dur = media.probe(src)["duration"]
     except Exception:  # noqa: BLE001

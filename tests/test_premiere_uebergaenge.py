@@ -27,10 +27,11 @@ def test_overlays_get_cross_dissolve_at_head_and_tail(env):  # noqa: F811
         assert "uebergang" not in c                                            # Standbild/Blur/Sprecher bleiben hart geschnitten
 
 
-def test_episode_clips_get_no_video_dissolve_and_no_audio_fade_by_default(env):  # noqa: F811
+def test_episode_clips_get_no_video_dissolve_and_audio_fades_follow_the_recipe(env):  # noqa: F811
     plan = build_plan(package(), env)
+    on = env.recipes["uebergaenge"]["audio"].get("aktiv", True)
     for c in (c for c in plan["clips"] if c["kind"] == "episode"):
-        assert "uebergang" not in c and "ton_blende" not in c
+        assert "uebergang" not in c and ("ton_blende" in c) == on
 
 
 def test_episode_audio_fades_when_switched_on(env):  # noqa: F811

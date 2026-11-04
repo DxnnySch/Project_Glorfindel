@@ -3,7 +3,7 @@
 // `locate()` liefert den Clip FRISCH (siehe core.js).
 'use strict';
 
-const { tt, txp, invalidate, rawValue, sleep } = require('./core');
+const { tt, txp, invalidate, rawValue, sleep, at } = require('./core');
 const fx = require('./effects');
 
 /** Textwert der Vorlage (Premiere 27.0): Objekt mit getText/setText. Ältere Annahme: Zeichenkette bzw. JSON-Textdokument. */
@@ -16,6 +16,13 @@ async function readText(param) {
     if (isMogrtText(v)) return v.getText();
     return typeof v === 'string' ? v : null;
   } catch (e) { return null; }
+}
+
+/** Synchroner Aufruf mit Ortsangabe im Fehler (Aktionen entstehen synchron innerhalb der Transaktion). */
+function at0(label, fn, next) {
+  let r;
+  try { r = fn(); } catch (e) { throw new Error(label + ': ' + ((e && e.message) || e)); }
+  return next ? next(r) : r;
 }
 
 const TEXT_NAMES = ['TextLayer', 'Text', 'Titel', 'Quelltext', 'Source Text'];
@@ -47,25 +54,32 @@ function withText(current, text) {
   return text;
 }
 
-/** Alle Parameter mit Textwert (oder passendem Namen) des Clips. `item`: bereits vorliegender Clip, sonst frisch per `locate`. */
+const CAPSULE = 'AE.ADBE Capsule';                    // Komponente einer Vorlage (Essential Graphics) ab Premiere 27.0
+
+/** Alle Parameter, die den Text tragen könnten. `item`: bereits vorliegender Clip, sonst frisch per `locate`.
+ *  Rangfolge: Textobjekt (27.0) > Zeichenkette > nicht lesbarer Parameter der Vorlagen-Komponente > nicht lesbarer Parameter mit passendem Namen. */
 async function scanText(locate, want, item) {
   const chain = await (item || await locate()).getComponentChain();
-  const found = [], named = [], dump = [];
+  const objs = [], strs = [], capsule = [], named = [], dump = [];
   const list = await fx.listComponents(chain);
   for (const c of list) {
+    let match = '';
+    try { match = await c.comp.getMatchName(); } catch (e) { /* ältere API */ }
     for (const p of fx.paramList(c.comp)) {
       let v, art;
-      try { v = rawValue(await p.param.getStartValue()); art = typeof v; } catch (e) { art = 'Fehler'; }
-      dump.push(c.name + '/' + p.name + ':' + (isMogrtText(v) ? 'MogrtText' : art));
-      if (isMogrtText(v)) found.unshift({ comp: c.index, index: p.index, name: p.name, value: '', mogrt: true });
-      else if (typeof v === 'string') found.push({ comp: c.index, index: p.index, name: p.name, value: v });
-      else if (want.includes(String(p.name).toLowerCase())) named.push({ comp: c.index, index: p.index, name: p.name, value: '' });
+      try { v = rawValue(await p.param.getStartValue()); art = isMogrtText(v) ? 'MogrtText' : v == null ? 'leer' : typeof v; } catch (e) { art = 'Fehler(' + ((e && e.message) || e) + ')'; }
+      dump.push(c.name + (match ? '[' + match + ']' : '') + '/' + p.name + ':' + art);
+      const cand = { comp: c.index, index: p.index, name: p.name, value: typeof v === 'string' ? v : '' };
+      if (isMogrtText(v)) objs.push({ ...cand, kind: 'objekt' });
+      else if (typeof v === 'string') strs.push({ ...cand, kind: 'text' });
+      else if (match === CAPSULE) capsule.push({ ...cand, kind: 'unlesbar' });
+      else if (want.includes(String(p.name).toLowerCase())) named.push({ ...cand, kind: 'unlesbar' });
     }
   }
-  return { found: found.length ? found : named.slice(0, 1), dump, comps: list.map((c) => c.name) };
+  return { found: [...objs, ...strs, ...capsule, ...named], dump, comps: list.map((c) => c.name) };
 }
 
-/** Textparameter des Clips finden (nach Namen, sonst der erste Parameter mit Textwert) und setzen.
+/** Textparameter des Clips finden und setzen.
  *  Die Grafik-Parameter erscheinen manchmal erst kurz nach dem Einfügen: bis zu ~5 s wiederholen. */
 async function setText(ppro, project, locate, text, names = TEXT_NAMES) {
   const want = names.map((n) => n.toLowerCase());
@@ -79,19 +93,29 @@ async function setText(ppro, project, locate, text, names = TEXT_NAMES) {
   }
   if (!scan || !scan.found.length) {
     throw new Error('Die Vorlage hat keinen Textparameter. Komponenten: ' + (scan ? scan.comps.join(', ') : '?') + '. Parameter: '
-      + ((scan ? scan.dump.filter((d) => !/^(Deckkraft|Bewegung|Vektorbewegung|Opacity|Motion|Vector Motion)\//.test(d)).join('; ') : '') || 'keine weiteren').slice(0, 900));
+      + ((scan ? scan.dump.filter((d) => !/^(Deckkraft|Bewegung|Vektorbewegung|Opacity|Motion|Vector Motion)[\[/]/.test(d)).join('; ') : '') || 'keine weiteren').slice(0, 900));
   }
-  const found = scan.found;
-  const pick = found.find((f) => want.includes(String(f.name).toLowerCase())) || found[0];
+  const pick = scan.found.find((f) => want.includes(String(f.name).toLowerCase())) || scan.found[0];
   const param = fx.findParam(await fx.componentAt(locate, pick.comp), [pick.name], pick.index);
   if (!param) throw new Error('Textparameter nicht mehr gefunden');
-  if (pick.mogrt) {                                   // Premiere 27.0: Textobjekt ändern und per Aktion zurückschreiben
-    const val = rawValue(await param.getStartValue());
-    if (val.setText(text) === false) throw new Error('Premiere hat den Text nicht angenommen');
-    await txp(ppro, 'Credit-Text', (add) => add(param.createSetValueAction(param.createKeyframe(val), true)));
+  const commit = (val, label) => txp(ppro, 'Credit-Text', (add) => add(
+    at0(label + ': createKeyframe', () => param.createKeyframe(val), (kf) => at0(label + ': createSetValueAction', () => param.createSetValueAction(kf, true)))));
+  const info = () => ' [' + pick.kind + '; ' + scan.dump.filter((d) => d.includes('/' + pick.name + ':')).join('; ') + ']';
+
+  if (pick.kind === 'objekt') {                       // Premiere 27.0: Textobjekt ändern und per Aktion zurückschreiben
+    const val = await at('MogrtText lesen', async () => rawValue(await param.getStartValue()));
+    if (await at('MogrtText.setText', async () => val.setText(text)) === false) throw new Error('Premiere hat den Text nicht angenommen');
+    await commit(val, 'MogrtText');
     return pick.name;
   }
-  await txp(ppro, 'Credit-Text', (add) => add(param.createSetValueAction(param.createKeyframe(withText(pick.value, text)), true)));
+  if (pick.kind === 'unlesbar' && typeof ppro.MogrtText === 'function') {
+    // Der aktuelle Wert lässt sich nicht lesen: neues Textobjekt anlegen (die Formatierung kommt dann vom Parameter, nicht aus dem Objekt)
+    const val = at0('new MogrtText', () => new ppro.MogrtText());
+    if (at0('MogrtText.setText', () => val.setText(text)) === false) throw new Error('Premiere hat den Text nicht angenommen');
+    try { await commit(val, 'MogrtText (neu)'); } catch (e) { throw new Error(((e && e.message) || e) + info()); }
+    return pick.name;
+  }
+  try { await commit(withText(pick.value, text), 'Zeichenkette'); } catch (e) { throw new Error(((e && e.message) || e) + info()); }
   return pick.name;
 }
 
