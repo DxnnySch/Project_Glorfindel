@@ -246,7 +246,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                 tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}]: Segment {i + 1} ist {seg.duration:.1f} s lang (> {th.max_segment_s} s)")
             s_in, s_out = snap_ep(seg.in_, episode_fps), snap_ep(seg.out, episode_fps)
             dur = s_out - s_in
-            tl.add(tr["series_video"], "scene_segment", t, t + dur, scene=sc.id, src="episode",
+            tl.add(tr["series_video"], "scene_segment", t, t + dur, scene=sc.id, src="episode", seg=i,
                    src_in=s_in, src_out=s_out, **({"note": seg.notiz} if seg.notiz else {}))
             tl.add(tr["series_audio"], "scene_audio", t, t + dur, scene=sc.id, src="episode",
                    src_in=s_in, src_out=s_out,

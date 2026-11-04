@@ -13,6 +13,7 @@ export async function render(main, ctx) {
   const statusCard = h('div', { class: 'card col' });
   const buildCard = h('div', { class: 'card col' });
   const swapCard = h('div', { class: 'card col' });
+  const syncCard = h('div', { class: 'card col' });
   const diagCard = h('div', { class: 'card col' });
   const reportBox = h('div', { class: 'col', style: { marginTop: '14px' } });
 
@@ -100,6 +101,54 @@ export async function render(main, ctx) {
         btn('Zur Kontrolle', { size: 'sm', onClick: () => ctx.go('compare') })) : null);
   }
 
+  // ---------- Abgleich: Änderungen aus Premiere übernehmen ----------
+  const TYP = { geaendert: 'Länge geändert', geteilt: 'in der Mitte geschnitten', entfernt: 'Clip fehlt in Premiere (bleibt in der App)' };
+  const fmtS = (x) => `${x.toFixed(2)} s`;
+  async function readSync() {
+    try {
+      const r = await runJob('Änderungen in Premiere suchen', () => api.post(epUrl(ep, '/premiere/sync'), { apply: false }));
+      const todo = r.changes.filter((c) => c.typ !== 'entfernt');
+      const rows = r.changes.map((c) => h('tr', {}, h('td', {}, c.titel), h('td', {}, `Segment ${c.index + 1}`), h('td', {}, TYP[c.typ] || c.typ),
+        h('td', { class: 'mono help' }, `${fmtS(c.alt[0])} – ${fmtS(c.alt[1])}`), h('td', { class: 'mono help' }, c.neu.map((n) => `${fmtS(n[0])} – ${fmtS(n[1])}`).join(' | ') || '–')));
+      const body = r.changes.length
+        ? h('div', { class: 'col' }, h('table', {}, h('thead', {}, h('tr', {}, ['Szene', 'Segment', 'Änderung', 'bisher', 'neu in Premiere'].map((x) => h('th', {}, x)))), h('tbody', {}, rows)),
+          h('p', { class: 'help' }, 'Beim Übernehmen werden Ein- und Ausstiegspunkte der Segmente angepasst. Geteilte Clips werden zu zwei Segmenten. Danach zeigt dieser Bereich, welche Standbilder in Premiere getauscht werden müssen.'))
+        : h('p', {}, 'In Premiere wurde nichts an den Serienclips verändert.');
+      modal({ title: r.changes.length ? `${r.changes.length} Änderung(en) in Premiere gefunden` : 'Keine Änderungen', wide: true, body,
+        actions: todo.length ? [{ label: 'Abbrechen' }, { label: `${todo.length} Änderung(en) übernehmen`, kind: 'primary', onClick: applySync }] : [{ label: 'Schließen', kind: 'primary' }] });
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  async function applySync() {
+    try {
+      const r = await runJob('Änderungen aus Premiere übernehmen', () => api.post(epUrl(ep, '/premiere/sync'), { apply: true }));
+      const n = r.changes.filter((c) => c.typ !== 'entfernt').length;
+      toast(n ? `${n} Änderung(en) übernommen.${r.sync.tausch.length ? ` ${r.sync.tausch.length} Standbild(er) müssen nach Premiere getauscht werden.` : ''}` : 'Nichts zu übernehmen.', 'ok', 9000);
+      await refresh();
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  async function refreshStills() {
+    try {
+      const r = await runJob('Standbilder in Premiere aktualisieren', () => api.post(epUrl(ep, '/premiere/refresh-stills')));
+      toast(`${r.getauscht} Standbild(er) in Premiere ersetzt, Schnitt unverändert.`, 'ok', 8000);
+      await refresh();
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  function drawSync() {
+    const sy = st.sync || { gebaut: false, tausch: [], struktur: false };
+    const need = sy.tausch.length > 0;
+    fill(syncCard,
+      h('div', { class: 'card-head' }, icon('refresh'), h('h2', { class: 'grow' }, 'Änderungen aus Premiere'),
+        !sy.gebaut ? null : sy.struktur ? h('span', { class: 'pill bad' }, 'Neu bauen nötig')
+          : need ? h('span', { class: 'pill warn' }, `Tausch nötig: ${sy.tausch.length} Standbild(er)`) : h('span', { class: 'pill ok' }, 'Premiere ist aktuell')),
+      h('p', { class: 'muted' }, 'Hast du in Premiere einen Serienclip verlängert, gekürzt oder in der Mitte geschnitten? „Einlesen“ vergleicht die Sequenz mit den Segmenten der App und übernimmt die neuen Ein- und Ausstiegspunkte. Das Standbild am Ende wird dann neu erzeugt und in Premiere am gleichen Ort ersetzt.'),
+      h('div', { class: 'row gap-s wrap' },
+        btn('Aus Premiere einlesen', { kind: need ? undefined : 'primary', icon: 'search', disabled: !(bridge.connected && sy.gebaut), onClick: readSync }),
+        btn('Standbilder in Premiere tauschen', { kind: need ? 'primary' : undefined, icon: 'refresh', disabled: !(bridge.connected && sy.gebaut && need && !sy.struktur), onClick: refreshStills })),
+      need ? h('p', { class: 'help' }, `Betroffen: ${sy.tausch.map((n) => n.replace(/\.png$/, '')).join(', ')} (Nummern der Standbilder im Rohschnitt).`) : null,
+      sy.struktur ? h('div', { class: 'banner info' }, icon('info'), h('span', {}, 'Die App hat jetzt andere Standbilder als der Rohschnitt in Premiere (Segmente oder Kommentare geändert). Ein Tausch ist nicht möglich – bitte oben neu bauen.')) : null,
+      !sy.gebaut ? h('p', { class: 'help' }, 'Zuerst oben einen Rohschnitt in Premiere bauen.') : null);
+  }
+
   // ---------- Diagnose ----------
   async function selftest() {
     try {
@@ -143,12 +192,13 @@ export async function render(main, ctx) {
     try {
       [bridge, st] = await Promise.all([api.get('/api/bridge/status'), api.get(epUrl(ep, '/premiere'))]);
       drawStatus();
+      drawSync();
     } catch (e) { /* nächste Runde */ }
   }
 
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Premiere'), h('p', {}, 'Direkte Verbindung zu Premiere Pro: Die App baut den Rohschnitt im Projekt und tauscht später Proxy gegen HQ, ohne dass Effekte und Handarbeit verloren gehen.'))),
-    h('div', { class: 'col gap-l' }, statusCard, buildCard, reportBox, swapCard, diagCard)));
+    h('div', { class: 'col gap-l' }, statusCard, buildCard, reportBox, syncCard, swapCard, diagCard)));
   await refresh();
   polling = setInterval(refresh, 2500);
   return () => clearInterval(polling);

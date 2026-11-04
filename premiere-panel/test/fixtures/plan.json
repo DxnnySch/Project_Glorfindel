@@ -233,7 +233,8 @@
    "src_in": 100.01658333333333,
    "src_out": 105.980875,
    "audio": 3,
-   "name": "sz_01 Segment",
+   "seg": 0,
+   "name": "sz_01 Segment 1",
    "ton_blende": {
     "ein": 1.0,
     "aus": 0.2,
@@ -324,7 +325,8 @@
    "src_in": 119.994875,
    "src_out": 124.99987499999999,
    "audio": 3,
-   "name": "sz_01 Segment",
+   "seg": 1,
+   "name": "sz_01 Segment 2",
    "ton_blende": {
     "ein": 0.2,
     "aus": 1.0,
@@ -455,7 +457,8 @@
    "src_in": 300.00804166666666,
    "src_out": 304.0120416666666,
    "audio": 3,
-   "name": "sz_02 Segment",
+   "seg": 0,
+   "name": "sz_02 Segment 1",
    "ton_blende": {
     "ein": 1.0,
     "aus": 1.0,

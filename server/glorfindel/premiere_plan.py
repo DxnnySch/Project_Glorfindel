@@ -149,7 +149,8 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
             base = {"start": start, "end": end, "track": idx, "scene": c.get("scene", "")}
             if typ == "scene_segment":
                 clips.append({"kind": "episode", **base, "media": ep_id, "src_in": c["src_in"] + ep_off, "src_out": c["src_out"] + ep_off,
-                              "audio": 3, "name": f"{c.get('scene', '')} Segment"})
+                              "audio": 3, "seg": c.get("seg"),
+                              "name": f"{c.get('scene', '')} Segment" + (f" {c['seg'] + 1}" if c.get("seg") is not None else "")})
             elif typ == "scene_audio":
                 continue                                            # Ton hängt am verknüpften Episoden-Clip (A4)
             elif typ == "still":

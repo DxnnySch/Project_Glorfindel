@@ -99,7 +99,8 @@ def premiere_effects(state: AppState = Depends(st)):
 @router.get("/ep/{season}/{episode}/premiere")
 def premiere_state(ep: Episode = Depends(ep_of)):
     st = premiere_ops.load_state(ep)
-    return {**st, "bridge": HUB.status()["connected"], "hq_vorhanden": bool(st.get("hq") and __import__("pathlib").Path(st["hq"]).exists())}
+    return {**st, "bridge": HUB.status()["connected"], "hq_vorhanden": bool(st.get("hq") and __import__("pathlib").Path(st["hq"]).exists()),
+            "sync": premiere_ops.sync_state(ep)}
 
 
 class BuildBody(BaseModel):
@@ -122,6 +123,22 @@ def premiere_swap(body: SwapBody, ep: Episode = Depends(ep_of), state: AppState 
         raise HTTPException(400, "to: hq oder proxy")
     return {"job": state.jobs.submit("Premiere auf HQ umstellen" if body.to == "hq" else "Premiere auf Proxy zurückstellen",
                                      lambda progress: premiere_ops.swap(ep, body.to, progress))}
+
+
+class SyncBody(BaseModel):
+    apply: bool = False
+
+
+@router.post("/ep/{season}/{episode}/premiere/sync")
+def premiere_sync_read(body: SyncBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    """Änderungen an den Serienclips aus Premiere einlesen (apply=false: nur anzeigen, true: in die Segmente übernehmen)."""
+    return {"job": state.jobs.submit("Änderungen aus Premiere übernehmen" if body.apply else "Änderungen in Premiere suchen",
+                                     lambda progress: premiere_ops.read_from_premiere(ep, body.apply, progress))}
+
+
+@router.post("/ep/{season}/{episode}/premiere/refresh-stills")
+def premiere_refresh_stills(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    return {"job": state.jobs.submit("Standbilder in Premiere aktualisieren", lambda progress: premiere_ops.refresh_stills(ep, progress))}
 
 
 @router.post("/bridge/selftest")

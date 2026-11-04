@@ -45,3 +45,10 @@ Umgesetzt und gegen die Premiere-Nachbildung getestet (237 pytest, 24 Node-Tests
 
 **Noch offen (aus dem Paritätsbericht):** Zwischenüberschriften (V11, Vorlage `Zwischenüberschriften Serienvideo.mogrt` existiert), Bauchbinde/Instagram-Popups (V12), Mitglieder-Grafiken V5–V7,
 Musik (A10/A11, nicht im Plan), Einstellungsebenen für alle Blur-Stellen (V2: 46), 1:1-Vergleich mit einem echt von der Bridge gebauten Projekt (`--built`).
+
+
+## Abgleich Premiere → App (Stand 2026-11-04)
+- Button „Aus Premiere einlesen“ (Bereich „Änderungen aus Premiere“): liest die gebaute Sequenz (`sequence.dump`), ordnet Serienclips über den Namen „sz_xx Segment n“ den Segmenten zu und übernimmt geänderte/geteilte Ein-/Aus-Punkte. Gelöschte Clips werden nur gemeldet. Module: `premiere_sync`, `premiere_ops.read_from_premiere/sync_state/refresh_stills`.
+- Anzeige „Tausch nötig“: Vergleich der Standbild-Zeiten des Modells mit denen beim Bau; „Standbilder in Premiere tauschen“ erzeugt neue Dateien (`1_r1.png`) und tauscht sie über `media.swap`.
+- Offen/ungeprüft in echtem Premiere: ob `getInPoint/getOutPoint` der Clips die Quellzeit liefern (Annahme: ja). Bauten vor dieser Version haben Clipnamen ohne Nummer (Zuordnung dann nach Reihenfolge).
+- Verschobene Clips (nur Start geändert) und Änderungen an Bildern/Credits werden nicht eingelesen.

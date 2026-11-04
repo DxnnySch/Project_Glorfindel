@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import media, pipeline, prfpset, rough_cut, store
+from . import media, pipeline, prfpset, premiere_sync, rough_cut, store
 from .bridge import HUB, BridgeError
 from .config import app_dir
 from .timemap import TimeMap
@@ -97,7 +97,14 @@ def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aa
     return dst
 
 
-def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, float] | None = None, pg=None, reuse: bool = False) -> dict[str, float]:
+def still_file(st: dict, name: str) -> str:
+    """Dateiname eines Standbilds: nach einem Abgleich mit Premiere bekommt es eine neue Fassung („1_r1.png“), damit Premiere nichts sperrt."""
+    rev = (st.get("still_rev") or {}).get(name, 0)
+    return name if not rev else f"{Path(name).stem}_r{rev}{Path(name).suffix}"
+
+
+def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, float] | None = None, pg=None, reuse: bool = False,
+                     files: dict[str, str] | None = None) -> dict[str, float]:
     """Standbilder (letztes Bild je Segment) aus genau dieser Datei ziehen. Rückgabe: Dateiname → Zeit in der Episode."""
     pg = as_progress(pg)
     times = times if times is not None else pipeline.still_times(scenes, fps)
@@ -105,10 +112,11 @@ def stills_from_file(scenes, media_file: Path, out_dir: Path, times: dict[str, f
     fps = info["fps"] or EPISODE_FPS
     for i, (name, t) in enumerate(times.items()):
         pg.sub(i, len(times), f"Standbild {name} bei {media.fmt_clock(t)}", "Standbilder")
-        target = out_dir / name
+        fname = (files or {}).get(name, name)
+        target = out_dir / fname
         if reuse and target.exists() and target.stat().st_size > 0 and target.stat().st_mtime >= media_file.stat().st_mtime:
             continue                                         # nach abgebrochenem Tausch schon vorhanden (evtl. von Premiere geöffnet)
-        media.extract_still_last_frame(media_file, t, fps, out_dir / name, (info["width"], info["height"]))
+        media.extract_still_last_frame(media_file, t, fps, target, (info["width"], info["height"]))
     pg.sub(len(times), len(times), "alle Standbilder fertig", "Standbilder")
     return times
 
@@ -231,7 +239,7 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     pg.step(6)
     st = load_state(ep)
     st.update({"ref_cfr": str(ref), "stills": times, "stills_dir": str(stills_dir), "active": "proxy", "version": res["version"],
-               "sequence": plan["name"], "ep_offset": off, "direct": bool(direct)})
+               "sequence": plan["name"], "ep_offset": off, "direct": bool(direct), "by_strand": by_strand, "still_rev": {}})
     if direct:
         st["hq"] = str(direct["file"])                      # die unveränderte HQ-Datei: kein Conform nötig
     save_state(ep, st)
@@ -270,10 +278,10 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
     hq_dir = stills_dir.with_name(stills_dir.name + "_HQ")          # Parallelordner: nichts wird überschrieben, Premiere kann nichts sperren
     pg.step(1)
     if to == "hq":
-        stills_from_file(None, Path(st["hq"]), hq_dir, times=st["stills"], pg=pg, reuse=True)
-        swaps = [{"from": st["ref_cfr"], "to": st["hq"]}] + [{"from": str(stills_dir / n), "to": str(hq_dir / n)} for n in st["stills"]]
+        stills_from_file(None, Path(st["hq"]), hq_dir, times=st["stills"], pg=pg, reuse=True, files={n: still_file(st, n) for n in st["stills"]})
+        swaps = [{"from": st["ref_cfr"], "to": st["hq"]}] + [{"from": str(stills_dir / still_file(st, n)), "to": str(hq_dir / still_file(st, n))} for n in st["stills"]]
     else:
-        swaps = [{"from": st["hq"], "to": st["ref_cfr"]}] + [{"from": str(hq_dir / n), "to": str(stills_dir / n)} for n in st["stills"]]
+        swaps = [{"from": st["hq"], "to": st["ref_cfr"]}] + [{"from": str(hq_dir / still_file(st, n)), "to": str(stills_dir / still_file(st, n))} for n in st["stills"]]
     pg.step(2)
     report = hub.call("media.swap", {"swaps": swaps, "refresh": [], "bin": f"Glorfindel {st['sequence']}" if st.get("sequence") else None}, timeout=600)
     if report.get("fehler"):
@@ -283,6 +291,90 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
     save_state(ep, st)
     store.log_change(ep.p.gl, ep.settings.user, f"Premiere auf {'HQ' if to == 'hq' else 'Proxy'} umgestellt ({len(st['stills'])} Standbilder, Episode)")
     return {"active": to, "report": report}
+
+
+# ---------- Abgleich mit Premiere ----------
+def _model_stills(ep: Episode, st: dict) -> dict[str, float]:
+    """Standbild-Zeiten, wie das Modell sie heute verlangt (Zeitachse der Referenz in Premiere)."""
+    scenes = pipeline.scenes_in_video(pipeline.ordered_scenes(ep, st.get("by_strand", True)))
+    off = st.get("ep_offset", 0.0)
+    return {n: round(t + off, 6) for n, t in pipeline.still_times(scenes, ep.project().fps).items()}
+
+
+def sync_state(ep: Episode) -> dict:
+    """Anzeige „muss nach Premiere getauscht werden?“: Standbilder, die nicht mehr zu den Segmenten der App passen."""
+    st = load_state(ep)
+    if not st.get("stills"):
+        return {"gebaut": False, "tausch": [], "struktur": False}
+    r = premiere_sync.stale_stills(_model_stills(ep, st), st["stills"])
+    return {"gebaut": True, "tausch": sorted(r["tausch"], key=lambda n: int(Path(n).stem)), "struktur": r["struktur"]}
+
+
+def read_from_premiere(ep: Episode, apply: bool = False, progress=None, hub=HUB) -> dict:
+    """Serienclips aus der gebauten Sequenz lesen und mit den Segmenten der App vergleichen; `apply` übernimmt die Änderungen."""
+    pg = as_progress(progress)
+    st = load_state(ep)
+    if not st.get("sequence"):
+        raise ValueError("Es gibt noch keinen in Premiere gebauten Rohschnitt dieser Folge.")
+    if not hub.connected:
+        raise BridgeError("Premiere ist nicht verbunden. Panel „Glorfindel Bridge“ in Premiere öffnen.")
+    pg.plan([("Sequenz aus Premiere lesen", 4), ("Mit den Segmenten vergleichen", 0.5), ("Segmente übernehmen", 0.5)])
+    pg.step(0)
+    dump = hub.call("sequence.dump", {"name": st["sequence"], "params": False, "maxItems": 5000}, timeout=300)
+    pg.step(1)
+    pieces = premiere_sync.pieces_from_dump(dump, st.get("ep_offset", 0.0))
+    scenes = ep.scenes()
+    changes = premiere_sync.compare(scenes, pieces, ep.project().fps)
+    pg.step(2)
+    applied = False
+    if apply:
+        for sc in premiere_sync.apply(scenes, changes):
+            ep.save_scene(sc, "Segmente aus Premiere übernommen")
+        n = sum(1 for c in changes if c["typ"] in ("geaendert", "geteilt"))
+        if n:
+            store.log_change(ep.p.gl, ep.settings.user, f"{n} Segment(e) aus Premiere übernommen")
+        applied = True
+    return {"changes": changes, "angewendet": applied, "sync": sync_state(ep), "sequence": st["sequence"]}
+
+
+def refresh_stills(ep: Episode, progress=None, hub=HUB) -> dict:
+    """Ersetzt in Premiere die Standbilder, die nach einer Änderung der Segmente nicht mehr stimmen. Der Schnitt bleibt unverändert."""
+    pg = as_progress(progress)
+    st = load_state(ep)
+    sy = sync_state(ep)
+    if not sy["gebaut"]:
+        raise ValueError("Es gibt noch keinen in Premiere gebauten Rohschnitt dieser Folge.")
+    if sy["struktur"]:
+        raise ValueError("Die Standbilder der App passen nicht mehr zur Anzahl im Rohschnitt in Premiere (Segmente oder Kommentare wurden verändert). Bitte den Rohschnitt neu bauen.")
+    if not sy["tausch"]:
+        return {"getauscht": 0, "namen": []}
+    if not hub.connected:
+        raise BridgeError("Premiere ist nicht verbunden. Panel „Glorfindel Bridge“ in Premiere öffnen.")
+    hq = st.get("active") == "hq"
+    media_file = Path(st["hq"] if hq else st["ref_cfr"])
+    stills_dir = Path(st["stills_dir"])
+    out_dir = stills_dir.with_name(stills_dir.name + "_HQ") if hq else stills_dir
+    new_times = _model_stills(ep, st)
+    pg.plan([("Neue Standbilder erzeugen", 6), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
+    pg.step(0)
+    revs = dict(st.get("still_rev") or {})
+    swaps, files = [], {}
+    for n in sy["tausch"]:
+        old = still_file(st, n)
+        revs[n] = revs.get(n, 0) + 1
+        files[n] = still_file({"still_rev": revs}, n)
+        swaps.append({"from": str(out_dir / old), "to": str(out_dir / files[n])})
+    stills_from_file(None, media_file, out_dir, times={n: new_times[n] for n in sy["tausch"]}, pg=pg, files=files)
+    pg.step(1)
+    report = hub.call("media.swap", {"swaps": swaps, "refresh": [], "bin": f"Glorfindel {st['sequence']}" if st.get("sequence") else None}, timeout=600)
+    if report.get("fehler"):
+        raise BridgeError("Tausch in Premiere unvollständig: " + "; ".join(f"{f.get('von') or f.get('datei')}: {f['fehler']}" for f in report["fehler"]))
+    pg.step(2)
+    st["stills"] = {**st["stills"], **{n: new_times[n] for n in sy["tausch"]}}
+    st["still_rev"] = revs
+    save_state(ep, st)
+    store.log_change(ep.p.gl, ep.settings.user, f"{len(swaps)} Standbild(er) in Premiere aktualisiert")
+    return {"getauscht": len(swaps), "namen": sy["tausch"], "report": report}
 
 
 # ---------- Selbsttest ----------
