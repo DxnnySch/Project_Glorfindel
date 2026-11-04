@@ -18,7 +18,8 @@ def test_panel_fixture_is_current():
 
 @pytest.mark.skipif(not shutil.which("node"), reason="Node.js nicht installiert")
 def test_panel_javascript_tests_pass():
-    r = subprocess.run(["node", "--test", str(ROOT / "premiere-panel" / "test" / "panel.test.js")], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+    r = subprocess.run(["node", "--test", str(ROOT / "premiere-panel" / "test" / "panel.test.js"), str(ROOT / "premiere-panel" / "test" / "tools.test.js")],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
     assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-1500:]
 
 
@@ -27,7 +28,7 @@ def test_manifest_is_valid_for_premiere():
     assert m["host"]["app"] == "premierepro" and m["main"] == "index.html" and m["entrypoints"][0]["type"] == "panel"
     assert (ROOT / "premiere-panel" / m["main"]).exists()
     assert m["requiredPermissions"]["network"]["domains"] == "all"
-    for f in ("lib/core.js", "lib/plan.js", "lib/bridge.js", "main.js"):
+    for f in ("lib/core.js", "lib/plan.js", "lib/bridge.js", "lib/tools.js", "main.js"):
         assert (ROOT / "premiere-panel" / f).exists()
 
 

@@ -46,7 +46,7 @@ def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fp
     """Referenz in konstante Bildrate bringen, Letterbox abschneiden, auf Episodengröße bringen.
     `offset` (Sekunden, auf das Bildraster gerundet) verschiebt die Zeitachse: positiv = Schwarz davor, negativ = Anfang abschneiden.
     So kann die Referenz auf der Zeitachse der HQ-Datei liegen und die HQ-Datei später unverändert eingesetzt werden.
-    `audio_src`: Datei, deren Ton unverändert übernommen wird (die HQ-Datei, auf deren Zeitachse die Referenz liegt). So hat der Rohschnitt den echten
+    `audio_src`: Datei, deren Ton übernommen (als AAC-Stereo) wird (die HQ-Datei, auf deren Zeitachse die Referenz liegt). So hat der Rohschnitt den echten
     Filmton, und Premiere liest genau das Tonformat, das auch die HQ-Datei hat (selbst kodierter Dolby-Ton wurde von Premiere ohne Ton importiert)."""
     w, h = size
     offset = round(offset * fps) / fps
@@ -65,8 +65,9 @@ def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fp
     af = ["-af", f"adelay={round(offset * 1000)}:all=1"] if offset > 0 else []
     venc = ["-fps_mode", "cfr", "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-g", "48", "-pix_fmt", "yuv420p"]
     if audio_src is not None:
-        acodec = media.probe(audio_src).get("acodec", "")
-        aenc = ["-c:a", "copy"] if acodec.lower() in (*DOLBY, "aac") else [*AUDIO["aac"], "-ar", "48000"]
+        # Premiere 27.1 zeigt E-AC-3 in MP4 ohne Wellenform und spielt keinen Ton (auch das unveränderte Dolby-Original nicht):
+        # der Ton der HQ-Datei kommt als AAC-Stereo in die Referenz (die Sequenz hat Stereo-Spuren).
+        aenc = [*AUDIO["aac"], "-ac", "2", "-ar", "48000"]
         cmd = [media._bin("ffmpeg"), "-y", "-v", "error", *pre, "-i", str(src), "-i", str(audio_src), "-map", "0:v:0", "-map", "1:a:0", "-vf", ",".join(vf),
                *venc, *aenc, "-shortest", "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
     else:
@@ -84,6 +85,29 @@ def conform_reference(src: Path, dst: Path, *, crop: list[int] | None = None, fp
     if r.returncode != 0:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(f"Konforme Referenz fehlgeschlagen: {r.stderr.strip()[-300:]}")
+    tmp.replace(dst)
+    return dst
+
+
+def remux_with_aac(src: Path, dst: Path, on_progress=None) -> Path:
+    """Kopie von `src` mit unverändertem Bild und AAC-Stereo-Ton. Premiere 27.1 liest E-AC-3 in MP4 nicht, und es tauscht Medien nur gegen Dateien
+    mit gleichem Tonformat: die HQ-Datei bekommt so dasselbe Tonformat wie die Referenz (Bild wird nicht neu kodiert, das dauert nur Minuten)."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_suffix(".part.mp4")
+    cmd = [media._bin("ffmpeg"), "-y", "-v", "error", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy", *AUDIO["aac"], "-ac", "2", "-ar", "48000",
+           "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
+    try:
+        dur = media.probe(src)["duration"]
+    except Exception:  # noqa: BLE001
+        dur = None
+    try:
+        r = media.run_ffmpeg(cmd, dur, on_progress)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    if r.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(f"HQ-Datei mit AAC-Ton fehlgeschlagen: {r.stderr.strip()[-300:]}")
     tmp.replace(dst)
     return dst
 

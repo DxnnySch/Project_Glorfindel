@@ -145,7 +145,14 @@ async function selftest(ppro, { png, preset, mogrts = {} }, emit = () => {}) {
       if (!ti) throw new Error('Vorlagen-Clip nicht gefunden');
       return ti;
     };
-    const name = await mogrt.setText(ppro, await getProject(), loc, 'Glorfindel Test ä');
+    // Premiere 27.1: der Text von Grafiken ist per Skript nicht setzbar (Parameter „Quelltext“ liefert null). Das ist hier kein Fehler:
+    // der Server schreibt den Text vor dem Einsetzen in die Vorlage (mogrt_text.py). Gemessen wird nur, ob es doch geht.
+    let name;
+    try { name = await mogrt.setText(ppro, await getProject(), loc, 'Glorfindel Test ä'); } catch (e) {
+      res.findings.mogrtTextBySkript = 'nicht möglich: ' + String((e && e.message) || e).slice(0, 160);
+      return { text_per_skript: 'nicht möglich (der Server schreibt den Text in die Vorlage)', eingesetzt: true };
+    }
+    res.findings.mogrtTextBySkript = 'möglich';
     const chain = await (await loc()).getComponentChain();
     let back = null;
     for (const c of await fx.listComponents(chain)) for (const p of fx.paramList(c.comp)) {
@@ -160,7 +167,7 @@ async function selftest(ppro, { png, preset, mogrts = {} }, emit = () => {}) {
     return { parameter: name, json: res.findings.mogrtTextIsJson };
   });
 
-  // Die eigenen Credit-Vorlagen (vorlagen/mogrt): einsetzen, Text schreiben, zurücklesen – genau wie beim Bau
+  // Die eigenen Credit-Vorlagen (vorlagen/mogrt): einsetzen (Pflicht); Text per Skript setzen und zurücklesen, wenn die Premiere-Version es kann
   let slot = 0;
   for (const [art, path] of Object.entries(mogrts)) {
     const track = 9 - slot++;
@@ -172,7 +179,11 @@ async function selftest(ppro, { png, preset, mogrts = {} }, emit = () => {}) {
         if (!ti) throw new Error('Vorlagen-Clip nicht gefunden');
         return ti;
       };
-      const name = await mogrt.setText(ppro, await getProject(), loc, '© Glorfindel Test ä');
+      let name;
+      try { name = await mogrt.setText(ppro, await getProject(), loc, '© Glorfindel Test ä'); } catch (e) {
+        (res.findings.eigeneVorlagen = res.findings.eigeneVorlagen || {})[art] = { parameter: null, hinweis: 'Text per Skript nicht setzbar – der Server schreibt ihn in die Vorlage' };
+        return { eingesetzt: true, text_per_skript: false };
+      }
       let back = null;
       for (const c of await fx.listComponents(await (await loc()).getComponentChain())) for (const p of fx.paramList(c.comp)) {
         if (p.name !== name) continue;

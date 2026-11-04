@@ -14,6 +14,7 @@ export async function render(main, ctx) {
   const buildCard = h('div', { class: 'card col' });
   const swapCard = h('div', { class: 'card col' });
   const syncCard = h('div', { class: 'card col' });
+  const toolsCard = h('div', { class: 'card col' });
   const diagCard = h('div', { class: 'card col' });
   const reportBox = h('div', { class: 'col', style: { marginTop: '14px' } });
 
@@ -44,7 +45,7 @@ export async function render(main, ctx) {
             h('li', {}, 'Hier erscheint „verbunden“. Premiere kann dafür auch schon ein Projekt geöffnet haben.')),
           h('div', { class: 'row gap-s' }, btn('Panel einrichten', { kind: 'primary', icon: 'download', onClick: installPanel }),
             btn('Installationspaket laden', { icon: 'download', onClick: () => { location.href = '/api/bridge/panel.ccx'; } }))));
-    drawBuild(); drawSwap(); drawDiag();
+    drawBuild(); drawSwap(); drawDiag(); drawTools();
   }
 
   // ---------- Bauen ----------
@@ -149,6 +150,37 @@ export async function render(main, ctx) {
       !sy.gebaut ? h('p', { class: 'help' }, 'Zuerst oben einen Rohschnitt in Premiere bauen.') : null);
   }
 
+  // ---------- Werkzeuge im Panel ----------
+  const pick = { scene: '' };
+  let toolsSig = '';
+  async function showScene() {
+    try {
+      const r = await api.post(epUrl(ep, '/premiere/show-scene'), { scene: pick.scene });
+      toast(`Abspielkopf in Premiere bei ${Math.floor(r.time / 60)}:${(r.time % 60).toFixed(1).padStart(4, '0')}.`, 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  function drawTools() {
+    const scenes = S.data.scenes || [];
+    if (!pick.scene && scenes.length) pick.scene = scenes[0].id;
+    const built = !!st.version;
+    const sig = `${bridge.connected}|${built}|${scenes.length}`;
+    if (sig === toolsSig) return;                          // nicht bei jeder Abfrage neu zeichnen: die Auswahlliste würde sich schließen
+    toolsSig = sig;
+    fill(toolsCard,
+      h('div', { class: 'card-head' }, icon('wand'), h('h2', { class: 'grow' }, 'Werkzeuge im Panel')),
+      h('p', { class: 'muted' }, 'Im Panel „Glorfindel Bridge“ in Premiere liegen Kurzbefehle, die auf die Auswahl in der Zeitleiste wirken und dieselben Regeln wie der Rohschnitt-Bau benutzen:'),
+      h('ul', { class: 'help', style: { margin: '0 0 0 18px' } },
+        h('li', {}, 'Artwork bauen: Bild → verschachtelte Sequenz mit Maske, Spurmaske-Key und den Standardeffekten.'),
+        h('li', {}, 'Credit setzen: Textclip mit dem Namen aus dem Bild (oder eigenem Text), Länge und Überblendung wie im Bau.'),
+        h('li', {}, 'Effekte: Karte, Gauß, Zoom, Pop, Kreis, Fancy-Kante … ein/aus mit richtigen Zeiten.'),
+        h('li', {}, 'Überblendung 0,42 s, Ton-Blende, Länge setzen (auch bis zum Abspielkopf), Szene am Abspielkopf.')),
+      h('p', { class: 'help' }, 'Die Werkzeuge nutzen die Einstellungen und Vorlagen der zuletzt gebauten Folge.'),
+      h('div', { class: 'row gap-s wrap' },
+        h('select', { onChange: (e) => { pick.scene = e.target.value; }, disabled: !scenes.length }, ...scenes.map((sc) => h('option', { value: sc.id, selected: sc.id === pick.scene }, sc.titel || sc.id))),
+        btn('Szene in Premiere zeigen', { icon: 'play', disabled: !(bridge.connected && built && pick.scene), onClick: showScene })),
+      !built ? h('p', { class: 'help' }, 'Zuerst oben einen Rohschnitt in Premiere bauen.') : null);
+  }
+
   // ---------- Diagnose ----------
   async function selftest() {
     try {
@@ -198,7 +230,7 @@ export async function render(main, ctx) {
 
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Premiere'), h('p', {}, 'Direkte Verbindung zu Premiere Pro: Die App baut den Rohschnitt im Projekt und tauscht später Proxy gegen HQ, ohne dass Effekte und Handarbeit verloren gehen.'))),
-    h('div', { class: 'col gap-l' }, statusCard, buildCard, reportBox, syncCard, swapCard, diagCard)));
+    h('div', { class: 'col gap-l' }, statusCard, buildCard, reportBox, toolsCard, syncCard, swapCard, diagCard)));
   await refresh();
   polling = setInterval(refresh, 2500);
   return () => clearInterval(polling);

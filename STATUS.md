@@ -26,7 +26,7 @@ Fertig und getestet (Python + Node, strenge API-Nachbildung): Hub/WebSocket mit 
 konforme Referenz, Standbilder aus derselben Datei auf dem Episodenraster, Credit-PNGs, Sequenz-Vorgabe mit 14 V/16 A, Panel (Bau, Effekte, Marker, Tausch,
 Auslesen, Selbsttest), Premiere-Ansicht in der Oberfläche, HQ-Tausch mit Rückweg, Projektleser für .prproj.
 **Nicht in echtem Premiere gelaufen** (siehe FRAGEN F10): Parameternamen/Farbformat/Keyframe-Zeitbezug sind per Selbsttest zu bestätigen.
-Offen: MOGRT-Credits, Audio-Blenden, optional verschachtelte Artwork-Sequenzen, Auto-Anker für HQ.
+Offen: Auto-Anker für HQ.
 
 
 ## Premiere-Parität (Stand 2026-11-03, Panel 0.5.1)
@@ -58,3 +58,20 @@ Musik (A10/A11, nicht im Plan), Einstellungsebenen für alle Blur-Stellen (V2: 4
 - Adobe hat die Schnittstelle für Premiere **27.0 (Beta)** angekündigt: `AE.ADBE Capsule`-Komponente, Wert `MogrtText` (`getText`/`setText`), zurück per `createKeyframe` + `createSetValueAction` (Typen `adobe/premierepro-types` v27.0.0-beta.22, Beispiel `uxp-premiere-pro-samples` PR #100).
 - Die Bridge unterstützt diesen Weg (Panel 0.5.7); mit 26.x fallen Credits auf PNG zurück. Ungeprüft in echtem Premiere 27.0.
 - Verworfen: Umweg über Änderung der .mogrt-Datei (internes Binärformat, keine Quellen, nicht prüfbar); ExtendScript aus UXP (nicht aufrufbar).
+- **Gemessen in Premiere 27.1.0 Beta (Selbsttest und UXP-Konsole, 2026-11-04):** Die Klassen `MogrtText` und `MogrtComment` gibt es, aber bei eingesetzten Grafiken (eigene Vorlagen „Credit Amazon v2“/„Credit Artwork v2“ und Adobes „Basic Title“) liefert der Textparameter `Text [AE.ADBE Text]/Quelltext` den Wert `null`, `getKeyframePtr` wirft „Illegal Parameter type“, `createKeyframe` verlangt „ArbData“ (diese Klasse gibt es nicht). Keine `AE.ADBE Capsule`-Komponente, kein Zugriff auf Vorlagenfelder am Clip: der Text ist per Skript weder lesbar noch setzbar.
+- **Umgesetzt statt Skript: der Text steht in der Datei** (`server/glorfindel/mogrt_text.py`, von Danny in Premiere bestätigt: „funktioniert perfekt“). Eine .mogrt ist ein ZIP mit `definition.json` (freigegebenes Textfeld, Typ 6) und `project.prgraphic` (ZIP mit gzip-komprimiertem Projekt; darin der Parameter „Quelltext“ als FlatBuffer-Block). Der Server schreibt je Credit eine Kopie mit dem richtigen Text (neuer String ans Blockende, ein Verweis umgebogen, Kopf angepasst, `capsuleID` erneuert; die Quell-ID in `sourceInfoLocalized` muss bleiben, sie steht auch im Projekt). Das Panel setzt die fertige Datei nur ein (`c.mogrt.baked`). Funktioniert mit jeder Premiere-Version, die die Vorlage importiert (kein Beta nötig). Cache: `…/premiere/mogrt/`.
+
+
+## Panel-Werkzeuge (Kurzbefehle, Panel 0.6.0, Stand 2026-11-04)
+Entwurf: `docs/superpowers/specs/2026-11-04-premiere-werkzeuge-design.md`. Das Panel hat eine Werkzeugleiste, die auf die **Auswahl in der Zeitleiste** wirkt; fachliche Entscheidungen trifft der Server (`premiere_tools.py`, Anfragen per `rpc` über die Bridge), das Panel führt Premiere-Grundoperationen aus (`lib/tools.js`).
+- **Artwork bauen:** Bild → verschachtelte Sequenz (Bild V3, Maske V5, Spurmaske-Key) an Stelle des Bildes, Standardeffekte der Einstellungen.
+- **Credit setzen:** Name aus Bilddatei bzw. Künstlerdatenbank (oder dem Clip unter einem gewählten Text-Clip), Vorlage mit festem Text, Länge wie der Clip, Cross Dissolve; oder eigener Text am Abspielkopf. Arten Amazon/Künstler/Musik (Spuren V9/V10/V11).
+- **Effekte:** Karte, Gauß, Zoom schnell/langsam, Pop, Kreis, Fancy-Kante, Transformieren, Von rechts, Schlagschatten – ein/aus/beide, Zeiten relativ zum Clip (Rezepte aus den .prfpset-Vorgaben).
+- **Überblendung 0,42 s** (Anfang/Ende/beide), **Ton-Blende** (Gleichleistung), **Länge setzen** (feste Länge oder bis zum Abspielkopf), **Szene am Abspielkopf**, **Auswahl untersuchen** (Fehlersuche).
+- In der App (Ansicht Premiere): „Szene in Premiere zeigen“ setzt den Abspielkopf an den Anfang der Szene.
+- Die Werkzeuge nutzen die Einstellungen der zuletzt gebauten Folge (`bridge_context.json`); davor ist ein Bau nötig. Entscheidungen und Standardwerte: `FRAGEN.md` F12.
+- **Ungeprüft in echtem Premiere** (nur gegen die strenge Nachbildung getestet, 46 Node- und die Python-Tests): `Sequence.getSelection()`, `getPlayerPosition/setPlayerPosition`, das Ersetzen eines Bildes durch die Artwork-Sequenz (Clip entfernen ohne Lücke, Sequenz setzen) und die Erkennung Video/Ton am Clip. Erster Test: ein Standbild wählen → „Artwork bauen“; „Auswahl untersuchen“ zeigt bei Problemen die Komponenten des Clips.
+
+## Ton der Referenz (2026-11-04)
+Premiere 27.1 zeigt E-AC-3 in MP4 ohne Wellenform und spielt keinen Ton (auch nicht das unveränderte Dolby-Original). Die Referenz bekommt den Ton der HQ-Datei jetzt als **AAC-Stereo** (`…_Referenz_CFR_TonAAC.mp4`).
+**Folge und Lösung:** Premiere tauscht Medien nur gegen Dateien mit gleichem Tonformat. Beim ersten „Auf HQ umschalten“ legt die App deshalb eine Kopie der HQ-Datei mit unverändertem Bild und AAC-Ton an (`…_AAC.mp4` im Cache der Folge, `premiere_ops.hq_for_premiere`, nur Umpacken, einmal je HQ-Datei) und tauscht gegen diese; „Zurück auf Proxy“ nimmt dieselbe Datei als Ausgangspunkt (`hq_pr` im Zustand). Das Original bleibt unberührt.

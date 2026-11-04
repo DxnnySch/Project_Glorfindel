@@ -5,13 +5,14 @@ Zustand dieser Maschine (Pfade lokaler Dateien) liegt im lokalen Cache der Folge
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
-from . import media, pipeline, prfpset, premiere_sync, rough_cut, store
+from . import media, mogrt_text, pipeline, prfpset, premiere_sync, premiere_tools, rough_cut, store
 from .bridge import HUB, BridgeError
 from .config import app_dir
 from .timemap import TimeMap
-from .premiere_media import audio_for, EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png
+from .premiere_media import audio_for, EPISODE_FPS, EPISODE_SIZE, conform_reference, credit_png, play_pause_clips, bars_png, remux_with_aac
 from .premiere_plan import PlanEnv, build_plan, load_recipes, with_library
 from .premiere_preset import make_sequence_preset
 from .progress import as_progress
@@ -85,7 +86,7 @@ def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aa
     src = ep.source(pr.reference_source)
     srcfile = ep.source_path(src)
     # mit Ton der HQ-Datei als eigene Datei: die ältere Referenz kann in Premiere geöffnet (gesperrt) sein
-    dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR{'_Ton' if audio_src else ''}.mp4"
+    dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR{'_TonAAC' if audio_src else ''}.mp4"
     side = dst.with_suffix(".json")
     want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop, "audio": audio, "audio_src": str(audio_src) if audio_src else ""}
     newest = max(srcfile.stat().st_mtime, audio_src.stat().st_mtime if audio_src else 0)
@@ -137,13 +138,18 @@ def _image_size(p: Path):
 
 def discover_credit_mogrts(folder: Path) -> dict[str, str]:
     """Credit-Vorlagen (editierbarer Text) aus vorlagen/mogrt: „Credit Amazon.mogrt“, „Credit Artwork.mogrt“, „Credit Musik.mogrt“.
-    Fehlt eine, bleibt für diese Art das PNG."""
+    Gibt es neuere Exporte („Credit Amazon v2.mogrt“), gilt die höchste Nummer. Fehlt eine Art, bleibt dafür das PNG."""
     out: dict[str, str] = {}
     if Path(folder).is_dir():
+        files = [f for f in Path(folder).iterdir() if f.suffix.lower() == ".mogrt"]
         for art in ("amazon", "artwork", "musik"):
-            p = next((f for f in Path(folder).iterdir() if f.suffix.lower() == ".mogrt" and f.stem.lower() == f"credit {art}"), None)
-            if p:
-                out[art] = str(p)
+            best: tuple[int, Path] | None = None
+            for f in files:
+                m = re.fullmatch(rf"credit {art}(?: v(\d+))?", f.stem.lower())
+                if m and (best is None or int(m.group(1) or 0) > best[0]):
+                    best = (int(m.group(1) or 0), f)
+            if best:
+                out[art] = str(best[1])
     return out
 
 
@@ -155,6 +161,14 @@ def library_for(root: Path, presets_dir: str, templates_dir: Path) -> dict:
         return lib
     snap = templates_dir / "effekt_bibliothek.json"
     return json.loads(snap.read_text(encoding="utf-8")) if snap.exists() else {}
+
+
+def _text_mogrt(template: Path, text: str, folder: Path) -> Path | None:
+    """Vorlage mit fest eingetragenem Text; bei unbekanntem Aufbau der Vorlage None (dann versucht das Panel den Text zu setzen, sonst PNG)."""
+    try:
+        return mogrt_text.text_mogrt(template, text, folder)
+    except Exception:  # noqa: BLE001 – defekte oder fremde Vorlage soll den Bau nicht verhindern
+        return None
 
 
 def _library(ep: Episode, templates_dir: Path) -> dict:
@@ -190,6 +204,7 @@ def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, st
         root=ep.p.root, episode_media=reference, stills_dir=stills_dir,
         credit=lambda text, art, x: credit_png(text, art, pdir(ep) / "credits", x_override=x),
         frame_box=lambda p: subject_box(llm, p, cache_file),
+        credit_mogrt=lambda tpl, text: _text_mogrt(Path(tpl), text, pdir(ep) / "mogrt"),
         image_size=_image_size, recipes=with_library(load_recipes(recipes_file if recipes_file.exists() else None), _library(ep, templates_dir)), doppel=tpl["doppelbild"],
         premiere={"aep": str(ep.p.root / s.aep), "comp": s.comp, "pause_in": s.pause_in, "play_in": s.play_in,
                   "preset": str(preset), "video_tracks": s.video_tracks, "audio_tracks": s.audio_tracks,
@@ -205,6 +220,7 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     pg.step(0)
     if not hub.connected:
         raise BridgeError("Premiere ist nicht verbunden. In Premiere: Fenster → Erweiterungen → „Glorfindel Bridge“ öffnen.")
+    premiere_tools.remember_episode(ep)                     # die Panel-Werkzeuge arbeiten mit den Einstellungen dieser Folge
     pg.step(1)
     direct = direct_hq(ep)
     if direct:
@@ -253,12 +269,37 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
 
 
 # ---------- Tausch Proxy ↔ HQ ----------
+def hq_for_premiere(ep: Episode, hq: Path, ref_acodec: str, pg=None) -> Path:
+    """Die HQ-Datei, die Premiere bekommt: hat sie ein anderes Tonformat als die Referenz in Premiere (z. B. Dolby gegen AAC), lässt Premiere den Tausch nicht zu.
+    Dann wird eine Kopie mit unverändertem Bild und AAC-Ton angelegt (einmal je HQ-Datei)."""
+    if audio_for(media.probe(hq).get("acodec", "")) == audio_for(ref_acodec):
+        return hq
+    dst = pdir(ep) / f"{hq.stem}_AAC.mp4"
+    if dst.exists() and dst.stat().st_mtime >= hq.stat().st_mtime:
+        return dst
+    pg = as_progress(pg)
+    pg.fraction(0.0, "HQ-Datei mit AAC-Ton für Premiere (Bild unverändert) …")
+    return remux_with_aac(hq, dst, on_progress=lambda f, info: pg.fraction(f, info.get("text")))
+
+
+def show_scene(ep: Episode, scene_id: str, hub=HUB) -> dict:
+    """Den Abspielkopf in Premiere an den Anfang einer Szene setzen (Zeit aus dem letzten Bauplan)."""
+    st = load_state(ep)
+    plan_file = pdir(ep) / f"bauplan_v{st.get('version')}.json"
+    if not st.get("version") or not plan_file.exists():
+        raise ValueError("Noch kein Rohschnitt gebaut: Szenen sind erst nach dem Bau in Premiere.")
+    from types import SimpleNamespace
+    t = premiere_tools.scene_start(SimpleNamespace(plan=store.read_json(plan_file, {})), scene_id)
+    return {"time": t, **hub.call("sequence.seek", {"time": t}, timeout=30)}
+
+
 def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
     """`to`: 'hq' oder 'proxy'. Tauscht nur die Dateien; Clips, Effekte und Handarbeit in Premiere bleiben."""
     pg = as_progress(progress)
     st = load_state(ep)
     if not st.get("ref_cfr") or not st.get("stills"):
         raise ValueError("Es gibt noch keinen in Premiere gebauten Rohschnitt dieser Folge.")
+    premiere_tools.remember_episode(ep)
     if to == "hq" and not (st.get("hq") and Path(st["hq"]).exists()):
         raise ValueError("Die konforme HQ-Datei fehlt. Zuerst unter „Kontrolle“ Anker setzen und „HQ-Conform“ ausführen.")
     if st.get("active") == to:
@@ -269,10 +310,6 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
         if abs(hq_fps - ref_fps) > 0.01:
             raise ValueError(f"Die HQ-Datei hat {hq_fps:.3f} statt {ref_fps:.3f} Bildern pro Sekunde wie die Referenz in Premiere. "
                              "Bitte unter „Kontrolle“ den HQ-Conform noch einmal ausführen (oder den Rohschnitt neu bauen); dann lässt Premiere den Tausch zu.")
-        a_hq, a_ref = media.probe(Path(st["hq"])).get("acodec", ""), media.probe(Path(st["ref_cfr"])).get("acodec", "")
-        if audio_for(a_hq) != audio_for(a_ref):
-            raise ValueError(f"Die HQ-Datei hat Dolby-Ton ({a_hq}), die Referenz in Premiere {a_ref}: Premiere lässt diesen Tausch nicht zu. "
-                             "Bitte den Rohschnitt neu bauen – die Referenz bekommt dann dasselbe Tonformat wie die HQ-Datei.")
     pg.plan([("Verbindung prüfen", 0.5), ("HQ-Standbilder erzeugen" if to == "hq" else "Standbilder vorbereiten", 8), ("In Premiere tauschen", 2), ("Speichern", 0.5)])
     pg.step(0)
     if not hub.connected:
@@ -281,10 +318,12 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
     hq_dir = stills_dir.with_name(stills_dir.name + "_HQ")          # Parallelordner: nichts wird überschrieben, Premiere kann nichts sperren
     pg.step(1)
     if to == "hq":
+        hq_file = hq_for_premiere(ep, Path(st["hq"]), media.probe(Path(st["ref_cfr"])).get("acodec", ""), pg)
+        st["hq_pr"] = str(hq_file)                                  # die Datei, die in Premiere liegt (für den Rückweg)
         stills_from_file(None, Path(st["hq"]), hq_dir, times=st["stills"], pg=pg, reuse=True, files={n: still_file(st, n) for n in st["stills"]})
-        swaps = [{"from": st["ref_cfr"], "to": st["hq"]}] + [{"from": str(stills_dir / still_file(st, n)), "to": str(hq_dir / still_file(st, n))} for n in st["stills"]]
+        swaps = [{"from": st["ref_cfr"], "to": str(hq_file)}] + [{"from": str(stills_dir / still_file(st, n)), "to": str(hq_dir / still_file(st, n))} for n in st["stills"]]
     else:
-        swaps = [{"from": st["hq"], "to": st["ref_cfr"]}] + [{"from": str(hq_dir / still_file(st, n)), "to": str(stills_dir / still_file(st, n))} for n in st["stills"]]
+        swaps = [{"from": st.get("hq_pr") or st["hq"], "to": st["ref_cfr"]}] + [{"from": str(hq_dir / still_file(st, n)), "to": str(stills_dir / still_file(st, n))} for n in st["stills"]]
     pg.step(2)
     report = hub.call("media.swap", {"swaps": swaps, "refresh": [], "bin": f"Glorfindel {st['sequence']}" if st.get("sequence") else None}, timeout=600)
     if report.get("fehler"):

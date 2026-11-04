@@ -212,6 +212,14 @@ test('Selbsttest: prüft alles, räumt vollständig auf und berührt keine vorha
   assert.equal((await (await project.getRootItem()).getItems()).length, 0, 'Test-Fach entfernt');
 });
 
+test('Selbsttest: Premiere 27.1 (Text per Skript nicht setzbar) ist kein Fehler: Vorlagen werden eingesetzt, der Befund steht im Bericht', async () => {
+  const env = fake.create({ presets: { 'C:/p/test.sqpreset': { video: 14, audio: 16 } }, mogrts: ['C:/Adobe/Motion Graphics Templates/Basic Title.mogrt', 'C:/vorlagen/mogrt/Credit OhneText.mogrt'] });
+  const rep = await selftest(env.ppro, { png: 'F:/x/test.png', preset: 'C:/p/test.sqpreset', mogrts: { amazon: 'C:/vorlagen/mogrt/Credit OhneText.mogrt' } });
+  assert.equal(rep.steps.find((x) => x.name === 'Eigene Vorlage: amazon').ok, true, JSON.stringify(rep.steps.filter((x) => !x.ok)));
+  assert.match(rep.findings.eigeneVorlagen.amazon.hinweis, /Server schreibt/);
+  assert.equal(env.project.sequences.length, 0, 'aufgeräumt');
+});
+
 test('Effekte: Parameter nach Namen, sonst nach Position; Farbe im dokumentierten Bereich', async () => {
   const { ppro } = newEnv();
   const comp = await ppro.VideoFilterFactory.createComponent('AE.ADBE Roughen Edges');
@@ -478,6 +486,20 @@ test('Credits als Text: lässt sich der Text nicht setzen, wird die Vorlage wied
   const items = creditItems(mainSeq(project));
   assert.ok(items.length && items.every((t) => /\.png$/.test(t.item.name)), items.map((t) => t.item.name).join(','));
 }).timeout?.(30000);
+
+test('Credits als Text: steht der Text schon in der Vorlage (baked), wird er nicht gesetzt und die Vorlage bleibt', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrts.push('C:/vorlagen/mogrt/Credit OhneText.mogrt');            // eine Vorlage, deren Text sich per Skript nicht setzen lässt
+  const plan = clone(PLAN);
+  for (const c of plan.clips) if (c.mogrt) { c.mogrt.path = 'C:/vorlagen/mogrt/Credit OhneText.mogrt'; c.mogrt.baked = true; }
+  const rep = await runPlan(ppro, plan);
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.ok(!rep.warnings.some((w) => /Credit-Text|Vorlage/.test(w)), rep.warnings.join('|'));
+  assert.equal(rep.placed.credit_text, PLAN.clips.filter((c) => c.kind === 'credit').length);
+  const items = creditItems(mainSeq(project));
+  assert.ok(items.length && items.every((t) => /^Credit /.test(t.item.name)), items.map((t) => t.item.name).join(','));
+  for (const c of PLAN.clips.filter((x) => x.kind === 'credit')) assert.ok(items.some((t) => t.name === c.name), 'Name ' + c.name);
+});
 
 test('Credits als Text: Doppelbild-Credit wird seitlich verschoben, Einzelbild bleibt am Vorgabeort', async () => {
   const { ppro, project } = newEnv();

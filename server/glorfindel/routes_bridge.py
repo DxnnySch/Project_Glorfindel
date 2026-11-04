@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.requests import HTTPConnection
 
-from . import panel_package, premiere_ops
+from . import panel_package, premiere_ops, premiere_tools
 from .config import app_dir
 from .bridge import HUB, PROTOCOL, BridgeError, get_token
 from .deps import AppState
@@ -54,7 +54,24 @@ async def bridge_ws(ws: WebSocket, token: str = ""):
         await ws.close(code=4403)
         return
     await ws.accept()
+    state = ws.app.state.gl
+    HUB.rpc_handler = lambda method, args: tool_rpc(state, method, args)
     await HUB.serve(ws)
+
+
+def tool_rpc(state: AppState, method: str, args: dict):
+    """Anfrage eines Panel-Werkzeugs: gemeint ist die zuletzt gebaute Folge."""
+    if method not in premiere_tools.RPC_METHODS:
+        raise ValueError(f"Unbekannte Methode: {method}")
+    ctxfile = premiere_tools.context_path()
+    ref = __import__("json").loads(ctxfile.read_text(encoding="utf-8")) if ctxfile.exists() else None
+    if not ref:
+        raise ValueError("Noch keine Folge in Premiere gebaut: Die Werkzeuge brauchen die Einstellungen der Folge (einmal „Rohschnitt bauen“).")
+    try:
+        ep = state.episode(ref["season"], ref["episode"])
+    except HTTPException as e:
+        raise ValueError(str(e.detail))
+    return premiere_tools.dispatch(premiere_tools.build_context(ep, state.templates_dir()), method, args)
 
 
 @router.get("/bridge/pairing")
@@ -139,6 +156,21 @@ def premiere_sync_read(body: SyncBody, ep: Episode = Depends(ep_of), state: AppS
 @router.post("/ep/{season}/{episode}/premiere/refresh-stills")
 def premiere_refresh_stills(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     return {"job": state.jobs.submit("Standbilder in Premiere aktualisieren", lambda progress: premiere_ops.refresh_stills(ep, progress))}
+
+
+class SceneBody(BaseModel):
+    scene: str
+
+
+@router.post("/ep/{season}/{episode}/premiere/show-scene")
+def premiere_show_scene(body: SceneBody, ep: Episode = Depends(ep_of)):
+    """Abspielkopf in Premiere an den Anfang einer Szene setzen."""
+    try:
+        return premiere_ops.show_scene(ep, body.scene)
+    except BridgeError as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/bridge/selftest")

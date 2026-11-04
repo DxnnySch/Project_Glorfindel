@@ -256,6 +256,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
             mogrtOk = false;
             report.warnings.push('Credit-Vorlage (MOGRT) nicht verwendet: ' + errText(e) + ' – Credits kommen als PNG.');
           }
+          if (mogrtOk && c.mogrt.baked) { usedMogrt = true; return; }     // der Server hat den Text schon in die Vorlage geschrieben
           if (mogrtOk) {
             // Text sofort setzen. Gelingt das nicht, wäre der Standardtext der Vorlage stehen geblieben: Clip wieder entfernen, PNG setzen
             try {

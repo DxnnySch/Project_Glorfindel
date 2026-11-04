@@ -184,7 +184,7 @@ def test_direct_hq_needs_no_conform(ep):
     ref = Path(st["ref_cfr"])
     info = media.probe(ref)
     assert info["fps"] == pytest.approx(24.0, abs=0.01) and info["duration"] == pytest.approx(30 + 2.5, abs=0.3)
-    assert info["acodec"] == "eac3"                                              # Dolby-Ton der HQ-Datei: Premiere tauscht sonst nicht
+    assert info["acodec"] == "aac"                                               # Premiere 27.1 liest E-AC-3 in MP4 nicht: Ton der HQ-Datei als AAC
     media.extract_frame(ref, 1.0, ep.p.root / "f_black.png")
     media.extract_frame(ref, 4.0, ep.p.root / "f_red.png")
     assert np.asarray(Image.open(ep.p.root / "f_black.png").convert("L")).mean() < 5            # davor Schwarz
@@ -195,7 +195,9 @@ def test_direct_hq_needs_no_conform(ep):
     assert st["stills"]["1.png"] == pytest.approx(17.0 + 2.5, abs=0.05)
     hub2 = FakeHub()
     premiere_ops.swap(ep, "hq", hub=hub2)                                       # ohne vorherigen Conform
-    assert hub2.calls[0][1]["swaps"][0] == {"from": st["ref_cfr"], "to": str(hq)}
+    swapped = hub2.calls[0][1]["swaps"][0]
+    assert swapped == {"from": st["ref_cfr"], "to": str(premiere_ops.pdir(ep) / "hq24_AAC.mp4")}               # Dolby-HQ: Kopie mit AAC-Ton, Bild unverändert
+    assert media.probe(Path(swapped["to"]))["acodec"] == "aac" and media.probe(Path(swapped["to"]))["fps"] == pytest.approx(24.0, abs=0.01)
     assert (ep.p.stills / "Bridge_v1_HQ" / "1.png").exists()
 
 
@@ -212,22 +214,32 @@ def test_swap_can_be_repeated_without_touching_existing_hq_stills(ep):
     assert still.read_bytes() == first and still.stat().st_mtime_ns == mtime                      # nicht neu geschrieben (Premiere hält die Datei offen)
 
 
-def test_swap_refuses_dolby_hq_against_aac_reference(ep):
+def test_swap_gives_dolby_hq_an_aac_copy_and_swaps_back_with_the_same_file(ep):
+    from glorfindel import media
     premiere_ops.build_in_premiere(ep, Path(__file__).resolve().parents[1] / "vorlagen", hub=FakeHub())
     hq = make_video(premiere_ops.pdir(ep) / "HQ_dolby.mp4", "green", seconds=30, fps=24000 / 1001, size="1920x800", acodec="eac3")
     premiere_ops.remember_hq(ep, str(hq))
-    with pytest.raises(ValueError, match="Dolby"):
-        premiere_ops.swap(ep, "hq", hub=FakeHub())
+    hub = FakeHub()
+    premiere_ops.swap(ep, "hq", hub=hub)
+    to = Path(hub.calls[0][1]["swaps"][0]["to"])
+    assert to.name == "HQ_dolby_AAC.mp4" and media.probe(to)["acodec"] == "aac" and media.probe(hq)["acodec"] == "eac3"          # Original unberührt
+    stamp = to.stat().st_mtime_ns
+    back = FakeHub()
+    premiere_ops.swap(ep, "proxy", hub=back)
+    assert back.calls[0][1]["swaps"][0]["from"] == str(to)                       # zurück tauscht die Datei, die in Premiere liegt
+    again = FakeHub()
+    premiere_ops.swap(ep, "hq", hub=again)
+    assert to.stat().st_mtime_ns == stamp                                         # Kopie wird wiederverwendet, nicht neu erzeugt
 
 
-def test_reference_takes_the_film_audio_from_the_hq_file_unchanged(tmp_path):
-    """Selbst kodierter Dolby-Ton wurde von Premiere ohne Ton importiert: liegt die Referenz auf der Zeitachse der HQ-Datei, wird deren Ton übernommen."""
+def test_reference_takes_the_film_audio_from_the_hq_file_as_aac_stereo(tmp_path):
+    """Premiere 27.1 liest E-AC-3 in MP4 nicht (keine Wellenform): liegt die Referenz auf der Zeitachse der HQ-Datei, wird deren Ton als AAC-Stereo übernommen."""
     from glorfindel import media, premiere_media
     src = make_video(tmp_path / "screen.mp4", "red", seconds=6, fps=30, size="640x360")
     hq = make_video(tmp_path / "hq.mp4", "green", seconds=8, fps=24, size="640x360", acodec="eac3")
     dst = premiere_media.conform_reference(src, tmp_path / "ref.mp4", fps=24.0, size=(640, 360), offset=1.0, audio_codec="eac3", audio_src=hq)
     info = media.probe(dst)
-    assert info["acodec"] == "eac3" and info["fps"] == pytest.approx(24.0, abs=0.01)
+    assert info["acodec"] == "aac" and info["fps"] == pytest.approx(24.0, abs=0.01)
     assert info["duration"] == pytest.approx(7.0, abs=0.2)                      # 6 s Video + 1 s Schwarz davor; der längere Ton wird abgeschnitten
     aac = make_video(tmp_path / "hq_aac.mp4", "green", seconds=8, fps=24, size="640x360")
     dst2 = premiere_media.conform_reference(src, tmp_path / "ref2.mp4", fps=24.0, size=(640, 360), offset=0.0, audio_src=aac)

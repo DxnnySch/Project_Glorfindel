@@ -64,6 +64,7 @@ class PlanEnv:
     premiere: dict = field(default_factory=dict)              # Einstellungen: aep, comp, play_in, pause_in, preset (Pfad .sqpreset), tracks
     doppel: dict = field(default_factory=dict)                # Positionen für Doppelbild-Layouts
     frame_box: Callable[[Path], dict | None] | None = None    # Hauptmotiv eines Bildes (relativer Rahmen) für den automatischen Ausschnitt
+    credit_mogrt: Callable[[str, str], Path | None] | None = None   # (Vorlage, Text) -> Vorlage mit fest eingetragenem Text (Premiere lässt den Text nicht per Skript setzen)
 
 
 def _resolve_chain(recipes: dict, ids: list[dict], dur: float, contour: str | None, fps: float) -> list[dict]:
@@ -210,7 +211,8 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                     # Editierbarer Text: Vorlage (.mogrt) einsetzen, Text als Parameter. Das PNG oben bleibt als Rückfall.
                     # Die Vorlage trägt Schrift/Ort selbst; nur Doppelbild-Layouts verschieben sie seitlich (Mitte 0,5 = Vorgabeort).
                     clip["text_modus"] = "mogrt"
-                    clip["mogrt"] = {"path": mg, "text": c["text"], "dx": round(x - 0.5, 4) if x is not None else 0.0,
+                    baked = env.credit_mogrt(mg, c["text"]) if env.credit_mogrt else None
+                    clip["mogrt"] = {"path": str(baked or mg), "baked": baked is not None, "text": c["text"], "dx": round(x - 0.5, 4) if x is not None else 0.0,
                                      "text_names": ["TextLayer", "Text", "Titel", "Quelltext", "Source Text"]}
                 clips.append(clip)
             elif typ == "comment":

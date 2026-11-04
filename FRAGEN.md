@@ -94,3 +94,17 @@ Danke für die `schnitt_v1.xml` – damit konnte ich die Ursachen im echten Expo
 Alles behoben (Clips ohne Medien werden weggelassen und im Rohschnitt als Warnung gemeldet, Struktur wie Premiere sie exportiert, automatische Prüfung vor dem Schreiben, Regressionstest mit genau diesem Fall).
 **Bitte:** Rohschnitt neu erzeugen und die neue XML importieren. Wenn Premiere wieder ablehnt: bitte die neue Datei schicken (oder das Premiere-Log), dann prüfe ich weiter.
 **Antwort:**
+
+## F12 – Panel-Werkzeuge: meine Standardwerte  🟡
+Ich habe die Kurzbefehl-Leiste ohne Rückfrage gebaut (Entwurf: `docs/superpowers/specs/2026-11-04-premiere-werkzeuge-design.md`). Das sind meine Entscheidungen, sag, was anders sein soll:
+- Effekte werden **hinzugefügt**, nicht ersetzt (zweimal klicken legt den Effekt doppelt an, Strg+Z nimmt es zurück).
+- Credit-Spuren: Amazon V9, Künstler V10, Musik V11 (aus DESIGN.md); Credit ohne eingegebenen Text: `© künstler` klein, wie im Bau; Standardlänge eines Credits ohne Auswahl: 5 s; Doppelbild-Layouts werden **nicht** seitlich verschoben (nur der Bau macht das).
+- Artwork bauen: Maske automatisch nach Bildformat, Größe und Effekte wie in den Einstellungen; das **Bild in der Zeitleiste wird ersetzt** (ein Effekt, den du vorher darauf gelegt hattest, geht dabei verloren).
+- „Credit setzen“ sucht das Bild für einen gewählten Text-Clip nur auf V3/V4 (Artwork) und V1 (Standbilder).
+- Die Werkzeuge nutzen die Einstellungen der **zuletzt gebauten** Folge.
+**Antwort:**
+
+## F13 – HQ-Tausch mit Dolby-Ton  🟢
+Premiere 27.1 liest E-AC-3 in MP4 nicht (keine Wellenform), deshalb hat die Referenz AAC-Stereo-Ton. Premiere tauscht aber nur gegen Dateien mit gleichem Tonformat.
+**Umgesetzt (mein Standard):** Beim ersten HQ-Tausch wird eine Kopie der HQ-Datei mit unverändertem Bild und AAC-Ton erzeugt und getauscht; das Original bleibt unberührt. Kostet einmal wenige Minuten und Plattenplatz in der Größe der HQ-Datei.
+**Antwort:**

@@ -1,5 +1,6 @@
 """Credits als editierbarer Text: Motion-Graphics-Vorlage aus vorlagen/mogrt, Rückfall auf PNG."""
 import json
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +20,14 @@ def test_discovery_finds_templates_by_credit_type(tmp_path):
     assert discover_credit_mogrts(tmp_path / "gibtsnicht") == {}
 
 
+def test_discovery_prefers_the_highest_version(tmp_path):
+    for n in ("Credit Amazon.mogrt", "Credit Amazon v2.mogrt", "Credit Amazon v10.mogrt", "Credit Artwork.mogrt", "Credit Artwork v2 alt.mogrt"):
+        (tmp_path / n).write_bytes(b"x")
+    found = discover_credit_mogrts(tmp_path)
+    assert found["amazon"].endswith("Credit Amazon v10.mogrt")
+    assert found["artwork"].endswith("Credit Artwork.mogrt")
+
+
 def test_credits_use_the_text_template_where_one_exists_and_keep_the_png_as_fallback(env):  # noqa: F811
     env.premiere["credit_mogrt"] = {"artwork": "C:/vorlagen/mogrt/Credit Artwork.mogrt"}
     plan = build_plan(package(), env)
@@ -31,6 +40,16 @@ def test_credits_use_the_text_template_where_one_exists_and_keep_the_png_as_fall
         assert c["mogrt"]["text"] == c["name"] and c["media"]                    # PNG bleibt als Rückfall registriert
     assert all("mogrt" not in c and c.get("text_modus", "png") == "png" for c in ama)
     json.dumps(plan)
+
+
+def test_baked_text_template_replaces_the_path_and_is_flagged(env):  # noqa: F811
+    env.premiere["credit_mogrt"] = {"artwork": "C:/vorlagen/mogrt/Credit Artwork v2.mogrt"}
+    env.credit_mogrt = lambda tpl, text: Path("C:/cache") / f"{text}.mogrt"
+    art = [c for c in build_plan(package(), env)["clips"] if c["kind"] == "credit" and c["art"] == "artwork"]
+    assert art and all(c["mogrt"]["baked"] and c["mogrt"]["path"].replace("\\", "/") == f"C:/cache/{c['name']}.mogrt" for c in art)
+    env.credit_mogrt = lambda tpl, text: None                                    # Vorlage nicht lesbar: Panel versucht den Text selbst zu setzen
+    art = [c for c in build_plan(package(), env)["clips"] if c["kind"] == "credit" and c["art"] == "artwork"]
+    assert all(not c["mogrt"]["baked"] and c["mogrt"]["path"].endswith("Credit Artwork v2.mogrt") for c in art)
 
 
 def test_double_image_credits_move_sideways_by_the_layout_offset(env):  # noqa: F811

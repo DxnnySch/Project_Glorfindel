@@ -19,7 +19,7 @@ from .config import app_dir
 PROTOCOL = 1
 # Operationen, die der Server aufrufen darf (das Panel akzeptiert ebenfalls nur diese)
 OPS = {"ping", "info", "introspect", "selftest", "project.dump", "sequence.dump", "plan.run", "media.swap", "media.refresh",
-       "project.save", "template.inspect", "probe.bin", "probe.place", "probe.swap", "probe.items"}
+       "project.save", "template.inspect", "probe.bin", "probe.place", "probe.swap", "probe.items", "sequence.seek"}
 
 
 class BridgeError(RuntimeError):
@@ -49,6 +49,7 @@ class BridgeHub:
         self._pending: dict[int, dict] = {}
         self._next = 1
         self._lock = threading.Lock()
+        self.rpc_handler: Callable[[str, dict], Any] | None = None     # Anfragen des Panels (Werkzeuge): (Methode, Argumente) -> Daten
         self.log: collections.deque = collections.deque(maxlen=400)
 
     # ---------- Status ----------
@@ -81,13 +82,31 @@ class BridgeHub:
             self._log("info", f"Premiere verbunden: {self.info.get('premiere', '?')} · Projekt {self.info.get('project', {}).get('name', '–')}")
             while True:
                 msg = json.loads(await ws.receive_text())
-                self._on_message(msg)
+                if msg.get("t") == "rpc":
+                    asyncio.create_task(self._rpc(ws, msg))              # läuft nebenher: lange Anfragen blockieren die Verbindung nicht
+                else:
+                    self._on_message(msg)
         except Exception as e:  # noqa: BLE001 – Trennung, Zeitüberschreitung, ungültiges JSON
             self._log("info", f"Verbindung beendet ({type(e).__name__})")
         finally:
             if self.ws is ws:
                 self.ws, self.info = None, {}
             self._fail_all("Verbindung zu Premiere getrennt")
+
+    async def _rpc(self, ws, msg: dict) -> None:
+        """Anfrage des Panels beantworten: der Handler läuft in einem Arbeits-Thread (Dateien, Bilder, Netz)."""
+        out: dict = {"t": "rpc_result", "id": msg.get("id")}
+        try:
+            if self.rpc_handler is None:
+                raise BridgeError("Der Server nimmt keine Anfragen an.")
+            handler = self.rpc_handler
+            out.update(ok=True, data=await asyncio.get_running_loop().run_in_executor(None, handler, str(msg.get("method", "")), msg.get("args") or {}))
+        except Exception as e:  # noqa: BLE001 – jeder Fehler geht als Text ans Panel
+            out.update(ok=False, error=str(e) or type(e).__name__)
+        try:
+            await ws.send_text(json.dumps(out))
+        except Exception:  # noqa: BLE001 – Panel inzwischen getrennt
+            pass
 
     def _on_message(self, msg: dict) -> None:
         t = msg.get("t")

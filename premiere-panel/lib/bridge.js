@@ -6,6 +6,7 @@ const plan = require('./plan');
 const media = require('./media');
 const dump = require('./dump');
 const selftest = require('./selftest');
+const { Tools } = require('./tools');
 
 const PORTS = Array.from({ length: 20 }, (_, i) => 8765 + i);
 
@@ -32,11 +33,12 @@ function makeHandlers(ppro) {
     'probe.swap': async (args) => dump.probeSwap(ppro, args),
     'probe.items': async (args) => dump.probeItems(ppro, args),
     'project.save': async () => { const p = await ppro.Project.getActiveProject(); await p.save(); return { saved: true }; },
+    'sequence.seek': async (args) => new Tools({ ppro, rpc: async () => { throw new Error('keine Anfrage nötig'); } }).seek(args),
   };
 }
 
 class Bridge {
-  constructor({ ppro, WebSocketImpl, fetchImpl, hostInfo = {}, version = '0.5.9', log = () => {}, onStatus = () => {} }) {
+  constructor({ ppro, WebSocketImpl, fetchImpl, hostInfo = {}, version = '0.6.0', log = () => {}, onStatus = () => {} }) {
     this.ppro = ppro;
     this.WS = WebSocketImpl;
     this.fetch = fetchImpl;
@@ -48,6 +50,44 @@ class Bridge {
     this.ws = null;
     this.stopped = false;
     this.busy = false;
+    this.rpcPending = new Map();
+    this.rpcNext = 1;
+    this._tools = null;
+  }
+
+  /** Anfrage an den Server (Werkzeuge): Antwort kommt als `rpc_result`. */
+  rpc(method, args = {}, timeoutMs = 120000) {
+    return new Promise((resolve, reject) => {
+      if (!this.ws) { reject(new Error('Nicht mit der Glorfindel-App verbunden.')); return; }
+      const id = this.rpcNext++;
+      const timer = setTimeout(() => { this.rpcPending.delete(id); reject(new Error('Die App hat nicht geantwortet (' + method + ').')); }, timeoutMs);
+      this.rpcPending.set(id, { resolve, reject, timer });
+      try { this.ws.send(JSON.stringify({ t: 'rpc', id, method, args })); } catch (e) { clearTimeout(timer); this.rpcPending.delete(id); reject(e); }
+    });
+  }
+
+  failRpc(why) {
+    for (const [id, p] of this.rpcPending) { clearTimeout(p.timer); p.reject(new Error(why)); this.rpcPending.delete(id); }
+  }
+
+  tools() {
+    if (!this._tools) this._tools = new Tools({ ppro: this.ppro, rpc: (m, a) => this.rpc(m, a), log: this.log });
+    return this._tools;
+  }
+
+  /** Werkzeug (Kurzbefehl) ausführen. Rückgabe immer als Daten: {ok, text, warnings, lines} oder {ok:false, error}. */
+  async runTool(name, args = {}) {
+    if (this.busy) return { ok: false, error: 'Premiere arbeitet noch an einem anderen Auftrag.' };
+    this.busy = true;
+    this.onStatus({ state: 'arbeitet', text: 'Werkzeug: ' + name });
+    try {
+      return { ok: true, ...(await this.tools().run(name, args)) };
+    } catch (e) {
+      return { ok: false, error: errText(e) };
+    } finally {
+      this.busy = false;
+      this.onStatus({ state: this.ws ? 'verbunden' : 'getrennt', text: this.ws ? 'Verbunden mit Glorfindel' : 'Getrennt' });
+    }
   }
 
   async findServer() {
@@ -93,13 +133,22 @@ class Bridge {
       };
       ws.onmessage = (ev) => this.onMessage(ws, ev.data).catch((e) => this.log('Fehler: ' + errText(e)));
       ws.onerror = (e) => reject(new Error('WebSocket-Fehler'));
-      ws.onclose = () => resolve();
+      ws.onclose = () => { this.failRpc('Verbindung zur App getrennt.'); resolve(); };
     });
   }
 
   async onMessage(ws, raw) {
     const msg = JSON.parse(raw);
-    if (msg.t === 'welcome') { this.onStatus({ state: 'verbunden', text: 'Verbunden mit Glorfindel' }); return; }
+    if (msg.t === 'welcome') {
+      this.onStatus({ state: 'verbunden', text: 'Verbunden mit Glorfindel' });
+      this.tools().config(true).catch((e) => this.log('Werkzeuge noch nicht bereit: ' + errText(e), 'warn'));
+      return;
+    }
+    if (msg.t === 'rpc_result') {
+      const p = this.rpcPending.get(msg.id);
+      if (p) { clearTimeout(p.timer); this.rpcPending.delete(msg.id); if (msg.ok) p.resolve(msg.data); else p.reject(new Error(msg.error || 'Fehler in der App')); }
+      return;
+    }
     if (msg.t !== 'call') return;
     const send = (o) => ws.send(JSON.stringify(o));
     const fn = this.handlers[msg.op];

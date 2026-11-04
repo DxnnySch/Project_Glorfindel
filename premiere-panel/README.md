@@ -18,8 +18,16 @@ Klappt der Installer nicht: **Adobe UXP Developer Tool** → „Add Plugin“ �
 * **Selbsttest**: legt ein Test-Fach und eine Test-Sequenz an, prüft Effekte, Farbe, Keyframes und räumt alles auf. Vor dem ersten Bau einmal ausführen.
 * **Aktive Sequenz auslesen**: zeigt Spuren, Clips und Effekte mit Parametern – nützlich, um den Rohschnitt mit dem Ursprungsschnitt zu vergleichen.
 
+## Werkzeuge (Kurzbefehle)
+Unter der Statusanzeige liegen Schaltflächen, die auf die **Auswahl in der Zeitleiste** wirken (Version 0.6.0). Sie benutzen die Einstellungen der zuletzt gebauten Folge, vorher also einmal „Rohschnitt bauen“.
+* **Artwork bauen:** gewähltes Bild → verschachtelte Sequenz mit Maske und Spurmaske-Key, dazu die Standardeffekte.
+* **Credit setzen:** Vorlage mit Namen aus dem Bild (oder eigenem Text; ohne Auswahl am Abspielkopf). Ist ein Text-Clip gewählt, liefert das Bild darunter den Namen.
+* **Effekte:** Karte, Gauß, Zoom, Pop, Kreis, Fancy-Kante … ein/aus/beide.
+* **Überblendung / Ton-Blende / Länge:** Cross Dissolve 0,42 s, Gleichleistungs-Blende, Länge setzen oder bis zum Abspielkopf.
+* **Szene am Abspielkopf**, **Auswahl untersuchen** (Komponenten und Wertetypen des Clips ins Protokoll).
+
 ## Bekannte Grenzen der Premiere-API
-Keine Spuren hinzufügen (daher eigene Sequenz-Vorgabe), keine Textgrafiken (Credits als PNG), keine Einstellungsebenen (Blur am Standbild),
+Keine Spuren hinzufügen (daher eigene Sequenz-Vorgabe), Text von Grafiken nicht per Skript setzbar (Credits: Text steht in der Vorlagendatei, siehe `vorlagen/mogrt/README.md`), keine Einstellungsebenen (Blur am Standbild),
 keine Audio-„Konstante Leistung“-Blenden. Details: `docs/bridge/DESIGN.md`.
 
 ## Entwicklung

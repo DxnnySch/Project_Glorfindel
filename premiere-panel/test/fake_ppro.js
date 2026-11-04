@@ -129,7 +129,12 @@ class Chain {
 }
 
 class TrackItem {
-  constructor(seq, kind, idx, item, start, end, inPt) { Object.assign(this, { seq, kind, idx, item, start, end, inPt, name: item.name, chain: new Chain(kind === 'video'), transitions: [] }); }
+  constructor(seq, kind, idx, item, start, end, inPt) {
+    Object.assign(this, { seq, kind, idx, item, start, end, inPt, name: item.name, chain: new Chain(kind === 'video'), transitions: [] });
+    if (kind !== 'video') this.createAddVideoTransitionAction = undefined;       // wie in der API: nur VideoClipTrackItem
+  }
+  async getTrackIndex() { return this.idx; }
+  async getDuration() { return new TickTime(this.end - this.start); }
   createAddVideoTransitionAction(tr, opts) {
     if (this.kind !== 'video') throw new Error('createAddVideoTransitionAction gibt es nur für Videoclips');
     if (!(tr instanceof VideoTransition)) throw new Error('VideoTransition erwartet');
@@ -163,6 +168,9 @@ class Sequence {
   async getVideoTrack(i) { return this.tracks.video[i]; }
   async getAudioTrack(i) { return this.tracks.audio[i]; }
   async getProjectItem() { return this.item; }
+  async getSelection() { const items = this.selected || []; return { getTrackItems: async () => items.map(wrap) }; }
+  async getPlayerPosition() { return new TickTime(this.playhead || 0); }
+  async setPlayerPosition(t) { if (!(t instanceof TickTime)) throw new Error('TickTime erwartet'); this.playhead = t.seconds; return true; }
 }
 
 class ProjectItem {
