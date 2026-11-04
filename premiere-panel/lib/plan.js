@@ -3,7 +3,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate, isStale: isStaleErr } = require('./core');
+const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate, sleep, isStale: isStaleErr } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const trans = require('./transitions');
@@ -30,7 +30,7 @@ async function sequenceByGuid(ppro, project, guid) {
 
 /** Clip in die Sequenz setzen. `getItem` liefert das Quellelement frisch. Premiere lehnt je nach Medium einen Audio-Index -1 ab („Invalid parameter“): dann mit 0 versuchen. */
 async function placeClip(ppro, seqGuid, getItem, startSec, videoIdx, audioIdx) {
-  const tries = audioIdx < 0 ? [audioIdx, 0] : [audioIdx];
+  const tries = audioIdx < 0 ? [audioIdx, 0] : [audioIdx, audioIdx];     // zweiter Versuch: nach Änderungen im Projekt sind Objekte kurz ungültig
   const errors = [];
   for (const a of tries) {
     try {
@@ -43,6 +43,7 @@ async function placeClip(ppro, seqGuid, getItem, startSec, videoIdx, audioIdx) {
     } catch (e) {
       errors.push('Spur V' + (videoIdx + 1) + ', Audio-Index ' + a + ': ' + errText(e));
       invalidate();
+      await sleep(300);
     }
   }
   throw new Error(errors.join(' | '));
@@ -248,12 +249,23 @@ async function runPlan(ppro, plan, emit = () => {}) {
         if (c.mogrt && mogrtOk) {
           try {
             await mogrt.insertTemplate(ppro, project, await sequenceByGuid(ppro, project, mainGuid), { path: c.mogrt.path, start: c.start, track: c.track });
-            usedMogrt = true;
-            return;
           } catch (e) {
             if (isStaleErr(e)) throw e;
             mogrtOk = false;
             report.warnings.push('Credit-Vorlage (MOGRT) nicht verwendet: ' + errText(e) + ' – Credits kommen als PNG.');
+          }
+          if (mogrtOk) {
+            // Text sofort setzen. Gelingt das nicht, wäre der Standardtext der Vorlage stehen geblieben: Clip wieder entfernen, PNG setzen
+            try {
+              await mogrt.setText(ppro, await getProject(), locate, c.mogrt.text, c.mogrt.text_names);
+              usedMogrt = true;
+              return;
+            } catch (e) {
+              mogrtOk = false;
+              report.warnings.push('Credit-Text konnte nicht in die Vorlage geschrieben werden: ' + errText(e) + ' – Credits kommen als PNG.');
+              try { await mogrt.removeClip(ppro, async () => sequenceByGuid(ppro, await getProject(), mainGuid), locate); }
+              catch (e2) { report.warnings.push('Vorlagen-Clip @' + c.start.toFixed(2) + ' ließ sich nicht entfernen (bitte von Hand löschen): ' + errText(e2)); }
+            }
           }
         }
         let key, audioIdx = -1, videoIdx = c.track, inOut = null;
@@ -281,7 +293,6 @@ async function runPlan(ppro, plan, emit = () => {}) {
       if (usedMogrt) {
         // Text in die Vorlage schreiben; Doppelbild-Layouts verschieben die Vorlage seitlich
         await guarded(report, 'Credit-Text ' + c.name, async () => {
-          await retryStale(async () => { await mogrt.setText(ppro, await getProject(), locate, c.mogrt.text, c.mogrt.text_names); }, refresh);
           if (c.mogrt.dx) await fx.setMotion(ppro, await getProject(), locate, { position: [0.5 + c.mogrt.dx, 0.5] }, ctx);
           countOk('credit_text');
         });

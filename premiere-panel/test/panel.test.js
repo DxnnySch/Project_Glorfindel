@@ -424,6 +424,19 @@ test('Credits als Text: fehlt die Vorlage, wird das PNG gesetzt (mit Hinweis), d
   assert.ok(creditItems(mainSeq(project)).every((t) => /\.png$/.test(t.item.name)));
 });
 
+test('Credits als Text: lässt sich der Text nicht setzen, wird die Vorlage wieder entfernt und das PNG gesetzt (kein Standardtext)', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrts.push('C:/vorlagen/mogrt/Credit OhneText.mogrt');
+  const plan = clone(PLAN);
+  for (const c of plan.clips) if (c.mogrt) c.mogrt.path = 'C:/vorlagen/mogrt/Credit OhneText.mogrt';
+  const rep = await runPlan(ppro, plan);
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.ok(rep.warnings.some((w) => /Credit-Text konnte nicht/.test(w)), rep.warnings.join('|'));
+  assert.equal(rep.placed.credit, PLAN.clips.filter((c) => c.kind === 'credit').length);
+  const items = creditItems(mainSeq(project));
+  assert.ok(items.length && items.every((t) => /\.png$/.test(t.item.name)), items.map((t) => t.item.name).join(','));
+}).timeout?.(30000);
+
 test('Credits als Text: Doppelbild-Credit wird seitlich verschoben, Einzelbild bleibt am Vorgabeort', async () => {
   const { ppro, project } = newEnv();
   await runPlan(ppro, clone(PLAN));

@@ -279,6 +279,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
       createVideoTransition(match) { if (!TRANSITIONS.includes(match)) throw new Error('Unbekannter Übergang ' + match); return new VideoTransition(match); },
       async getVideoTransitionMatchNames() { return [...TRANSITIONS]; },
     },
+    TrackItemSelection: { createEmptySelection(cb) { const sel = { items: [], addItem(t) { this.items.push(unwrap(t)); return true; } }; cb(sel); return true; } },
     Constants: { TrackItemType: { EMPTY: 0, CLIP: 1, TRANSITION: 2 }, MediaType: { ANY: 0, DATA: 1, VIDEO: 2, AUDIO: 3 } },
     ProjectItem: { TYPE_BIN: 2, TYPE_CLIP: 1, TYPE_ROOT: 3 },
     FolderItem: { cast: (i) => { if (!(i instanceof FolderItem)) throw new Error('kein Fach'); return i; } },
@@ -303,6 +304,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
             if (v >= seq.tracks.video.length) throw new Error('Videospur ' + (v + 1) + ' existiert nicht');
             const item = new ClipItem(project, path.split(/[\/]/).pop().replace(/\.mogrt$/i, ''), null, { hasVideo: true, length: 5 });
             const ti = new TrackItem(seq, 'video', v, item, time.seconds, time.seconds + 5, 0);
+            if (/OhneText/.test(path)) { trim(seq.tracks.video[v], time.seconds, time.seconds + 5); seq.tracks.video[v].items.push(ti); bump(); return [ti]; }   // wie in Premiere 26.5.2 gemessen: Grafik ohne erreichbaren Textparameter
             const tp = new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 }));
             ti.chain.comps.push(new Component('Grafikparameter', []));
             ti.chain.comps.at(-1).params.push(tp, new Param('Laufweite', 'num', 0));
@@ -310,6 +312,10 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
             seq.tracks.video[v].items.push(ti);
             bump();
             return [ti];
+          },
+          createRemoveItemsAction(sel, ripple, mediaType) {
+            if (!(sel && sel.items)) throw new Error('TrackItemSelection erwartet');
+            return new Action(() => { for (const t of sel.items) { const tr = seq.tracks[t.kind][t.idx]; tr.items = tr.items.filter((x) => x !== t); } });
           },
           createOverwriteItemAction(item, time, v, a) {
             if (a < 0 && !item.hasAudio) throw new Error('Invalid parameter.');   // wie in Premiere 26.5.2 gemessen: -1 wird abgelehnt
