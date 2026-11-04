@@ -14,6 +14,12 @@ FIXTURE = Path(__file__).resolve().parents[1] / "premiere-panel" / "test" / "fix
 STABLE_ROOT = "F:/OneDrive"
 
 
+def _mit_tonblenden(recipes):
+    """Die Ton-Blenden sind im Betrieb vorerst aus (Rezept „aktiv“: false); die Testpläne schalten sie ein, damit das Panel sie üben kann."""
+    u = recipes["uebergaenge"]
+    return {**recipes, "uebergaenge": {**u, "audio": {**u["audio"], "aktiv": True}}}
+
+
 def make_plan() -> dict:
     tpl, th = load_template(), Thresholds()
     seg = lambda a, b: Segment(**{"in": a, "out": b})  # noqa: E731
@@ -40,7 +46,7 @@ def make_plan() -> dict:
         Image.new("RGB", (800, 1200)).save(root / "Bilder" / "john howe.jpg")
         env = PlanEnv(root=root, episode_media=root / "cache" / "S3_E1_ref_cfr.mp4", stills_dir=root / "Videoelemente",
                       credit=lambda text, art, x: root / "credits" / f"{art}_{abs(hash((text, x))) % 10**6}.png",
-                      image_size=lambda p: Image.open(p).size, recipes=with_library(load_recipes(), json.loads((Path(__file__).resolve().parents[1] / "vorlagen" / "effekt_bibliothek.json").read_text(encoding="utf-8"))),
+                      image_size=lambda p: Image.open(p).size, recipes=_mit_tonblenden(with_library(load_recipes(), json.loads((Path(__file__).resolve().parents[1] / "vorlagen" / "effekt_bibliothek.json").read_text(encoding="utf-8")))),
                       premiere={"aep": f"{STABLE_ROOT}/Videomaterial/Programm-Vorgaben/AfterFX/Play-Pause.aep", "comp": "Play-Pause",
                                 "pause_in": 28.7, "play_in": 0.0, "preset": "C:/cache/rohschnitt.sqpreset", "video_tracks": 14, "audio_tracks": 16,
                                 "pause_media": f"{STABLE_ROOT}/Videomaterial/VFX/Pause.mov", "play_media": "C:/cache/anim/Play.mov",

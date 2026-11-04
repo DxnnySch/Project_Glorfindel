@@ -1,4 +1,5 @@
 """Übergänge wie im Ursprungsschnitt: Cross Dissolve (0,42 s) an Überlagerungen, Gleichleistungs-Blenden am Serienton."""
+import dataclasses
 import math
 
 import pytest
@@ -26,14 +27,18 @@ def test_overlays_get_cross_dissolve_at_head_and_tail(env):  # noqa: F811
         assert "uebergang" not in c                                            # Standbild/Blur/Sprecher bleiben hart geschnitten
 
 
-def test_episode_clips_dissolve_only_at_scene_edges_and_fade_their_audio(env):  # noqa: F811
+def test_episode_clips_get_no_video_dissolve_and_no_audio_fade_by_default(env):  # noqa: F811
+    plan = build_plan(package(), env)
+    for c in (c for c in plan["clips"] if c["kind"] == "episode"):
+        assert "uebergang" not in c and "ton_blende" not in c
+
+
+def test_episode_audio_fades_when_switched_on(env):  # noqa: F811
+    u = env.recipes["uebergaenge"]
+    env = dataclasses.replace(env, recipes={**env.recipes, "uebergaenge": {**u, "audio": {**u["audio"], "aktiv": True}}})
     plan = build_plan(package(), env)
     first, second, other = sorted((c for c in plan["clips"] if c["kind"] == "episode"), key=lambda c: c["start"])
     assert first["scene"] == second["scene"] != other["scene"] and abs(first["end"] - second["start"]) < 0.05
-    d = pytest.approx(25 / 60, abs=1e-3)
-    assert first["uebergang"] == {"ein": d, "aus": 0.0}                         # Szenenanfang: ein, Schnitt in der Szene: hart
-    assert second["uebergang"] == {"ein": 0.0, "aus": d}
-    assert other["uebergang"] == {"ein": d, "aus": d}
     assert (first["ton_blende"]["ein"], first["ton_blende"]["aus"]) == (1.0, 0.2)   # Szenenkante lang, harter Quellsprung kurz
     assert (second["ton_blende"]["ein"], second["ton_blende"]["aus"]) == (0.2, 1.0)
     assert (other["ton_blende"]["ein"], other["ton_blende"]["aus"]) == (1.0, 1.0)

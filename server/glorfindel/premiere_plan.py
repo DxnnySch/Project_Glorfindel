@@ -316,7 +316,7 @@ def _transitions(clips: list[dict], spec: dict) -> None:
         if vd.get("episode") == "szenenkanten" and d > 0:
             h = min(d, (c["end"] - c["start"]) / 2)
             c["uebergang"] = {"ein": round(h, 4) if edge_in else 0.0, "aus": round(h, 4) if edge_out else 0.0}
-        if "episode" in ad.get("fuer", ()) and ad_long > 0:
+        if ad.get("aktiv", True) and "episode" in ad.get("fuer", ()) and ad_long > 0:
             cut_in = touch_in and not edge_in and abs(c["src_in"] - prev["src_out"]) > 0.05
             cut_out = touch_out and not edge_out and abs(nxt["src_in"] - c["src_out"]) > 0.05
             ein = ad_long if edge_in else (ad_cut if cut_in else 0.0)

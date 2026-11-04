@@ -18,9 +18,11 @@
     "credit",
     "map"
    ],
-   "episode": "szenenkanten"
+   "episode": "nie",
+   "hinweis": "Filmclips bekommen keine Blende (Danny, 2026-11-04)"
   },
   "audio": {
+   "aktiv": true,
    "dauer": 1.0,
    "kurve": "gleichleistung",
    "fuer": [
@@ -232,10 +234,6 @@
    "src_out": 105.980875,
    "audio": 3,
    "name": "sz_01 Segment",
-   "uebergang": {
-    "ein": 0.4167,
-    "aus": 0.0
-   },
    "ton_blende": {
     "ein": 1.0,
     "aus": 0.2,
@@ -327,10 +325,6 @@
    "src_out": 124.99987499999999,
    "audio": 3,
    "name": "sz_01 Segment",
-   "uebergang": {
-    "ein": 0.0,
-    "aus": 0.4167
-   },
    "ton_blende": {
     "ein": 0.2,
     "aus": 1.0,
@@ -462,10 +456,6 @@
    "src_out": 304.0120416666666,
    "audio": 3,
    "name": "sz_02 Segment",
-   "uebergang": {
-    "ein": 0.4167,
-    "aus": 0.4167
-   },
    "ton_blende": {
     "ein": 1.0,
     "aus": 1.0,
