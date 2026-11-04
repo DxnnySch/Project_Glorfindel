@@ -262,7 +262,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
               return;
             } catch (e) {
               mogrtOk = false;
-              report.warnings.push('Credit-Text konnte nicht in die Vorlage geschrieben werden: ' + errText(e) + ' – Credits kommen als PNG.');
+              report.warnings.push('Credit-Text konnte nicht in die Vorlage geschrieben werden: ' + errText(e) + ' – Credits kommen als PNG. (Premiere kann den Text von Vorlagen erst ab Version 27.0, derzeit als Beta, per Skript setzen.)');
               try { await mogrt.removeClip(ppro, async () => sequenceByGuid(ppro, await getProject(), mainGuid), locate); }
               catch (e2) { report.warnings.push('Vorlagen-Clip @' + c.start.toFixed(2) + ' ließ sich nicht entfernen (bitte von Hand löschen): ' + errText(e2)); }
             }

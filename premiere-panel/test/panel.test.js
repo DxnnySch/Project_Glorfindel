@@ -391,7 +391,7 @@ test('Serienton: Pegel in dB, wenn Premiere den Pegel so führt (Modus wird am C
 
 const creditItems = (main) => main.tracks.video.flatMap((t) => t.items).filter((t) => PLAN.clips.some((c) => c.kind === 'credit' && c.track === t.idx && Math.abs(c.start - t.start) < 0.004));
 
-test('Credits als Text: Vorlage eingesetzt, Text im Textparameter (Textdokument bleibt erhalten), Länge, Name, Übergänge', async () => {
+test('Credits als Text: Vorlage eingesetzt, Text über das Textobjekt gesetzt (Formatierung bleibt), Länge, Name, Übergänge', async () => {
   const { ppro, project } = newEnv();
   const rep = await runPlan(ppro, clone(PLAN));
   assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
@@ -404,13 +404,25 @@ test('Credits als Text: Vorlage eingesetzt, Text im Textparameter (Textdokument 
     assert.match(ti.item.name, /^Credit /, 'aus der Vorlage, nicht das PNG');
     assert.ok(Math.abs(ti.end - c.end) < 0.004, 'Länge');
     assert.equal(ti.name, c.name);
-    const text = ti.chain.comps.find((k) => k.name === 'Grafikparameter').params.find((p) => p.displayName === 'Text');
-    const doc = JSON.parse(text.value);
-    assert.equal(doc.textEditValue, c.mogrt.text);
-    assert.deepEqual(doc.fontTextRunLength, [c.mogrt.text.length], 'Länge des Textlaufs mitgeführt');
-    assert.equal(doc.fontSizeEditValue, 50, 'übrige Textformatierung unberührt');
+    const text = ti.chain.comps.find((k) => k.name === 'Grafikparameter').params.find((p) => p.displayName === 'Quelltext');
+    assert.equal(text.value.getText(), c.mogrt.text, 'Text über das Textobjekt (Premiere 27.0) gesetzt');
+    assert.equal(text.value.getFontName(), 'GrandCentral-Light', 'Formatierung der Vorlage unberührt');
     assert.equal(ti.transitions.length, 2);
   }
+});
+
+test('Credits als Text: ältere Vorlagen mit Textdokument (JSON) werden weiter unterstützt', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrts.push('C:/vorlagen/mogrt/Credit JsonText.mogrt');
+  const plan = clone(PLAN);
+  for (const c of plan.clips) if (c.mogrt) c.mogrt.path = 'C:/vorlagen/mogrt/Credit JsonText.mogrt';
+  const rep = await runPlan(ppro, plan);
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const c = plan.clips.find((x) => x.kind === 'credit' && x.mogrt);
+  const ti = trackItems(mainSeq(project), 'video', c.track).find((t) => Math.abs(t.start - c.start) < 0.004);
+  const doc = JSON.parse(ti.chain.comps.find((k) => k.name === 'Grafikparameter').params.find((p) => p.displayName === 'Text').value);
+  assert.equal(doc.textEditValue, c.mogrt.text);
+  assert.equal(doc.fontSizeEditValue, 50);
 });
 
 test('Credits als Text: fehlt die Vorlage, wird das PNG gesetzt (mit Hinweis), der Bau läuft weiter', async () => {

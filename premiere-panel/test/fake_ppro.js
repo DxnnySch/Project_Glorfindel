@@ -69,10 +69,18 @@ const PARAMS = {
   'AE.ADBE Gaussian Blur 2': [['Weichzeichnung', 'num', 0], ['Weichzeichnungsdimensionen', 'num', 0], ['Kantenpixel wiederholen', 'bool', false]],
 };
 
+// Premiere 27.0 (Beta): Text einer Vorlage als Wertobjekt mit setText/getText; erst createSetValueAction schreibt es zurück (wie in der API-Beschreibung)
+class MogrtText {
+  constructor(t = '') { this.text = t; }
+  getText() { return this.text; }
+  setText(t) { if (typeof t !== 'string') throw new Error('Text erwartet'); this.text = t; return true; }
+  getFontName() { return 'GrandCentral-Light'; }
+}
+
 class Param {
   constructor(name, type, init) { this.displayName = name; this.type = type; this.value = init; this.varying = false; this.kfs = []; this.log = []; }
   _check(v) {
-    const ok = { str: typeof v === 'string', num: typeof v === 'number', bool: typeof v === 'boolean', point: v instanceof PointF, color: v instanceof Color }[this.type];
+    const ok = { mogrt: v instanceof MogrtText, str: typeof v === 'string', num: typeof v === 'number', bool: typeof v === 'boolean', point: v instanceof PointF, color: v instanceof Color }[this.type];
     if (!ok) throw new Error('Wert passt nicht zum Parametertyp ' + this.type + ' (' + this.displayName + ')');
   }
   createKeyframe(v) { this._check(v); return { position: new TickTime(0), value: { value: v } }; }
@@ -96,12 +104,13 @@ class Param {
     for (let i = 1; i < k.length; i++) if (x <= k[i][0]) { const [a, va] = k[i - 1], [b, vb] = k[i]; return typeof va === 'number' ? va + (vb - va) * (x - a) / (b - a) : va; }
     return k.at(-1)[1];
   }
-  async getStartValue() { return { value: this.kfs.length ? this.kfs[0][1] : this.value }; }
+  async getStartValue() { const v = this.kfs.length ? this.kfs[0][1] : this.value; return { value: v instanceof MogrtText ? new MogrtText(v.text) : v }; }
 }
 
 class Component {
   constructor(name, spec) { this.name = name; this.params = spec.map(([n, t, v]) => new Param(n, t, v ?? (t === 'point' ? new PointF(0.5, 0.5) : t === 'color' ? new Color(0, 0, 0, 1) : v))); }
   async getDisplayName() { return this.name; }
+  async getMatchName() { return this.match || ('AE.' + this.name); }
   getParamCount() { return this.params.length; }
   getParam(i) { return this.params[i]; }
 }
@@ -305,8 +314,10 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
             const item = new ClipItem(project, path.split(/[\/]/).pop().replace(/\.mogrt$/i, ''), null, { hasVideo: true, length: 5 });
             const ti = new TrackItem(seq, 'video', v, item, time.seconds, time.seconds + 5, 0);
             if (/OhneText/.test(path)) { trim(seq.tracks.video[v], time.seconds, time.seconds + 5); seq.tracks.video[v].items.push(ti); bump(); return [ti]; }   // wie in Premiere 26.5.2 gemessen: Grafik ohne erreichbaren Textparameter
-            const tp = new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 }));
+            const legacy = /JsonText/.test(path);                              // ältere Annahme: Textdokument als JSON-Zeichenkette
+            const tp = legacy ? new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 })) : new Param('Quelltext', 'mogrt', new MogrtText('Ihr Titel'));
             ti.chain.comps.push(new Component('Grafikparameter', []));
+            ti.chain.comps.at(-1).match = 'AE.ADBE Capsule';
             ti.chain.comps.at(-1).params.push(tp, new Param('Laufweite', 'num', 0));
             trim(seq.tracks.video[v], time.seconds, time.seconds + 5);
             seq.tracks.video[v].items.push(ti);

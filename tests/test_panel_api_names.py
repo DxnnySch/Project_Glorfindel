@@ -13,7 +13,7 @@ OWN = {
     "readComponents", "sequenceDump", "methodsOf", "introspect", "selftest", "makeHandlers", "findServer", "projectInfo", "session", "onMessage",
     "run", "stop", "safe", "fn", "addAction", "ensureBin", "handlers", "log", "onStatus", "send", "start", "setStatus", "show", "setup",
     "race", "finally", "probeItems", "again", "c2", "proj", "itemsByPath", "cands", "scope", "probeSwap", "canChangeMediaPath", "pairs", "find", "fn", "isAdjustmentLayer", "adjustmentItem", "nestedItem", "buildNested", "locator", "bars_png", "rawByPath", "probePlace", "mk", "createInsertProjectItemAction", "placeClip", "getItem", "probeBin", "lockedAccess", "getProj", "invalidate", "txp", "withTimeout", "getBin", "builtinIndex", "componentAt", "retryStale", "isStale", "fresh", "locate", "getProject", "refresh", "resolveMatchName", "sequenceByGuid", "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
-    "addVideoTransitions", "setAudioFade", "resolveTransition", "levelMode", "toLevel", "locateA", "insertTemplate", "setText", "removeClip", "withText",
+    "addVideoTransitions", "setAudioFade", "resolveTransition", "levelMode", "toLevel", "locateA", "insertTemplate", "setText", "readText", "getText", "removeClip", "withText",
 }
 JS = {
     "map", "filter", "find", "findIndex", "includes", "push", "slice", "join", "split", "replace", "startsWith", "endsWith", "toLowerCase", "toFixed",

@@ -6,6 +6,18 @@
 const { tt, txp, invalidate, rawValue, sleep } = require('./core');
 const fx = require('./effects');
 
+/** Textwert der Vorlage (Premiere 27.0): Objekt mit getText/setText. Ältere Annahme: Zeichenkette bzw. JSON-Textdokument. */
+const isMogrtText = (v) => !!v && typeof v === 'object' && typeof v.getText === 'function' && typeof v.setText === 'function';
+
+/** Aktueller Text eines Parameters (null, wenn nicht lesbar). */
+async function readText(param) {
+  try {
+    const v = rawValue(await param.getStartValue());
+    if (isMogrtText(v)) return v.getText();
+    return typeof v === 'string' ? v : null;
+  } catch (e) { return null; }
+}
+
 const TEXT_NAMES = ['TextLayer', 'Text', 'Titel', 'Quelltext', 'Source Text'];
 
 let lastInserted = null;
@@ -44,8 +56,9 @@ async function scanText(locate, want, item) {
     for (const p of fx.paramList(c.comp)) {
       let v, art;
       try { v = rawValue(await p.param.getStartValue()); art = typeof v; } catch (e) { art = 'Fehler'; }
-      dump.push(c.name + '/' + p.name + ':' + art);
-      if (typeof v === 'string') found.push({ comp: c.index, index: p.index, name: p.name, value: v });
+      dump.push(c.name + '/' + p.name + ':' + (isMogrtText(v) ? 'MogrtText' : art));
+      if (isMogrtText(v)) found.unshift({ comp: c.index, index: p.index, name: p.name, value: '', mogrt: true });
+      else if (typeof v === 'string') found.push({ comp: c.index, index: p.index, name: p.name, value: v });
       else if (want.includes(String(p.name).toLowerCase())) named.push({ comp: c.index, index: p.index, name: p.name, value: '' });
     }
   }
@@ -72,6 +85,12 @@ async function setText(ppro, project, locate, text, names = TEXT_NAMES) {
   const pick = found.find((f) => want.includes(String(f.name).toLowerCase())) || found[0];
   const param = fx.findParam(await fx.componentAt(locate, pick.comp), [pick.name], pick.index);
   if (!param) throw new Error('Textparameter nicht mehr gefunden');
+  if (pick.mogrt) {                                   // Premiere 27.0: Textobjekt ändern und per Aktion zurückschreiben
+    const val = rawValue(await param.getStartValue());
+    if (val.setText(text) === false) throw new Error('Premiere hat den Text nicht angenommen');
+    await txp(ppro, 'Credit-Text', (add) => add(param.createSetValueAction(param.createKeyframe(val), true)));
+    return pick.name;
+  }
   await txp(ppro, 'Credit-Text', (add) => add(param.createSetValueAction(param.createKeyframe(withText(pick.value, text)), true)));
   return pick.name;
 }
@@ -85,4 +104,4 @@ async function removeClip(ppro, seqOf, locate) {
   await txp(ppro, 'Vorlage entfernen', (add) => add(editor.createRemoveItemsAction(sel, false, ppro.Constants.MediaType.ANY)));
 }
 
-module.exports = { insertTemplate, setText, removeClip, withText, TEXT_NAMES };
+module.exports = { insertTemplate, setText, removeClip, readText, isMogrtText, withText, TEXT_NAMES };

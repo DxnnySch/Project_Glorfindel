@@ -52,3 +52,9 @@ Musik (A10/A11, nicht im Plan), Einstellungsebenen für alle Blur-Stellen (V2: 4
 - Anzeige „Tausch nötig“: Vergleich der Standbild-Zeiten des Modells mit denen beim Bau; „Standbilder in Premiere tauschen“ erzeugt neue Dateien (`1_r1.png`) und tauscht sie über `media.swap`.
 - Offen/ungeprüft in echtem Premiere: ob `getInPoint/getOutPoint` der Clips die Quellzeit liefern (Annahme: ja). Bauten vor dieser Version haben Clipnamen ohne Nummer (Zuordnung dann nach Reihenfolge).
 - Verschobene Clips (nur Start geändert) und Änderungen an Bildern/Credits werden nicht eingelesen.
+
+## Editierbare Credits: Recherche (2026-11-04)
+- Premiere 26.5.2 liefert für eingesetzte Vorlagen nur Deckkraft/Bewegung/Vektorbewegung; der Textparameter ist per UXP nicht erreichbar (auch Adobes „Basic Title“ nicht). Forum: `MOGRT Parameters in UXP availabilty`, `Setting MOGRT text parameters in Premiere UXP?`.
+- Adobe hat die Schnittstelle für Premiere **27.0 (Beta)** angekündigt: `AE.ADBE Capsule`-Komponente, Wert `MogrtText` (`getText`/`setText`), zurück per `createKeyframe` + `createSetValueAction` (Typen `adobe/premierepro-types` v27.0.0-beta.22, Beispiel `uxp-premiere-pro-samples` PR #100).
+- Die Bridge unterstützt diesen Weg (Panel 0.5.7); mit 26.x fallen Credits auf PNG zurück. Ungeprüft in echtem Premiere 27.0.
+- Verworfen: Umweg über Änderung der .mogrt-Datei (internes Binärformat, keine Quellen, nicht prüfbar); ExtendScript aus UXP (nicht aufrufbar).

@@ -150,7 +150,7 @@ async function selftest(ppro, { png, preset, mogrts = {} }, emit = () => {}) {
     let back = null;
     for (const c of await fx.listComponents(chain)) for (const p of fx.paramList(c.comp)) {
       if (p.name !== name) continue;
-      try { const v = rawValue(await p.param.getStartValue()); if (typeof v === 'string') back = v; } catch (e) { /* weiter */ }
+      back = (await mogrt.readText(p.param)) ?? back;
     }
     res.findings.mogrtTextParam = name;
     res.findings.mogrtTextBack = back && back.slice(0, 160);
@@ -176,7 +176,7 @@ async function selftest(ppro, { png, preset, mogrts = {} }, emit = () => {}) {
       let back = null;
       for (const c of await fx.listComponents(await (await loc()).getComponentChain())) for (const p of fx.paramList(c.comp)) {
         if (p.name !== name) continue;
-        try { const v = rawValue(await p.param.getStartValue()); if (typeof v === 'string') back = v; } catch (e) { /* weiter */ }
+        back = (await mogrt.readText(p.param)) ?? back;
       }
       (res.findings.eigeneVorlagen = res.findings.eigeneVorlagen || {})[art] = { parameter: name, zurueck: back && back.slice(0, 120) };
       if (back && !back.includes('Glorfindel Test')) throw new Error('Text nicht übernommen: ' + back.slice(0, 80));
