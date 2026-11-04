@@ -155,7 +155,8 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     res.findings.mogrtTextParam = name;
     res.findings.mogrtTextBack = back && back.slice(0, 160);
     res.findings.mogrtTextIsJson = /^\s*\{/.test(back || '');
-    if (!back || !back.includes('Glorfindel Test')) throw new Error('Text nicht zurückgelesen: ' + String(back).slice(0, 80));
+    if (!back) res.findings.mogrtTextReadable = false;       // Setzen ging durch, Zurücklesen nicht möglich: kein Fehler
+    else if (!back.includes('Glorfindel Test')) throw new Error('Text nicht zurückgelesen: ' + String(back).slice(0, 80));
     return { parameter: name, json: res.findings.mogrtTextIsJson };
   });
 

@@ -210,7 +210,7 @@ def build_plan(pkg: dict, env: PlanEnv) -> dict:
                     # Die Vorlage trägt Schrift/Ort selbst; nur Doppelbild-Layouts verschieben sie seitlich (Mitte 0,5 = Vorgabeort).
                     clip["text_modus"] = "mogrt"
                     clip["mogrt"] = {"path": mg, "text": c["text"], "dx": round(x - 0.5, 4) if x is not None else 0.0,
-                                     "text_names": ["Text", "Titel", "Quelltext", "Source Text"]}
+                                     "text_names": ["TextLayer", "Text", "Titel", "Quelltext", "Source Text"]}
                 clips.append(clip)
             elif typ == "comment":
                 if c.get("placeholder") or not c.get("rec_path"):

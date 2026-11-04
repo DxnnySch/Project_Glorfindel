@@ -2243,6 +2243,7 @@
     "text": "© amazon studios",
     "dx": 0.0,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2270,6 +2271,7 @@
     "text": "© amazon studios",
     "dx": 0.0,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2297,6 +2299,7 @@
     "text": "© amazon studios",
     "dx": 0.0,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2324,6 +2327,7 @@
     "text": "© amazon studios",
     "dx": 0.0,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2351,6 +2355,7 @@
     "text": "© alan lee",
     "dx": 0.0,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2378,6 +2383,7 @@
     "text": "© alan lee",
     "dx": -0.23,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2405,6 +2411,7 @@
     "text": "© john howe",
     "dx": 0.0,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",
@@ -2432,6 +2439,7 @@
     "text": "© john howe",
     "dx": 0.23,
     "text_names": [
+     "TextLayer",
      "Text",
      "Titel",
      "Quelltext",

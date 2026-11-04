@@ -6,7 +6,7 @@
 const { tt, txp, invalidate } = require('./core');
 const fx = require('./effects');
 
-const TEXT_NAMES = ['Text', 'Titel', 'Quelltext', 'Source Text'];
+const TEXT_NAMES = ['TextLayer', 'Text', 'Titel', 'Quelltext', 'Source Text'];
 
 /** Vorlage an Zeit und Spur einsetzen. Die API wirkt sofort (keine Aktion) und verlangt „locked access“. */
 async function insertTemplate(ppro, project, seq, { path, start, track }) {
@@ -36,15 +36,18 @@ function withText(current, text) {
 async function setText(ppro, project, locate, text, names = TEXT_NAMES) {
   const chain = await (await locate()).getComponentChain();
   const want = names.map((n) => n.toLowerCase());
-  const found = [];
+  const found = [], named = [], dump = [];
   for (const c of await fx.listComponents(chain)) {
     for (const p of fx.paramList(c.comp)) {
-      let v;
-      try { v = (await p.param.getStartValue()).value; } catch (e) { continue; }
+      let v, art;
+      try { v = (await p.param.getStartValue()).value; art = typeof v; } catch (e) { art = 'Fehler'; }
+      dump.push(c.name + '/' + p.name + ':' + art);
       if (typeof v === 'string') found.push({ comp: c.index, index: p.index, name: p.name, value: v });
+      else if (want.includes(String(p.name).toLowerCase())) named.push({ comp: c.index, index: p.index, name: p.name, value: '' });   // Wert nicht lesbar, Name passt
     }
   }
-  if (!found.length) throw new Error('Die Vorlage hat keinen Textparameter');
+  if (!found.length && named.length) found.push(named[0]);
+  if (!found.length) throw new Error('Die Vorlage hat keinen Textparameter. Gefunden: ' + (dump.join('; ') || 'keine Komponenten').slice(0, 600));
   const pick = found.find((f) => want.includes(String(f.name).toLowerCase())) || found[0];
   const param = fx.findParam(await fx.componentAt(locate, pick.comp), [pick.name], pick.index);
   if (!param) throw new Error('Textparameter nicht mehr gefunden');
