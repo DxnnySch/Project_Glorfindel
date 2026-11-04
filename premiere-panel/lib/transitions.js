@@ -3,7 +3,7 @@
 // Audioübergänge („Konstante Leistung“) gibt es dort nicht – der Ton bekommt stattdessen Pegel-Keyframes mit Gleichleistungs-Kurve.
 'use strict';
 
-const { tt, txp, errText } = require('./core');
+const { tt, txp, errText, rawValue } = require('./core');
 const fx = require('./effects');
 
 const LEVEL = { comp: ['Volume', 'Lautstärke'], param: ['Level', 'Pegel'] };
@@ -42,7 +42,7 @@ async function addVideoTransitions(ppro, locate, u, spec, ctx) {
 
 /** Wie Premiere den Pegel führt: lineare Amplitude (1 = 0 dB, so liegt sie im Projekt) oder dB (0 = unverändert). Erkannt am Ausgangswert. */
 function levelMode(startValue) {
-  const v = typeof startValue === 'object' && startValue ? startValue.value : startValue;
+  const v = rawValue(startValue);
   if (typeof v === 'number' && Math.abs(v) < 1e-6) return 'db';
   return 'linear';
 }

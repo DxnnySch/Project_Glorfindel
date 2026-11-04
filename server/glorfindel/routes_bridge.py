@@ -126,7 +126,7 @@ def premiere_swap(body: SwapBody, ep: Episode = Depends(ep_of), state: AppState 
 
 @router.post("/bridge/selftest")
 def premiere_selftest(state: AppState = Depends(st)):
-    return {"job": state.jobs.submit("Premiere-Selbsttest", lambda progress: premiere_ops.run_selftest(None, progress))}
+    return {"job": state.jobs.submit("Premiere-Selbsttest", lambda progress: premiere_ops.run_selftest(None, progress, templates_dir=state.templates_dir()))}
 
 
 # ---------- Panel einrichten ----------

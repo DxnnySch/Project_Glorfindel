@@ -199,8 +199,9 @@ test('Auslesen: Projekt und Sequenz mit Effekten, Parametern und Keyframes', asy
 
 test('Selbsttest: prüft alles, räumt vollständig auf und berührt keine vorhandene Sequenz', async () => {
   const { ppro, project } = fake.create({ presets: { 'C:/p/test.sqpreset': { video: 14, audio: 16 } } });
-  const rep = await selftest(ppro, { png: 'F:/x/test.png', preset: 'C:/p/test.sqpreset' });
+  const rep = await selftest(ppro, { png: 'F:/x/test.png', preset: 'C:/p/test.sqpreset', mogrts: { amazon: 'C:/vorlagen/mogrt/Credit Amazon.mogrt', artwork: 'C:/vorlagen/mogrt/Credit Artwork.mogrt' } });
   assert.equal(rep.ok, true, JSON.stringify(rep.steps.filter((s) => !s.ok)));
+  assert.ok(rep.steps.some((s) => s.name === 'Eigene Vorlage: amazon' && s.ok) && rep.findings.eigeneVorlagen.artwork.parameter);
   assert.equal(rep.findings.colorMode, 'unit');
   assert.deepEqual(rep.findings.keyframeTimes, [0, 0.5]);
   assert.equal(rep.findings.keyframeOrigin, 'clipanfang');

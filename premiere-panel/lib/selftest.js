@@ -4,7 +4,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): alles wird per Locator frisch geholt.
 'use strict';
 
-const { tt, tx, txp, errText, norm, getProj, invalidate } = require('./core');
+const { tt, tx, txp, errText, norm, getProj, invalidate, rawValue } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const trans = require('./transitions');
@@ -14,7 +14,7 @@ const { trackItemAt, sequenceByGuid, placeClip } = require('./plan');
 const BIN = 'Glorfindel-Selbsttest';
 const FILTER_RE = /Crop|Zuschn|Roughen|Kanten|Shadow|Schatten|Geometry|Transform|Gaussian|Blur|Weichz|Opacity|Motion/i;
 
-async function selftest(ppro, { png, preset }, emit = () => {}) {
+async function selftest(ppro, { png, preset, mogrts = {} }, emit = () => {}) {
   const res = { steps: [], findings: {}, ok: true };
   const step = async (name, fn) => {
     try { const detail = await fn(); res.steps.push({ name, ok: true, detail }); emit('progress', { text: 'Selbsttest: ' + name }); return detail; }
@@ -150,7 +150,7 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     let back = null;
     for (const c of await fx.listComponents(chain)) for (const p of fx.paramList(c.comp)) {
       if (p.name !== name) continue;
-      try { const v = (await p.param.getStartValue()).value; if (typeof v === 'string') back = v; } catch (e) { /* weiter */ }
+      try { const v = rawValue(await p.param.getStartValue()); if (typeof v === 'string') back = v; } catch (e) { /* weiter */ }
     }
     res.findings.mogrtTextParam = name;
     res.findings.mogrtTextBack = back && back.slice(0, 160);
@@ -159,6 +159,30 @@ async function selftest(ppro, { png, preset }, emit = () => {}) {
     else if (!back.includes('Glorfindel Test')) throw new Error('Text nicht zurückgelesen: ' + String(back).slice(0, 80));
     return { parameter: name, json: res.findings.mogrtTextIsJson };
   });
+
+  // Die eigenen Credit-Vorlagen (vorlagen/mogrt): einsetzen, Text schreiben, zurücklesen – genau wie beim Bau
+  let slot = 0;
+  for (const [art, path] of Object.entries(mogrts)) {
+    const track = 9 - slot++;
+    await step('Eigene Vorlage: ' + art, async () => {
+      const seq = await sequenceByGuid(ppro, await getProject(), seqGuid);
+      await mogrt.insertTemplate(ppro, await getProject(), seq, { path, start: 20, track });
+      const loc = async () => {
+        const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), seqGuid), 'video', track, 20);
+        if (!ti) throw new Error('Vorlagen-Clip nicht gefunden');
+        return ti;
+      };
+      const name = await mogrt.setText(ppro, await getProject(), loc, '© Glorfindel Test ä');
+      let back = null;
+      for (const c of await fx.listComponents(await (await loc()).getComponentChain())) for (const p of fx.paramList(c.comp)) {
+        if (p.name !== name) continue;
+        try { const v = rawValue(await p.param.getStartValue()); if (typeof v === 'string') back = v; } catch (e) { /* weiter */ }
+      }
+      (res.findings.eigeneVorlagen = res.findings.eigeneVorlagen || {})[art] = { parameter: name, zurueck: back && back.slice(0, 120) };
+      if (back && !back.includes('Glorfindel Test')) throw new Error('Text nicht übernommen: ' + back.slice(0, 80));
+      return { parameter: name, lesbar: !!back };
+    });
+  }
 
   // Aufräumen – immer
   await step('Aufräumen', async () => {

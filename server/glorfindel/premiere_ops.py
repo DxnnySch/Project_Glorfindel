@@ -286,7 +286,7 @@ def swap(ep: Episode, to: str, progress=None, hub=HUB) -> dict:
 
 
 # ---------- Selbsttest ----------
-def run_selftest(ep: Episode | None, progress=None, hub=HUB) -> dict:
+def run_selftest(ep: Episode | None, progress=None, hub=HUB, templates_dir: Path | None = None) -> dict:
     pg = as_progress(progress)
     if not hub.connected:
         raise BridgeError("Premiere ist nicht verbunden.")
@@ -296,7 +296,8 @@ def run_selftest(ep: Episode | None, progress=None, hub=HUB) -> dict:
     png = d / "selbsttest.png"
     Image.new("RGB", (1000, 800), (60, 110, 200)).save(png)
     preset = make_sequence_preset(d / "selbsttest.sqpreset", video_tracks=14, audio_tracks=16)
-    res = hub.call("selftest", {"png": str(png), "preset": str(preset)}, timeout=300,
+    mogrts = discover_credit_mogrts(templates_dir / "mogrt") if templates_dir else {}
+    res = hub.call("selftest", {"png": str(png), "preset": str(preset), "mogrts": mogrts}, timeout=300,
                    on_event=lambda n, data: pg.fraction(0.5, (data or {}).get("text")) if n == "progress" else None)
     cal = {**calibration(), "colorMode": res.get("findings", {}).get("colorMode", "unit")}
     store.write_json(app_dir() / "bridge_calibration.json", cal)

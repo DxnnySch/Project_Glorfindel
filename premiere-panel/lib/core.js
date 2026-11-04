@@ -102,4 +102,11 @@ function asClip(ppro, item) {
   try { return ppro.ClipProjectItem.cast(item); } catch (e) { return null; }
 }
 
-module.exports = { TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, at, getProj, invalidate, withTimeout, retryStale, guarded, walkItems, asClip };
+/** Rohwert aus einem Keyframe holen: Premiere verpackt ihn je nach Aufruf ein- oder zweifach ({value:{value:x}}). */
+function rawValue(kf) {
+  let v = kf;
+  for (let i = 0; i < 3 && v && typeof v === 'object' && 'value' in v; i++) v = v.value;
+  return v;
+}
+
+module.exports = { rawValue, TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, at, getProj, invalidate, withTimeout, retryStale, guarded, walkItems, asClip };
