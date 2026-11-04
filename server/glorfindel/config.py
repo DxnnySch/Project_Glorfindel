@@ -63,6 +63,7 @@ class PremiereSettings(BaseModel):
     artwork_effects: list[str] = Field(default_factory=lambda: ["drop_shadow", "zoom_schnell", "fancy_out", "fancy_in"])   # Effekte je Artwork (Namen aus den Vorgaben)
     map_effects: list[str] = Field(default_factory=lambda: ["karte_in", "karte_out"])
     art_size_px: int = 1000                                                 # Kantenlänge eines einzelnen Artworks im 1080p-Bild
+    sequence_fps: float = 60.0                                              # Bildrate der Hauptsequenz (Ursprungsschnitt: 60; 24 passt zum Film ohne Ruckeln)
     video_tracks: int = 14                                                  # Spuren der Hauptsequenz (wie im Ursprungsschnitt)
     audio_tracks: int = 16
 

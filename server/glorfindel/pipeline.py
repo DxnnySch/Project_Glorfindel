@@ -293,6 +293,7 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     scenes = scenes_in_video(ordered_scenes(ep, by_strand))
     tpl_file = templates_dir / "rohschnitt_vorlage.json"
     template = rough_cut.load_template(tpl_file if tpl_file.exists() else None)
+    template["sequence"] = {**template["sequence"], "fps": ep.settings.premiere.sequence_fps}      # Bildrate der Hauptsequenz (Einstellungen → Premiere)
     out_dir = ep.p.gl / "schnitt"
     version = rough_cut.next_version(out_dir)
     pr = ep.project()

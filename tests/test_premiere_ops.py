@@ -81,7 +81,7 @@ def test_build_creates_reference_stills_plan_and_calls_premiere(ep):
     assert stills == ["1.png"] and Image.open(sdir / "1.png").size == (1920, 800)
     op, args = hub.calls[0]
     plan = args["plan"]
-    assert op == "plan.run" and plan["calibration"] == {"colorMode": "unit", "keyframeBase": "clip"}
+    assert op == "plan.run" and plan["calibration"] == {"colorMode": "unit", "keyframeBase": "source"}
     m = {x["id"]: x for x in plan["media"]}
     assert Path(m[next(c for c in plan["clips"] if c["kind"] == "episode")["media"]]["path"]) == ref
     assert {Path(x["path"]).name for x in plan["media"] if x["kind"] == "still"} == {"1.png"}

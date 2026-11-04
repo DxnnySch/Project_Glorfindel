@@ -45,7 +45,7 @@ def remember_hq(ep: Episode, hq_file: str) -> None:
 
 
 def calibration() -> dict:
-    return store.read_json(app_dir() / "bridge_calibration.json", {"colorMode": "unit", "keyframeBase": "clip"})
+    return store.read_json(app_dir() / "bridge_calibration.json", {"colorMode": "unit", "keyframeBase": "source"})
 
 
 # ---------- Medien ----------
@@ -220,9 +220,10 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     times = {n: round(t + off, 6) for n, t in pipeline.still_times(scenes, fps_ep).items()}      # Zeitachse der Referenz in Premiere (= HQ-Zeit)
     stills_from_file(None, ref, stills_dir, times=times, pg=pg)
     pg.step(4)
-    preset = make_sequence_preset(pdir(ep) / "Glorfindel-Rohschnitt.sqpreset", video_tracks=ep.settings.premiere.video_tracks,
-                                  audio_tracks=ep.settings.premiere.audio_tracks)
-    nested_preset = make_sequence_preset(pdir(ep) / "Glorfindel-Artwork.sqpreset", video_tracks=5, audio_tracks=1)
+    seq_fps = ep.settings.premiere.sequence_fps
+    preset = make_sequence_preset(pdir(ep) / f"Glorfindel-Rohschnitt-{seq_fps:g}fps.sqpreset", video_tracks=ep.settings.premiere.video_tracks,
+                                  audio_tracks=ep.settings.premiere.audio_tracks, fps=seq_fps)
+    nested_preset = make_sequence_preset(pdir(ep) / f"Glorfindel-Artwork-{seq_fps:g}fps.sqpreset", video_tracks=5, audio_tracks=1, fps=seq_fps)
     plan = build_plan(pkg, make_env(ep, templates_dir, ref, preset, stills_dir, nested_preset, ep_offset=off))
     plan["calibration"] = calibration()
     plan["save"] = True

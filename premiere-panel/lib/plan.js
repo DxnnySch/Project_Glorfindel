@@ -62,7 +62,9 @@ async function findSequenceItem(ppro, folder, name) {
 async function runPlan(ppro, plan, emit = () => {}) {
   const report = { errors: [], warnings: [...(plan.warnings || [])], placed: {}, effects: {}, sequence: plan.name, started: Date.now() };
   const ctx = { colorMode: (plan.calibration && plan.calibration.colorMode) || 'unit', offset: 0 };
-  const kfBase = (plan.calibration && plan.calibration.keyframeBase) || 'clip';   // 'clip' | 'sequence' | 'source'
+  // Zeitbezug der Keyframes: 'source' = Zeit im Quellmaterial (Einstiegspunkt des Clips + Zeit im Clip), so speichert Premiere sie auch im Projekt
+  // (Einstellungsebenen beginnen bei 3600 s). Bei Standbildern/Grafiken mit Einstiegspunkt 0 ist das dasselbe wie „ab Clipanfang“. Alter Wert 'clip' wird nicht mehr verwendet.
+  const kfBase = (plan.calibration && plan.calibration.keyframeBase) === 'sequence' ? 'sequence' : 'source';
   const say = (text, done, of) => emit('progress', { text, done, of });
   const getProject = () => getProj(ppro);
   const project0 = await getProject();
@@ -304,8 +306,16 @@ async function runPlan(ppro, plan, emit = () => {}) {
         if (r1.fehlend.length) report.warnings.push('Zuschneiden: nicht gesetzt: ' + r1.fehlend.join(', '));
         await fx.setMotion(ppro, await getProject(), locate, { position: c.position, scale: c.scale }, ctx);
       }
-      for (const e of [...(c.effects || []), ...(useAdjust ? [] : c.fallback_effects || [])]) {
-        ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? (await (await locate()).getInPoint()).seconds : 0;
+      for (let e of [...(c.effects || []), ...(useAdjust ? [] : c.fallback_effects || [])]) {
+        const off = kfBase === 'sequence' ? c.start : (await (await locate()).getInPoint()).seconds;
+        ctx.offset = off;
+        if (c.kind === 'adjust' && off > 0.5) {
+          // Einstellungsebenen haben einen Einstiegspunkt bei 3600 s. Ob die API die Zeit ab Clipanfang oder im Quellmaterial erwartet, ist nicht gesichert:
+          // die Keyframes (Anfangs- und Endwert gleich, hier 0) werden für beide Bezüge gesetzt; der jeweils andere Satz liegt wirkungslos außerhalb des Clips.
+          e = { ...e, params: e.params.map((p) => (p.keyframes && p.keyframes.length > 1 && p.keyframes[0][1] === p.keyframes.at(-1)[1]
+            ? { ...p, keyframes: [...p.keyframes, ...p.keyframes.map(([t, v]) => [t + off, v])] } : p)) };
+          ctx.offset = 0;
+        }
         const r = await fx.addEffect(ppro, await getProject(), locate, e, ctx);
         report.effects[e.id] = (report.effects[e.id] || 0) + 1;
         if (r.fehlend.length) report.warnings.push(e.id + ': Parameter nicht gesetzt: ' + r.fehlend.join(', '));

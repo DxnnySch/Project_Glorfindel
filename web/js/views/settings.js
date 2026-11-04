@@ -60,6 +60,7 @@ export async function render(main) {
         h('div', { class: 'card col' }, h('h2', {}, 'Premiere-Rohschnitt'),
           h('p', { class: 'help' }, 'Gilt für „Rohschnitt in Premiere bauen“. Wähle, welche Effekte jedes Bild/Artwork und jede Karte bekommt (z. B. „Zoom langsam“ statt „Zoom schnell“).'),
           field('Effekte auf Bildern/Artworks', artBox), field('Effekte auf Karten', mapBox), presetInfo,
+          field('Bildrate der Premiere-Sequenz', h('select', { onChange: (e) => { pr.sequence_fps = +e.target.value; } }, [[60, '60 fps (wie im Ursprungsschnitt: weiche Animationen)'], [24, '24 fps (wie der Film: kein Ruckeln, Schnitte bildgenau)'], [24000 / 1001, '23,976 fps']].map(([v, l]) => h('option', { value: v, selected: Math.abs((pr.sequence_fps || 60) - v) < 0.001 }, l)))),
           h('div', { class: 'grid g2' }, field('Kantenlänge eines Artworks (px)', inp('art_size_px', pr, 'number')),
             field('Maske', h('select', { onChange: (e) => { pr.mask = e.target.value; } }, [['Maske Quadrat.png', 'Abgerundetes Quadrat'], ['Maske.png', 'Vollbild']].map(([v, l]) => h('option', { value: v, selected: pr.mask === v }, l))))),
           field('Pause-Animation (relativ zum Stamm; Play entsteht rückwärts daraus)', inp('pause_mov', pr)), field('Ordner mit den Premiere-Vorgaben (.prfpset)', inp('presets_dir', pr))),

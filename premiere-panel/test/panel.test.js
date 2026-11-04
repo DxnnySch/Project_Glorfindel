@@ -280,6 +280,22 @@ test('Amazon-Credit ist nie zugleich mit einem Künstler-Credit zu sehen; Schwar
   assert.ok(bars[0].start < 0.01 && Math.abs(bars[0].end - Math.max(...PLAN.clips.filter((c) => c.kind !== 'bars' && c.kind !== 'adjust').map((c) => c.end))) < 0.01);
 });
 
+test('Gauß In/Out: Einstellungsebene beginnt bei 3600 s – Keyframes gelten dann für beide Zeitbezüge (ab Clipanfang und im Quellmaterial)', async () => {
+  const env = newEnv();
+  const adj = new env.ClipItem(env.project, 'Einstellungsebene', null, { hasVideo: true, length: 5 });
+  adj.adjustment = true; adj.inPt = 3600; adj.outPt = 3605;           // wie im Ursprungsschnitt: Quellmaterial beginnt bei 1:00:00:00
+  (await env.project.getRootItem()).children.push(adj);
+  const rep = await runPlan(env.ppro, clone(PLAN));
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  const c = PLAN.clips.find((x) => x.kind === 'adjust');
+  const ti = trackItems(mainSeq(env.project), 'video', 1).find((t) => Math.abs(t.start - c.start) < 0.004);
+  const kf = ti.chain.comps.find((k) => k.name === 'AE.Impact_Blur_FX').params.find((p) => p.displayName === 'Stärke').kfs;
+  const rel = c.effects[0].params[0].keyframes;
+  assert.equal(kf.length, rel.length * 2);
+  rel.forEach(([t, v], i) => { assert.ok(Math.abs(kf[i][0] - t) < 1e-3 && kf[i][1] === v); assert.ok(Math.abs(kf[i + rel.length][0] - (3600 + t)) < 1e-3 && kf[i + rel.length][1] === v); });
+  assert.ok(kf.every(([t], i) => i === 0 || t >= kf[i - 1][0]), 'Zeiten aufsteigend');
+});
+
 test('Gauß In/Out: mit Einstellungsebene im Projekt liegt es auf V2, ohne Einstellungsebene als Rückfall am Standbild (mit Hinweis)', async () => {
   const withAdj = newEnv();
   const adj = new withAdj.ClipItem(withAdj.project, 'Einstellungsebene', null, { hasVideo: true, length: 5 });
@@ -364,7 +380,8 @@ test('Serienton: Gleichleistungs-Blenden als Pegel-Keyframes auf der Tonspur des
     const level = ti.chain.comps.find((k) => k.name === 'Lautstärke').params.find((q) => q.displayName === 'Pegel');
     assert.ok(level.varying && level.kfs.length === c.ton_blende.keyframes.length);
     assert.equal(level.kfs.length, c.ton_blende.keyframes.length);
-    level.kfs.forEach(([t], i) => assert.ok(Math.abs(t - c.ton_blende.keyframes[i][0]) < 1e-3, 'Zeit ' + i));
+    assert.ok(ti.inPt > 1, 'Serienclip beginnt nicht am Quellanfang');
+    level.kfs.forEach(([t], i) => assert.ok(Math.abs(t - (ti.inPt + c.ton_blende.keyframes[i][0])) < 1e-3, 'Zeit im Quellmaterial ' + i));   // Premiere führt Keyframes im Quellmaterial: ohne Einstiegspunkt läge die Blende vor dem Clip (Ton stumm)
     assert.ok(level.kfs.every(([, v]) => v >= 0 && v <= 1), 'lineare Amplitude 0..1');
     assert.ok(Math.abs(level.kfs[0][1] - (c.ton_blende.ein > 0 ? 0 : 1)) < 1e-9);
   }
