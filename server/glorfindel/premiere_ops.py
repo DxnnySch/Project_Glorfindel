@@ -84,7 +84,8 @@ def ensure_reference(ep: Episode, pg=None, offset: float = 0.0, audio: str = "aa
         raise ValueError("Keine Referenz-Episode importiert (Quellen).")
     src = ep.source(pr.reference_source)
     srcfile = ep.source_path(src)
-    dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR.mp4"
+    # mit Ton der HQ-Datei als eigene Datei: die ältere Referenz kann in Premiere geöffnet (gesperrt) sein
+    dst = pdir(ep) / f"{ep.p.slug.replace(' ', '_')}_Referenz_CFR{'_Ton' if audio_src else ''}.mp4"
     side = dst.with_suffix(".json")
     want = {"fps": round(pr.fps, 4), "offset": round(offset, 4), "crop": src.crop, "audio": audio, "audio_src": str(audio_src) if audio_src else ""}
     newest = max(srcfile.stat().st_mtime, audio_src.stat().st_mtime if audio_src else 0)
