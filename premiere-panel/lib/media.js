@@ -8,7 +8,7 @@ const fresh = (ppro) => getProj(ppro);
 
 async function getBin(ppro, project, name) {
   const root = await project.getRootItem();
-  const bin = (await root.getItems()).find((i) => i.name === name && i.type === ppro.ProjectItem.TYPE_BIN);
+  const bin = ((await root.getItems()) || []).find((i) => i && i.name === name && i.type === ppro.ProjectItem.TYPE_BIN);
   return bin ? ppro.FolderItem.cast(bin) : null;
 }
 

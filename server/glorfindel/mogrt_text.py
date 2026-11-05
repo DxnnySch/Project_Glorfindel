@@ -18,6 +18,17 @@ import zipfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+# Je Text eigene Kennungen auch für die Sequenz der Vorlage (sourceInfoLocalized) und alle Objekte des eingebetteten Projekts.
+# AUS: Die Auswertung von Test8–Test10.prproj zeigt, dass die fehlenden Credit-Texte nicht an gleichen Kennungen liegen (dieselbe Datei
+# „Credit Amazon v2 490e484fe5c8.mogrt“ ergab in Test10 zwei Credits mit und sieben ohne Text; Credits aus verschiedenen Dateien fehlten ebenso),
+# sondern daran, dass Premiere die Grafik erst nach dem Einsetzen lädt (das Panel wartet jetzt darauf, siehe premiere-panel/lib/mogrt.js).
+# Die Umschreibung hat Premiere nie erreicht (der Cache-Schlüssel enthielt die Formatkennung nicht) und ist dort ungeprüft.
+FRESH_SOURCE_ID = False
+FORMAT = b"3"                                         # hochzählen, wenn sich der Aufbau der erzeugten Dateien ändert: sonst bliebe die alte Datei im Cache
+
+
+def _format_tag() -> bytes:
+    return FORMAT + (b"+src" if FRESH_SOURCE_ID else b"")
 HEADER = 12                                           # Kopf des Blocks: Länge des FlatBuffers (u32), 0, Kennung 0x11223344
 _GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -44,10 +55,17 @@ def patch_text_blob(blob: bytes, old: str, new: str) -> bytes:
     return bytes(head) + bytes(body)
 
 
+_OBJECT_UID = re.compile(r'ObjectUID="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"')
+
+
+def _derived_id(old: str, text: str) -> str:
+    return str(uuid.uuid5(uuid.UUID(old), text))
+
+
 _PARAM = re.compile(r"(<Name>Quelltext</Name>.*?<StartKeyframeValue[^>]*>)(.*?)(</StartKeyframeValue>)", re.S)
 
 
-def _patch_project(gz: bytes, old: str, new: str) -> bytes:
+def _patch_project(gz: bytes, old: str, new: str, ids: dict[str, str] | None = None) -> bytes:
     xml = gzip.decompress(gz).decode("utf-8")
     m = _PARAM.search(xml)
     if not m:
@@ -56,14 +74,26 @@ def _patch_project(gz: bytes, old: str, new: str) -> bytes:
     b64 = base64.b64encode(patch_text_blob(blob, old, new)).decode("ascii")
     xml = xml[:m.start(2)] + b64 + "\n\t\t" + xml[m.end(2):]
     xml = xml.replace(f"<InstanceName>{escape(old)}</InstanceName>", f"<InstanceName>{escape(new)}</InstanceName>")
+    if FRESH_SOURCE_ID:
+        for a in set(_OBJECT_UID.findall(xml)) | set(ids or {}):   # jede Objekt-Kennung im Projekt der Vorlage (Sequenz, Medien, Spuren): je Text eigene
+            xml = xml.replace(a, _derived_id(a, new))
     return gzip.compress(xml.encode("utf-8"), mtime=0)
 
 
-def _fresh_ids(definition: dict) -> None:
-    """Neue Kennung der Vorlage (capsuleID): Premiere hält Vorlagen nach ihrer Kennung.
-    Die Quell-ID in sourceInfoLocalized bleibt: sie steht auch im Projekt der Vorlage, beide müssen übereinstimmen (sonst lässt sich die Datei nicht importieren)."""
+def _fresh_ids(definition: dict, text: str) -> dict[str, str]:
+    """Neue Kennungen der Vorlage: Premiere hält Vorlagen nach ihrer Kennung (capsuleID) und die Grafik nach der Sequenz-Kennung
+    (sourceInfoLocalized, steht auch im Projekt der Vorlage). Bliebe sie gleich, behielte Premiere nur die erste Grafik und alle weiteren Credits kämen ohne ihren Text.
+    Gibt die ersetzten Sequenz-Kennungen zurück (alt -> neu), damit sie im eingebetteten Projekt gleich mitgeändert werden."""
     if isinstance(definition.get("capsuleID"), str) and _GUID.match(definition["capsuleID"]):
         definition["capsuleID"] = str(uuid.uuid4())
+    ids: dict[str, str] = {}
+    if not FRESH_SOURCE_ID:
+        return ids
+    for loc in (definition.get("sourceInfoLocalized") or {}).values():
+        old = loc.get("id") if isinstance(loc, dict) else None
+        if isinstance(old, str) and _GUID.match(old) and old != str(uuid.UUID(int=0)):
+            loc["id"] = ids.setdefault(old, _derived_id(old, text))
+    return ids
 
 
 def make_text_mogrt(template: Path, text: str, dst: Path) -> Path:
@@ -77,20 +107,23 @@ def make_text_mogrt(template: Path, text: str, dst: Path) -> Path:
         old = entries[0]["str"]
         for e in entries:
             e["str"] = text
-        _fresh_ids(definition)
+        ids = _fresh_ids(definition, text)
         out = io.BytesIO()
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
             for info in zin.infolist():
                 data = zin.read(info.filename)
                 if info.filename == "definition.json":
-                    data = json.dumps(definition, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                    data = json.dumps(definition, ensure_ascii=False, separators=(",", ":"))
+                    for a, b in ids.items():                  # dieselbe Kennung steht auch als Quelle im Rest der Beschreibung
+                        data = data.replace(a, b)
+                    data = data.encode("utf-8")
                 elif info.filename == "project.prgraphic":
                     inner_in = zipfile.ZipFile(io.BytesIO(data))
                     inner_out = io.BytesIO()
                     with zipfile.ZipFile(inner_out, "w", zipfile.ZIP_STORED) as zi:
                         for ii in inner_in.infolist():
                             blob = inner_in.read(ii.filename)
-                            zi.writestr(ii.filename, _patch_project(blob, old, text) if ii.filename.lower().endswith(".prproj") else blob)
+                            zi.writestr(ii.filename, _patch_project(blob, old, text, ids) if ii.filename.lower().endswith(".prproj") else blob)
                     data = inner_out.getvalue()
                 zout.writestr(info.filename, data)
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -102,6 +135,7 @@ def make_text_mogrt(template: Path, text: str, dst: Path) -> Path:
 
 def text_mogrt(template: Path, text: str, folder: Path) -> Path:
     """Vorlage mit festem Text, je Vorlage und Text nur einmal erzeugt."""
-    key = hashlib.sha1(Path(template).read_bytes() + b"\0" + text.encode("utf-8")).hexdigest()[:12]
+    # Formatkennung im Schlüssel: sonst bliebe nach einer Änderung am Aufbau die alte Datei im Cache (so geschehen: Test8–Test10 liefen mit Dateien von 09:30)
+    key = hashlib.sha1(_format_tag() + b"\0" + Path(template).read_bytes() + b"\0" + text.encode("utf-8")).hexdigest()[:12]
     dst = Path(folder) / f"{Path(template).stem} {key}.mogrt"
     return dst if dst.exists() else make_text_mogrt(Path(template), text, dst)

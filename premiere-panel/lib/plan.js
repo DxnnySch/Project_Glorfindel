@@ -3,7 +3,7 @@
 // Objekte werden nie über Änderungen hinweg gehalten (siehe core.js): Sequenzen per GUID, Clips per Spur+Startzeit, Medien per Pfad frisch geholt.
 'use strict';
 
-const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate, sleep, isStale: isStaleErr } = require('./core');
+const { tt, tx, txp, at, norm, guarded, errText, walkItems, asClip, retryStale, getProj, invalidate, sleep, isStale: isStaleErr, isTransient } = require('./core');
 const media = require('./media');
 const fx = require('./effects');
 const trans = require('./transitions');
@@ -13,19 +13,26 @@ const TOL = 0.004; // Sekunden: so genau muss ein gesetzter Clip auf dem geplant
 
 async function trackItemAt(ppro, seq, kind, index, startSec) {
   const track = kind === 'video' ? await seq.getVideoTrack(index) : await seq.getAudioTrack(index);
-  const items = track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false);
+  const items = track.getTrackItems(ppro.Constants.TrackItemType.CLIP, false) || [];
   let best = null;
   for (const it of items) {
+    if (!it) continue;
     const s = (await it.getStartTime()).seconds;
     if (Math.abs(s - startSec) < TOL) best = it;
   }
   return best;
 }
 
+/** Sequenz per GUID. Kurz nach einer Änderung kann die Liste leere Einträge haben (gemessen: „reading 'guid'“): dann kurz warten und neu lesen. */
 async function sequenceByGuid(ppro, project, guid) {
-  const seq = (await project.getSequences()).find((s) => String(s.guid) === guid);
-  if (!seq) throw new Error('Sequenz nicht mehr im Projekt');
-  return seq;
+  for (let i = 0; i < 3; i++) {
+    const seq = ((await project.getSequences()) || []).find((s) => s && String(s.guid) === guid);
+    if (seq) return seq;
+    invalidate();
+    await sleep(200);
+    project = await getProj(ppro);
+  }
+  throw new Error('Sequenz nicht mehr im Projekt (wurde sie gelöscht? GUID ' + guid + ')');
 }
 
 /** Clip in die Sequenz setzen. `getItem` liefert das Quellelement frisch. Premiere lehnt je nach Medium einen Audio-Index -1 ab („Invalid parameter“): dann mit 0 versuchen. */
@@ -33,8 +40,15 @@ async function placeClip(ppro, seqGuid, getItem, startSec, videoIdx, audioIdx) {
   const tries = audioIdx < 0 ? [audioIdx, 0] : [audioIdx, audioIdx];     // zweiter Versuch: nach Änderungen im Projekt sind Objekte kurz ungültig
   const errors = [];
   for (const a of tries) {
+    let item;
+    try { item = await getItem(); } catch (e) {
+      if (!isTransient(e)) throw e;                   // z. B. „Artwork-Sequenz fehlt“: ein zweiter Versuch ändert daran nichts
+      errors.push('Quelle holen: ' + errText(e));
+      invalidate();
+      await sleep(300);
+      continue;
+    }
     try {
-      const item = await getItem();
       if (!item) throw new Error('Quelle fehlt');
       const project = await getProj(ppro);
       const editor = ppro.SequenceEditor.getEditor(await sequenceByGuid(ppro, project, seqGuid));
@@ -95,7 +109,7 @@ async function runPlan(ppro, plan, emit = () => {}) {
     if (!names[key]) return null;
     const project = await getProject();
     const bin = await media.getBin(ppro, project, plan.bin);
-    const it = (await bin.getItems()).find((i) => i.name === names[key]);
+    const it = ((await bin.getItems()) || []).find((i) => i && i.name === names[key]);
     return it ? (raw ? it : asClip(ppro, it)) : null;
   };
 
@@ -197,18 +211,24 @@ async function runPlan(ppro, plan, emit = () => {}) {
     for (const [label, media_, track] of parts) {
       await at('Artwork ' + label + ' setzen', async () => {
         await placeClip(ppro, guid, () => fresh(media_, true), 0, track, -1);
-        const ti = await locator(track)();
-        if (Math.abs((await ti.getEndTime()).seconds - n.dur) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, n.dur))));
+        await retryStale(async () => {
+          const ti = await locator(track)();
+          if (Math.abs((await ti.getEndTime()).seconds - n.dur) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, n.dur))));
+        });
       });
     }
+    // Bild und Maske liegen: ab hier ist die Sequenz brauchbar. Was jetzt noch scheitert, wird gemeldet, das Artwork kommt trotzdem in den Schnitt.
+    nestedName[n.id] = n.name;
     for (const [label, , track, scale, position] of parts) {
-      await at('Artwork ' + label + ': Position/Größe', async () => { await fx.setMotion(ppro, await getProject(), locator(track), { position, scale }, ctx); });
+      try { await at('Artwork ' + label + ': Position/Größe', async () => { await fx.setMotion(ppro, await getProject(), locator(track), { position, scale }, ctx); }); }
+      catch (e) { report.warnings.push('Artwork-Sequenz „' + n.name + '“: ' + errText(e) + ' – bitte Bewegung von V' + (track + 1) + ' in der Sequenz prüfen.'); }
     }
     const matte = { id: 'spurmaske', match_name: 'AE.ADBE Legacy Key Track Matte', display: 'Spurmaske-Key',
       params: [{ index: 0, names: ['Maske:', 'Matte:', 'Mask:'], value: n.matte_track }, { index: 1, names: ['Compositing mit', 'Composite Using'], value: 0 }] };
-    const r = await at('Spurmaske-Key', async () => fx.addEffect(ppro, await getProject(), locator(n.image_track), matte, ctx));
-    if (r.fehlend.length) report.warnings.push('Spurmaske-Key (' + n.name + '): ' + r.fehlend.join(', '));
-    nestedName[n.id] = n.name;
+    try {
+      const r = await at('Spurmaske-Key', async () => fx.addEffect(ppro, await getProject(), locator(n.image_track), matte, ctx));
+      if (r.fehlend.length) report.warnings.push('Spurmaske-Key (' + n.name + '): ' + r.fehlend.join(', '));
+    } catch (e) { report.warnings.push('Artwork-Sequenz „' + n.name + '“: ' + errText(e) + ' – das Bild erscheint ohne Maske; Spurmaske-Key von Hand setzen.'); }
   };
   if ((plan.nested || []).length) {
     say('Artwork-Sequenzen anlegen …');
@@ -228,49 +248,80 @@ async function runPlan(ppro, plan, emit = () => {}) {
   const total = plan.clips.length;
   let done = 0;
   let transWarned = false;
-  let mogrtOk = true;                                  // nach dem ersten Fehler einer Vorlage kommen alle Credits als PNG
-  const countOk = (k) => { report.placed[k] = (report.placed[k] || 0) + 1; };
-  for (const c of plan.clips) {
-    done++;
-    if (done % 10 === 0 || done === total) say('Clips setzen: ' + done + ' von ' + total, done, total);
-    if (c.kind === 'adjust' && !useAdjust) continue;
-    await guarded(report, c.kind + ' ' + (c.name || '') + ' @' + c.start.toFixed(2), async () => {
-      const dur = c.end - c.start;
-      const isAudio = c.kind === 'voice';
-      const kind = isAudio ? 'audio' : 'video';
-      // Clip immer frisch holen: nach jeder Änderung sind alte Objekte ungültig
-      const locate = async () => {
-        const project = await getProject();
-        const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, project, mainGuid), kind, c.track, c.start);
-        if (!ti) throw new Error('gesetzter Clip nicht auf der Spur gefunden');
-        return ti;
-      };
-      let usedMogrt = false;
+  let mogrtOk = true;                                  // nach einem grundsätzlichen Fehler der Vorlagen kommen alle weiteren Credits als PNG
+  let mogrtMisses = 0;                                 // Credits in Folge, deren Grafik Premiere nicht geladen hat
+  const verifyMogrt = mogrt.canVerify(ppro);
+  const mogrtWait = { timeout: (plan.calibration && plan.calibration.mogrt_wait_ms) || mogrt.timing.timeout };
+  const mogrtPlaced = [];                              // für die Schlussprüfung: Credits, die als Vorlage im Schnitt liegen
+  const countOk = (k, n = 1) => { report.placed[k] = (report.placed[k] || 0) + n; };
+  const seqOf = async () => sequenceByGuid(ppro, await getProject(), mainGuid);
+  const at2 = (t) => t.toFixed(2);
+
+  /** Credit als Vorlage einsetzen und warten, bis Premiere die Grafik geladen hat (vorher nichts am Clip ändern: siehe mogrt.js).
+   *  Kommt die Grafik nicht, wird der leere Clip entfernt und einmal neu eingesetzt; dann PNG-Rückfall. Rückgabe: true = Vorlage liegt. */
+  const placeCreditMogrt = async (c, locate) => {
+    let state = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        await retryStale(async () => {
+          const project = await getProject();
+          await mogrt.insertTemplate(ppro, project, await sequenceByGuid(ppro, project, mainGuid), { path: c.mogrt.path, start: c.start, track: c.track });
+        }, refresh);
+      } catch (e) {
+        mogrtOk = false;
+        report.warnings.push('Credit-Vorlage (MOGRT) nicht verwendet: ' + errText(e) + ' – Credits kommen als PNG.');
+        return false;
+      }
+      if (!verifyMogrt) break;                         // Premiere 26.x zeigt die Grafik-Komponenten nicht: nicht prüfbar
+      state = await mogrt.waitForGraphic(locate, mogrtWait);
+      if (state.ok) break;
+      try { await retryStale(() => mogrt.removeClip(ppro, seqOf, locate)); }
+      catch (e) {
+        report.warnings.push('Credit „' + c.name + '“ @' + at2(c.start) + ': leere Grafik ließ sich nicht entfernen (bitte von Hand löschen): ' + errText(e));
+        return false;
+      }
+    }
+    if (state && !state.ok) {
+      mogrtMisses++;
+      report.warnings.push('Credit „' + c.name + '“ @' + at2(c.start) + ' (V' + (c.track + 1) + '): Premiere hat die Grafik der Vorlage nicht geladen '
+        + '(nur ' + (state.comps.join(', ') || 'keine Komponenten') + ', ' + Math.round(state.ms / 1000) + ' s gewartet' + (state.error ? '; ' + state.error : '') + ') – als PNG gesetzt.');
+      if (mogrtMisses >= 3 && mogrtOk) {
+        mogrtOk = false;
+        report.warnings.push('Drei Credit-Vorlagen in Folge ohne geladene Grafik: alle weiteren Credits kommen als PNG. (Premiere neu starten und erneut bauen; hilft das nicht, die Vorlage in Premiere einmal von Hand einsetzen und prüfen.)');
+      }
+      return false;
+    }
+    mogrtMisses = 0;
+    if (c.mogrt.baked) return true;                    // der Server hat den Text schon in die Vorlage geschrieben
+    // Text setzen. Gelingt das nicht, wäre der Standardtext der Vorlage stehen geblieben: Clip wieder entfernen, PNG setzen
+    try {
+      await mogrt.setText(ppro, await getProject(), locate, c.mogrt.text, c.mogrt.text_names);
+      return true;
+    } catch (e) {
+      mogrtOk = false;
+      report.warnings.push('Credit-Text konnte nicht in die Vorlage geschrieben werden: ' + errText(e) + ' – Credits kommen als PNG. (Premiere kann den Text von Vorlagen erst ab Version 27.0, derzeit als Beta, per Skript setzen.)');
+      try { await retryStale(() => mogrt.removeClip(ppro, seqOf, locate)); }
+      catch (e2) { report.warnings.push('Vorlagen-Clip @' + at2(c.start) + ' ließ sich nicht entfernen (bitte von Hand löschen): ' + errText(e2)); }
+      return false;
+    }
+  };
+
+  /** Einen Clip des Plans setzen (Medium bzw. Vorlage, Länge, Name, Effekte, Übergänge). `count`: im Bericht zählen. */
+  const placePlanned = async (c, { count = true } = {}) => {
+    const dur = c.end - c.start;
+    const isAudio = c.kind === 'voice';
+    const kind = isAudio ? 'audio' : 'video';
+    // Clip immer frisch holen: nach jeder Änderung sind alte Objekte ungültig
+    const locate = async () => {
+      const project = await getProject();
+      const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, project, mainGuid), kind, c.track, c.start);
+      if (!ti) throw new Error('gesetzter Clip nicht auf der Spur gefunden');
+      return ti;
+    };
+    let usedMogrt = false;
+    if (c.mogrt && mogrtOk) usedMogrt = await placeCreditMogrt(c, locate);
+    if (!usedMogrt) {
       await retryStale(async () => {
-        const project = await getProject();
-        if (c.mogrt && mogrtOk) {
-          try {
-            await mogrt.insertTemplate(ppro, project, await sequenceByGuid(ppro, project, mainGuid), { path: c.mogrt.path, start: c.start, track: c.track });
-          } catch (e) {
-            if (isStaleErr(e)) throw e;
-            mogrtOk = false;
-            report.warnings.push('Credit-Vorlage (MOGRT) nicht verwendet: ' + errText(e) + ' – Credits kommen als PNG.');
-          }
-          if (mogrtOk && c.mogrt.baked) { usedMogrt = true; return; }     // der Server hat den Text schon in die Vorlage geschrieben
-          if (mogrtOk) {
-            // Text sofort setzen. Gelingt das nicht, wäre der Standardtext der Vorlage stehen geblieben: Clip wieder entfernen, PNG setzen
-            try {
-              await mogrt.setText(ppro, await getProject(), locate, c.mogrt.text, c.mogrt.text_names);
-              usedMogrt = true;
-              return;
-            } catch (e) {
-              mogrtOk = false;
-              report.warnings.push('Credit-Text konnte nicht in die Vorlage geschrieben werden: ' + errText(e) + ' – Credits kommen als PNG. (Premiere kann den Text von Vorlagen erst ab Version 27.0, derzeit als Beta, per Skript setzen.)');
-              try { await mogrt.removeClip(ppro, async () => sequenceByGuid(ppro, await getProject(), mainGuid), locate); }
-              catch (e2) { report.warnings.push('Vorlagen-Clip @' + c.start.toFixed(2) + ' ließ sich nicht entfernen (bitte von Hand löschen): ' + errText(e2)); }
-            }
-          }
-        }
         let key, audioIdx = -1, videoIdx = c.track, inOut = null;
         if (c.kind === 'episode') { key = 'epSeq'; audioIdx = c.audio; inOut = [c.src_in, c.src_out]; }
         else if (c.kind === 'voice') { key = c.media; audioIdx = c.track; videoIdx = 0; inOut = [c.src_in, c.src_out]; }
@@ -278,8 +329,12 @@ async function runPlan(ppro, plan, emit = () => {}) {
         else if (c.nested) { key = 'nested'; }
         else if (c.kind === 'adjust') { key = 'adjust'; }
         else { key = c.media; }
+        const nestedTitle = ((plan.nested || []).find((n) => n.id === c.nested) || {}).name || c.nested;
         const getItem = key === 'adjust' ? adjustmentItem : key === 'nested'
-          ? async () => { if (!nestedName[c.nested]) throw new Error('Artwork-Sequenz wurde nicht angelegt'); return nestedItem(nestedName[c.nested]); }
+          ? async () => {
+            if (!nestedName[c.nested]) throw new Error('Artwork-Sequenz „' + nestedTitle + '“ fehlt, ihr Bau ist gescheitert (Fehler „Artwork-Sequenz …“ weiter oben) – an dieser Stelle bleibt das Artwork leer.');
+            return nestedItem(nestedName[c.nested]);
+          }
           : () => fresh(key, true);
         if (inOut) {
           const src = await fresh(key);
@@ -288,68 +343,100 @@ async function runPlan(ppro, plan, emit = () => {}) {
         }
         await placeClip(ppro, mainGuid, getItem, c.start, videoIdx, audioIdx);   // nach der Änderung (In/Out) ist `src` ungültig
       }, refresh);
+    }
+    await retryStale(async () => {
       const ti = await locate();
       if (Math.abs((await ti.getEndTime()).seconds - c.end) > TOL) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, c.end))));
-      if (c.name) await guarded(report, 'Name ' + c.name, async () => { const t2 = await locate(); await txp(ppro, 'Name', (add) => add(t2.createSetNameAction(c.name))); });
-      countOk(c.kind);
-      if (isAudio) return;
-      if (usedMogrt) {
-        // Text in die Vorlage schreiben; Doppelbild-Layouts verschieben die Vorlage seitlich
-        await guarded(report, 'Credit-Text ' + c.name, async () => {
-          if (c.mogrt.dx) await fx.setMotion(ppro, await getProject(), locate, { position: [0.5 + c.mogrt.dx, 0.5] }, ctx);
-          countOk('credit_text');
-        });
-      }
-
-      // Effekte je nach Art des Clips
-      if (c.kind === 'artwork' && c.crop) {
-        const r1 = await fx.addCrop(ppro, await getProject(), locate, c.crop, ctx);
-        if (r1.fehlend.length) report.warnings.push('Zuschneiden: nicht gesetzt: ' + r1.fehlend.join(', '));
-        await fx.setMotion(ppro, await getProject(), locate, { position: c.position, scale: c.scale }, ctx);
-      }
-      for (let e of [...(c.effects || []), ...(useAdjust ? [] : c.fallback_effects || [])]) {
-        const off = kfBase === 'sequence' ? c.start : (await (await locate()).getInPoint()).seconds;
-        ctx.offset = off;
-        if (c.kind === 'adjust' && off > 0.5) {
-          // Einstellungsebenen haben einen Einstiegspunkt bei 3600 s. Ob die API die Zeit ab Clipanfang oder im Quellmaterial erwartet, ist nicht gesichert:
-          // die Keyframes (Anfangs- und Endwert gleich, hier 0) werden für beide Bezüge gesetzt; der jeweils andere Satz liegt wirkungslos außerhalb des Clips.
-          e = { ...e, params: e.params.map((p) => (p.keyframes && p.keyframes.length > 1 && p.keyframes[0][1] === p.keyframes.at(-1)[1]
-            ? { ...p, keyframes: [...p.keyframes, ...p.keyframes.map(([t, v]) => [t + off, v])] } : p)) };
-          ctx.offset = 0;
-        }
-        const r = await fx.addEffect(ppro, await getProject(), locate, e, ctx);
-        report.effects[e.id] = (report.effects[e.id] || 0) + 1;
-        if (r.fehlend.length) report.warnings.push(e.id + ': Parameter nicht gesetzt: ' + r.fehlend.join(', '));
-      }
-      ctx.offset = 0;
-
-      // Übergänge: Cross Dissolve wie im Ursprungsschnitt. Scheitert das, bleibt die Deckkraft-Blende der Credits als Rückfall.
-      let blended = false;
-      if (c.uebergang && plan.transitions && plan.transitions.video) {
-        try {
-          const n = await trans.addVideoTransitions(ppro, locate, c.uebergang, plan.transitions.video, ctx);
-          report.effects.uebergang = (report.effects.uebergang || 0) + n;
-          blended = true;
-        } catch (e) {
-          if (!transWarned) { transWarned = true; report.warnings.push('Übergang (Cross Dissolve) nicht gesetzt: ' + errText(e) + (c.kind === 'credit' ? ' – Credits blenden stattdessen über die Deckkraft.' : '')); }
-        }
-      }
-      if (c.kind === 'credit' && c.fade && !blended) await fx.setFade(ppro, await getProject(), locate, dur, c.fade, ctx);
-
-      // Serienton: Gleichleistungs-Blende als Pegel-Keyframes (die API kennt keine Audioübergänge)
-      if (c.kind === 'episode' && c.ton_blende && c.ton_blende.keyframes && c.ton_blende.keyframes.length) {
-        await guarded(report, 'Ton-Blende @' + c.start.toFixed(2), async () => {
-          const locateA = async () => {
-            const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), mainGuid), 'audio', c.audio, c.start);
-            if (!ti) throw new Error('Ton des Serienclips nicht auf A' + (c.audio + 1) + ' gefunden');
-            return ti;
-          };
-          ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? (await (await locateA()).getInPoint()).seconds : 0;
-          try { await trans.setAudioFade(ppro, await getProject(), locateA, c.ton_blende.keyframes, ctx); } finally { ctx.offset = 0; }
-          report.effects.ton_blende = (report.effects.ton_blende || 0) + 1;
-        });
-      }
     });
+    if (c.name) await guarded(report, 'Name ' + c.name, async () => retryStale(async () => { const t2 = await locate(); await txp(ppro, 'Name', (add) => add(t2.createSetNameAction(c.name))); }));
+    if (count) countOk(c.kind);
+    if (isAudio) return;
+    if (usedMogrt) {
+      mogrtPlaced.push(c);
+      // Doppelbild-Layouts verschieben die Vorlage seitlich
+      await guarded(report, 'Credit-Text ' + c.name, async () => {
+        if (c.mogrt.dx) await fx.setMotion(ppro, await getProject(), locate, { position: [0.5 + c.mogrt.dx, 0.5] }, ctx);
+        countOk('credit_text');
+      });
+    }
+
+    // Effekte je nach Art des Clips
+    if (c.kind === 'artwork' && c.crop) {
+      const r1 = await fx.addCrop(ppro, await getProject(), locate, c.crop, ctx);
+      if (r1.fehlend.length) report.warnings.push('Zuschneiden: nicht gesetzt: ' + r1.fehlend.join(', '));
+      await fx.setMotion(ppro, await getProject(), locate, { position: c.position, scale: c.scale }, ctx);
+    }
+    for (let e of [...(c.effects || []), ...(useAdjust ? [] : c.fallback_effects || [])]) {
+      const off = kfBase === 'sequence' ? c.start : await retryStale(async () => (await (await locate()).getInPoint()).seconds);
+      ctx.offset = off;
+      if (c.kind === 'adjust' && off > 0.5) {
+        // Einstellungsebenen haben einen Einstiegspunkt bei 3600 s. Ob die API die Zeit ab Clipanfang oder im Quellmaterial erwartet, ist nicht gesichert:
+        // die Keyframes (Anfangs- und Endwert gleich, hier 0) werden für beide Bezüge gesetzt; der jeweils andere Satz liegt wirkungslos außerhalb des Clips.
+        e = { ...e, params: e.params.map((p) => (p.keyframes && p.keyframes.length > 1 && p.keyframes[0][1] === p.keyframes.at(-1)[1]
+          ? { ...p, keyframes: [...p.keyframes, ...p.keyframes.map(([t, v]) => [t + off, v])] } : p)) };
+        ctx.offset = 0;
+      }
+      const r = await fx.addEffect(ppro, await getProject(), locate, e, ctx);
+      report.effects[e.id] = (report.effects[e.id] || 0) + 1;
+      if (r.fehlend.length) report.warnings.push(e.id + ': Parameter nicht gesetzt: ' + r.fehlend.join(', '));
+    }
+    ctx.offset = 0;
+
+    // Übergänge: Cross Dissolve wie im Ursprungsschnitt. Scheitert das, bleibt die Deckkraft-Blende der Credits als Rückfall.
+    let blended = false;
+    if (c.uebergang && plan.transitions && plan.transitions.video) {
+      try {
+        const n = await trans.addVideoTransitions(ppro, locate, c.uebergang, plan.transitions.video, ctx);
+        report.effects.uebergang = (report.effects.uebergang || 0) + n;
+        blended = true;
+      } catch (e) {
+        if (!transWarned) { transWarned = true; report.warnings.push('Übergang (Cross Dissolve) nicht gesetzt: ' + errText(e) + (c.kind === 'credit' ? ' – Credits blenden stattdessen über die Deckkraft.' : '')); }
+      }
+    }
+    if (c.kind === 'credit' && c.fade && !blended) await fx.setFade(ppro, await getProject(), locate, dur, c.fade, ctx);
+
+    // Serienton: Gleichleistungs-Blende als Pegel-Keyframes (die API kennt keine Audioübergänge)
+    if (c.kind === 'episode' && c.ton_blende && c.ton_blende.keyframes && c.ton_blende.keyframes.length) {
+      await guarded(report, 'Ton-Blende @' + at2(c.start), async () => {
+        const locateA = async () => {
+          const ti = await trackItemAt(ppro, await sequenceByGuid(ppro, await getProject(), mainGuid), 'audio', c.audio, c.start);
+          if (!ti) throw new Error('Ton des Serienclips nicht auf A' + (c.audio + 1) + ' gefunden');
+          return ti;
+        };
+        ctx.offset = kfBase === 'sequence' ? c.start : kfBase === 'source' ? await retryStale(async () => (await (await locateA()).getInPoint()).seconds) : 0;
+        try { await trans.setAudioFade(ppro, await getProject(), locateA, c.ton_blende.keyframes, ctx); } finally { ctx.offset = 0; }
+        report.effects.ton_blende = (report.effects.ton_blende || 0) + 1;
+      });
+    }
+  };
+
+  for (const c of plan.clips) {
+    done++;
+    if (done % 10 === 0 || done === total) say('Clips setzen: ' + done + ' von ' + total, done, total);
+    if (c.kind === 'adjust' && !useAdjust) continue;
+    if (c.mogrt && mogrtOk && verifyMogrt) say('Credit „' + c.name + '“: warte auf die Grafik der Vorlage …', done, total);
+    await guarded(report, c.kind + ' ' + (c.name || '') + ' @' + at2(c.start), () => placePlanned(c));
+  }
+
+  // ---- 5b. Schlussprüfung: hat jede eingesetzte Vorlage noch ihre Grafik? Sonst das PNG an ihre Stelle (das Video zeigt immer den Credit). ----
+  if (verifyMogrt && mogrtPlaced.length) {
+    say('Credits prüfen …');
+    for (const c of mogrtPlaced) {
+      await guarded(report, 'Credit prüfen ' + c.name + ' @' + at2(c.start), async () => {
+        const locate = async () => {
+          const ti = await trackItemAt(ppro, await seqOf(), 'video', c.track, c.start);
+          if (!ti) throw new Error('Credit nicht mehr auf V' + (c.track + 1) + ' gefunden');
+          return ti;
+        };
+        const st = await mogrt.waitForGraphic(locate, { timeout: 1500 });
+        if (st.ok) return;
+        await retryStale(() => mogrt.removeClip(ppro, seqOf, locate));
+        countOk('credit_text', -1);
+        await placePlanned({ ...c, mogrt: null, text_modus: 'png' }, { count: false });
+        countOk('credit_png_nachgesetzt');
+        report.warnings.push('Credit „' + c.name + '“ @' + at2(c.start) + ' (V' + (c.track + 1) + '): Grafik der Vorlage nach dem Bau leer (' + (st.comps.join(', ') || 'keine Komponenten') + ') – durch das PNG ersetzt.');
+      });
+    }
   }
 
   // ---- 6. Marker ----

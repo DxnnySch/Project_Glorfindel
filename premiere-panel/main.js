@@ -5,7 +5,7 @@
 const { Bridge } = require('./lib/bridge');
 const { buildTools: build, toolsNotReady: notReady } = require('./lib/toolbar');
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.2';
 const $ = (id) => document.getElementById(id);
 
 function log(text, cls) {

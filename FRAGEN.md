@@ -108,3 +108,9 @@ Ich habe die Kurzbefehl-Leiste ohne Rückfrage gebaut (Entwurf: `docs/superpower
 Premiere 27.1 liest E-AC-3 in MP4 nicht (keine Wellenform), deshalb hat die Referenz AAC-Stereo-Ton. Premiere tauscht aber nur gegen Dateien mit gleichem Tonformat.
 **Umgesetzt (mein Standard):** Beim ersten HQ-Tausch wird eine Kopie der HQ-Datei mit unverändertem Bild und AAC-Ton erzeugt und getauscht; das Original bleibt unberührt. Kostet einmal wenige Minuten und Plattenplatz in der Größe der HQ-Datei.
 **Antwort:**
+
+## F14 – Credit-Vorlagen: Warten und Rückfall  🟢
+Premiere lädt die Grafik einer eingesetzten Vorlage erst nach dem Einsetzen (Ursache der leeren Credit-Ebenen in Test8–Test10).
+**Umgesetzt (mein Standard):** Das Panel wartet je Credit bis zu 12 s auf die Grafik, versucht es einmal neu, sonst kommt für diesen Credit das PNG (mit Hinweis); nach drei Fehlschlägen in Folge alle weiteren Credits als PNG. „Credit setzen“ ersetzt, was auf der Credit-Spur im Bereich liegt (wie Überschreiben).
+Die Umschreibung aller Kennungen je Text in der Vorlage (`FRESH_SOURCE_ID` in `mogrt_text.py`) ist aus, weil sie nachweislich nicht die Ursache war und in Premiere nie lief.
+**Antwort:**

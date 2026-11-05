@@ -103,6 +103,7 @@ def test_credit_needs_a_template_and_writes_the_text_into_it(ctx, tmp_path):
     r = pt.credit(c, art="artwork", path=str(img), name=None, text=None, dur=6.0)
     assert r["text"] == "© alan lee" and r["track"] == 9 and r["uebergang"] == pytest.approx(0.4167)
     assert read_text(inspect(Path(r["mogrt"]))[2]) == "© alan lee"
+    assert r["png"] and Path(r["png"]).exists() and Path(r["png"]).suffix == ".png"    # Rückfall, falls Premiere die Grafik nicht lädt
 
 
 def test_scene_at_finds_scene_from_the_latest_plan(ctx):

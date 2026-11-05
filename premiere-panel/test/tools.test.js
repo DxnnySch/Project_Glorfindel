@@ -10,6 +10,8 @@ const { runPlan } = require('../lib/plan');
 const { Tools } = require('../lib/tools');
 const { Bridge, makeHandlers } = require('../lib/bridge');
 const { buildTools, toolsNotReady } = require('../lib/toolbar');
+const mogrtLib = require('../lib/mogrt');
+Object.assign(mogrtLib.timing, { timeout: 80, step: 1 });   // Warten auf die Grafik der Vorlage: in Tests kurz
 
 const PLAN = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'plan.json'), 'utf8'));
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -196,7 +198,8 @@ test('Artwork: Bild wird durch eine verschachtelte Sequenz mit Maske und Spurmas
   select(still);
   const r = await tools.run('artwork', {});
   assert.match(r.text, /1 Artwork gebaut/);
-  assert.ok(r.warnings.every((w) => /Parameter nicht gesetzt/.test(w)), r.warnings.join('|'));
+  assert.ok(r.warnings.every((w) => /Parameter nicht gesetzt|„© alan lee“ \(V10, 0:12.0\) lag im Bereich des neuen Credits und wurde ersetzt/.test(w)), r.warnings.join('|'));
+  assert.equal(project.active && project.active.name, PLAN.name, 'Hauptsequenz wieder aktiv');
   const nested = project.sequences.find((s) => s.name === 'Artwork 1');
   assert.ok(nested, 'Sequenz angelegt');
   assert.equal(items(nested, 'video', 2).length, 1, 'Bild auf V3');
@@ -341,4 +344,57 @@ test('Oberfläche: Neuaufbau ersetzt die alte Leiste; „nicht bereit“ bietet 
   assert.ok(host.all((n) => n.tag === 'b').length === 0, 'kein HTML aus Text erzeugt');
   press(host, 'Neu laden');
   assert.equal(retried, 1);
+});
+
+test('Credit: Premiere fügt die Vorlage ein (schiebt die Spur) – spätere Clips der Credit-Spur kommen an ihren Platz zurück', async () => {
+  const { tools, main, select } = await setup();
+  const later = at(main, 'video', 9, 31.45);
+  assert.ok(later, 'Credit „© alan lee“ bei 31.45 s auf V10');
+  select();
+  main.playhead = 20.0;
+  const r = await tools.run('credit', { art: 'artwork', text: '© Ted Nasmith' });
+  assert.match(r.text, /1 Credit gesetzt/);
+  assert.deepEqual(r.warnings, []);
+  assert.ok(at(main, 'video', 9, 20.0), 'neuer Credit');
+  assert.ok(Math.abs(later.start - 31.45) < 0.004 && Math.abs(later.end - 32.95) < 0.004, 'späterer Credit unverändert: ' + later.start);
+});
+
+test('Credit: was auf der Credit-Spur im Bereich liegt, wird wie beim Überschreiben ersetzt bzw. gekürzt (keine Verschiebung)', async () => {
+  const { tools, main, select } = await setup();
+  const old = at(main, 'video', 9, 12.033);
+  select();
+  main.playhead = 13.0;
+  const r = await tools.run('credit', { art: 'artwork', text: '© Ted Nasmith' });
+  assert.match(r.text, /1 Credit gesetzt/);
+  assert.match(r.warnings.join('|'), /lag im Bereich des neuen Credits und wurde ersetzt/);
+  assert.ok(Math.abs(old.start - 12.033) < 0.004 && Math.abs(old.end - 13.0) < 0.004, 'linker Teil bleibt bis zum neuen Credit');
+  const v10 = items(main, 'video', 9).filter((t) => t.end > 13.004 && t.start < 18 - 0.004);
+  assert.equal(v10.length, 1, v10.map((t) => t.name + '@' + t.start).join(','));
+  assert.ok(Math.abs(at(main, 'video', 9, 31.45).end - 32.95) < 0.004, 'späterer Credit am alten Platz');
+});
+
+test('Credit: ragt ein Clip der Credit-Spur über den neuen Credit hinaus, wird er vorne gekürzt und bleibt an seinem Platz', async () => {
+  const { tools, main, select } = await setup();
+  select();
+  main.playhead = 3.0;
+  await tools.run('credit', { art: 'amazon', text: '© amazon studios' });
+  const v9 = items(main, 'video', 8).filter((t) => t.start < 12.04).sort((a, b) => a.start - b.start).map((t) => [+t.start.toFixed(3), +t.end.toFixed(3)]);
+  assert.deepEqual(v9, [[0, 3], [3, 8], [8, 12.033]]);
+});
+
+test('Credit: lädt Premiere die Grafik nicht, setzt das Werkzeug das PNG des Servers (mit Hinweis)', async () => {
+  const { tools, main, select, project } = await setup();
+  project.mogrtLoad = () => null;
+  const orig = tools.rpc;
+  tools.rpc = async (m, a) => { const r = await orig(m, a); return m === 'tools.credit' ? { ...r, png: 'C:/cache/credits/credit_artwork_x.png' } : r; };
+  select();
+  main.playhead = 20.0;
+  const r = await tools.run('credit', { art: 'artwork', text: '© Ted Nasmith' });
+  assert.match(r.text, /1 Credit gesetzt/);
+  assert.match(r.warnings[0], /nicht geladen.*als PNG gesetzt/);
+  const ti = at(main, 'video', 9, 20.0);
+  assert.match(ti.item.name, /\.png$/);
+  assert.ok(Math.abs(ti.end - 25.0) < 0.01);
+  assert.equal(ti.name, '© Ted Nasmith');
+  assert.equal(items(main, 'video', 9).filter((t) => t.start > 19.9 && t.start < 25).length, 1, 'keine leere Ebene');
 });

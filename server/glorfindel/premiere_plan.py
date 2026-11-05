@@ -352,7 +352,7 @@ def _amazon_vs_artist(clips: list[dict]) -> None:
             pieces = nxt
         for x, y in pieces:
             if y - x >= 0.1:
-                out.append({**c, "start": round(x, 4), "end": round(y, 4)})
+                out.append({**c, "start": x, "end": y})            # schon auf dem Bildraster; nicht runden (25.0667 statt 25.0666… ließ in Premiere Splitter stehen)
     clips[:] = out
 
 
@@ -368,7 +368,7 @@ def _adjust_blur(clips: list[dict], periods: list[tuple[float, float]], recipes:
         d = b - a
         r = min(ramp, d / 2)
         kfs = [[0.0, 0.0], [round(r, 4), strength], [round(d - r, 4), strength], [round(d, 4), 0.0]]
-        clips.append({"kind": "adjust", "start": round(a, 4), "end": round(b, 4), "track": track, "scene": "", "name": "Gauß In/Out",
+        clips.append({"kind": "adjust", "start": a, "end": b, "track": track, "scene": "", "name": "Gauß In/Out",
                       "effects": [{"id": "blur", "match_name": spec["match_name"], "params": [{"index": ein["param_index"], "name": ein["param"], "value": 0.0, "keyframes": kfs}]}]})
 
 

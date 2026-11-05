@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from . import autoframe, mogrt_text, store
 from .config import app_dir
+from .premiere_media import credit_png
 from .rough_cut import credit_from_filename, credit_text
 
 RPC_METHODS = {"tools.config", "tools.effects", "tools.artwork", "tools.credit", "tools.audiofade", "tools.scene_at"}
@@ -121,7 +122,8 @@ def credit_text_for(ctx: ToolContext, path: str | None, name: str | None, text: 
         return text.strip()
     base = credit_from_filename(path or re.sub(r"^artwork\s+(\d+\s+)?", "", name or "", flags=re.I))
     if not base:
-        raise ValueError("Kein Name für den Credit: Clip mit Bilddatei wählen oder Text eingeben.")
+        raise ValueError("Kein Name für den Credit: Clip mit Bilddatei wählen oder Text eingeben. "
+                         f"(Clip „{name or ''}“, Datei „{path or ''}“)")
     return credit_text("© {kuenstler}", ctx.artist_db.get(base, base))
 
 
@@ -134,7 +136,11 @@ def credit(ctx: ToolContext, art: str, path: str | None, name: str | None, text:
     t = credit_text_for(ctx, path, name, text) if art != "amazon" or text or path or name else "© amazon studios"
     baked = mogrt_text.text_mogrt(Path(tpl), t, ctx.cache / "mogrt")
     vd = (ctx.recipes.get("uebergaenge") or {}).get("video", {})
-    return {"text": t, "art": art, "track": CREDIT_TRACKS[art], "mogrt": str(baked), "dur": float(dur), "dx": 0.0,
+    try:                                                       # Rückfall, falls Premiere die Grafik der Vorlage nicht lädt
+        png = str(credit_png(t, art, ctx.cache / "credits"))
+    except Exception:  # noqa: BLE001 – ohne PNG meldet das Panel den Fehler
+        png = None
+    return {"text": t, "art": art, "track": CREDIT_TRACKS[art], "mogrt": str(baked), "png": png, "dur": float(dur), "dx": 0.0,
             "uebergang": float(vd.get("dauer", 0.4167))}
 
 

@@ -129,10 +129,14 @@ async function addEffect(ppro, project, locate, effect, ctx) {
   const res = { id: effect.id, angewendet: [], fehlend: [], match: null };
   ctx.displayHints = [effect.display].filter(Boolean);
   res.match = await resolveMatchName(ppro, effect.match_name, ctx);
-  const comp = await ppro.VideoFilterFactory.createComponent(res.match);
-  const chain = await (await locate()).getComponentChain();
-  const index = chain.getComponentCount();
-  await txp(ppro, 'Effekt ' + effect.id, (add) => add(chain.createAppendComponentAction(comp)));
+  // Anhängen ist die einzige Änderung in diesem Block: ein ungültiges Objekt fällt vorher auf, ein zweiter Lauf hängt nichts doppelt an
+  const index = await retryStale(async () => {
+    const comp = await ppro.VideoFilterFactory.createComponent(res.match);
+    const chain = await (await locate()).getComponentChain();
+    const i = chain.getComponentCount();
+    await txp(ppro, 'Effekt ' + effect.id, (add) => add(chain.createAppendComponentAction(comp)));
+    return i;
+  });
   for (const p of effect.params || []) {
     if (p.value === undefined && !(p.keyframes && p.keyframes.length)) continue;
     const label = p.name || (p.names && p.names[0]) || '#' + p.index;
@@ -152,27 +156,33 @@ async function addEffect(ppro, project, locate, effect, ctx) {
 
 /** Position/Skalierung (Bewegung). Position als normierte Werte 0..1. */
 async function setMotion(ppro, project, locate, { position, scale }, ctx) {
-  const idx = await builtinIndex(locate, 'motion');
-  if (idx < 0) throw new Error('Bewegung-Effekt nicht gefunden');
   const done = [];
   for (const [label, names, pidx, spec] of [['Position', NAMES.position, 0, position ? { value: { point: position } } : null], ['Skalierung', NAMES.scale, 1, scale != null ? { value: scale } : null]]) {
     if (!spec) continue;
-    const param = findParam(await componentAt(locate, idx), names, pidx);
-    if (!param) continue;
-    await setParam(ppro, project, param, spec, ctx);
-    done.push(label);
+    // je Wert ein eigener Versuch: Clip, Komponente und Parameter frisch, die Änderung zuletzt (ein zweiter Lauf setzt denselben Wert noch einmal)
+    const ok = await retryStale(async () => {
+      const idx = await builtinIndex(locate, 'motion');
+      if (idx < 0) throw new Error('Bewegung-Effekt nicht gefunden');
+      const param = findParam(await componentAt(locate, idx), names, pidx);
+      if (!param) return false;
+      await setParam(ppro, project, param, spec, ctx);
+      return true;
+    });
+    if (ok) done.push(label);
   }
   return done;
 }
 
 /** Ein-/Ausblenden über die Deckkraft: 0 → 100 in `fade` s, am Ende 100 → 0. */
 async function setFade(ppro, project, locate, dur, fade, ctx) {
-  const idx = await builtinIndex(locate, 'opacity');
-  if (idx < 0) throw new Error('Deckkraft-Effekt nicht gefunden');
-  const param = findParam(await componentAt(locate, idx), NAMES.opacity, 0);
-  if (!param) throw new Error('Deckkraft-Parameter nicht gefunden');
   const f = Math.min(fade, dur / 2);
-  await setParam(ppro, project, param, { keyframes: [[0, 0], [f, 100], [Math.max(f, dur - f), 100], [dur, 0]] }, ctx);
+  await retryStale(async () => {
+    const idx = await builtinIndex(locate, 'opacity');
+    if (idx < 0) throw new Error('Deckkraft-Effekt nicht gefunden');
+    const param = findParam(await componentAt(locate, idx), NAMES.opacity, 0);
+    if (!param) throw new Error('Deckkraft-Parameter nicht gefunden');
+    await setParam(ppro, project, param, { keyframes: [[0, 0], [f, 100], [Math.max(f, dur - f), 100], [dur, 0]] }, ctx);
+  });
 }
 
 /** Quadratischer Zuschnitt (Effekt „Zuschneiden“), Werte in Prozent. */

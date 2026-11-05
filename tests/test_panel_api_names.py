@@ -14,8 +14,9 @@ OWN = {
     "run", "stop", "safe", "fn", "addAction", "ensureBin", "handlers", "log", "onStatus", "send", "start", "setStatus", "show", "setup",
     "race", "finally", "probeItems", "again", "c2", "proj", "itemsByPath", "cands", "scope", "probeSwap", "canChangeMediaPath", "pairs", "find", "fn", "isAdjustmentLayer", "adjustmentItem", "nestedItem", "buildNested", "locator", "bars_png", "rawByPath", "probePlace", "mk", "createInsertProjectItemAction", "placeClip", "getItem", "probeBin", "lockedAccess", "getProj", "invalidate", "txp", "withTimeout", "getBin", "builtinIndex", "componentAt", "retryStale", "isStale", "fresh", "locate", "getProject", "refresh", "resolveMatchName", "sequenceByGuid", "projectDump", "fetchImpl", "fetch", "WebSocketImpl", "mediaByPath", "hostInfo", "WS",
     "addVideoTransitions", "setAudioFade", "resolveTransition", "levelMode", "toLevel", "locateA", "insertTemplate", "setText", "readText", "MogrtText", "getText", "removeClip", "withText",
-    "seek", "rpc", "tools", "failRpc", "config", "activeSequence", "fxCtx", "keyframeOffset", "playhead", "hasSelection", "clipBeneath", "artworkOne", "effects",
+    "seek", "rpc", "tools", "failRpc", "config", "activeSequence", "fxCtx", "keyframeOffset", "playhead", "hasSelection", "clipBeneath", "placeCredit", "artworkOne", "effects",
     "transitions", "audioFade", "setLength", "credit", "artwork", "sceneAtPlayhead", "inspect",      # lib/tools.js, lib/bridge.js (eigene Methoden)
+    "canVerify", "waitForGraphic", "graphicState", "itemsAfter", "restoreShifted", "activate", "isTransient",   # Warten auf die Grafik der Vorlage, Einfügen rückgängig (0.6.2)
 }
 JS = {
     "map", "filter", "find", "findIndex", "includes", "push", "slice", "join", "split", "replace", "startsWith", "endsWith", "toLowerCase", "toFixed",

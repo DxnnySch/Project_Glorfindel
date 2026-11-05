@@ -19,6 +19,17 @@ def test_amazon_credit_is_cut_at_artist_credits():
     assert amazon == [(0.0, 5.0), (12.0, 20.0)]
 
 
+def test_amazon_pieces_keep_exact_frame_times():
+    """Test10.prproj: Credit-Zeiten auf 4 Stellen gerundet (25.0667 statt 1504/60) – Premiere setzte das Ende genau, fügte die nächste Vorlage
+    aber auf dem Bildraster ein: hauchdünne Reste des vorigen Credits blieben stehen und wurden mitverschoben."""
+    t = 1504 / 60
+    clips = [{"kind": "credit", "art": "amazon", "start": 0.0, "end": 2000 / 60, "track": 8},
+             {"kind": "credit", "art": "artwork", "start": t, "end": 1800 / 60, "track": 9}]
+    _amazon_vs_artist(clips)
+    amazon = sorted((c["start"], c["end"]) for c in clips if c["art"] == "amazon")
+    assert amazon == [(0.0, t), (1800 / 60, 2000 / 60)]                   # genau, nicht 25.0667
+
+
 def test_map_effect_slides_in_and_out():
     fx = _map_effect(10.0)
     kfs = fx["params"][0]["keyframes"]

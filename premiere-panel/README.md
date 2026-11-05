@@ -19,7 +19,7 @@ Klappt der Installer nicht: **Adobe UXP Developer Tool** → „Add Plugin“ �
 * **Aktive Sequenz auslesen**: zeigt Spuren, Clips und Effekte mit Parametern – nützlich, um den Rohschnitt mit dem Ursprungsschnitt zu vergleichen.
 
 ## Werkzeuge (Kurzbefehle)
-Unter der Statusanzeige liegen Schaltflächen, die auf die **Auswahl in der Zeitleiste** wirken (Version 0.6.0). Sie benutzen die Einstellungen der zuletzt gebauten Folge, vorher also einmal „Rohschnitt bauen“.
+Unter der Statusanzeige liegen Schaltflächen, die auf die **Auswahl in der Zeitleiste** wirken (Version 0.6.2). Sie benutzen die Einstellungen der zuletzt gebauten Folge, vorher also einmal „Rohschnitt bauen“.
 * **Artwork bauen:** gewähltes Bild → verschachtelte Sequenz mit Maske und Spurmaske-Key, dazu die Standardeffekte.
 * **Credit setzen:** Vorlage mit Namen aus dem Bild (oder eigenem Text; ohne Auswahl am Abspielkopf). Ist ein Text-Clip gewählt, liefert das Bild darunter den Namen.
 * **Effekte:** Karte, Gauß, Zoom, Pop, Kreis, Fancy-Kante … ein/aus/beide.

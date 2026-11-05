@@ -581,8 +581,8 @@
   },
   {
    "kind": "adjust",
-   "start": 12.0333,
-   "end": 21.2667,
+   "start": 12.033333333333333,
+   "end": 21.266666666666666,
    "track": 1,
    "scene": "",
    "name": "Gauß In/Out",
@@ -2223,7 +2223,7 @@
   {
    "kind": "credit",
    "start": 0.0,
-   "end": 12.0333,
+   "end": 12.033333333333333,
    "track": 8,
    "scene": "sz_01",
    "art": "amazon",
@@ -2251,7 +2251,7 @@
   },
   {
    "kind": "credit",
-   "start": 21.2667,
+   "start": 21.266666666666666,
    "end": 27.15,
    "track": 8,
    "scene": "sz_01",

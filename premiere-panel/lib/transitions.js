@@ -3,7 +3,7 @@
 // Audioübergänge („Konstante Leistung“) gibt es dort nicht – der Ton bekommt stattdessen Pegel-Keyframes mit Gleichleistungs-Kurve.
 'use strict';
 
-const { tt, txp, errText, rawValue } = require('./core');
+const { tt, txp, errText, rawValue, retryStale } = require('./core');
 const fx = require('./effects');
 
 const LEVEL = { comp: ['Volume', 'Lautstärke'], param: ['Level', 'Pegel'] };
@@ -28,13 +28,15 @@ async function addVideoTransitions(ppro, locate, u, spec, ctx) {
   let n = 0;
   for (const [applyToStart, dur] of [[true, u.ein || 0], [false, u.aus || 0]]) {
     if (!(dur > 0)) continue;
-    const ti = await locate();
-    const opts = new ppro.AddTransitionOptions();
-    opts.setApplyToStart(applyToStart);
-    opts.setDuration(tt(ppro, dur));
-    opts.setForceSingleSided(true);
-    const tr = ppro.TransitionFactory.createVideoTransition(match);
-    await txp(ppro, 'Übergang', (add) => add(ti.createAddVideoTransitionAction(tr, opts)));
+    await retryStale(async () => {                    // je Seite eigener Versuch: der Clip wird frisch geholt, die Änderung steht zuletzt
+      const ti = await locate();
+      const opts = new ppro.AddTransitionOptions();
+      opts.setApplyToStart(applyToStart);
+      opts.setDuration(tt(ppro, dur));
+      opts.setForceSingleSided(true);
+      const tr = ppro.TransitionFactory.createVideoTransition(match);
+      await txp(ppro, 'Übergang', (add) => add(ti.createAddVideoTransitionAction(tr, opts)));
+    });
     n++;
   }
   return n;
@@ -52,13 +54,15 @@ const toLevel = (gain, mode) => (mode === 'db' ? (gain <= 1e-4 ? DB_FLOOR : Math
 
 /** Pegel-Keyframes (Gleichleistungs-Blende) an einem Audioclip. `keyframes`: [[Sekunden ab Clipanfang, Verstärkung 0..1]]. */
 async function setAudioFade(ppro, project, locate, keyframes, ctx) {
-  const idx = await levelComponentIndex(locate);
-  if (idx < 0) throw new Error('Lautstärke-Effekt am Audioclip nicht gefunden');
-  const param = fx.findParam(await fx.componentAt(locate, idx), LEVEL.param, 1);
-  if (!param) throw new Error('Pegel-Parameter nicht gefunden');
-  const mode = levelMode(await param.getStartValue());
-  await fx.setParam(ppro, project, param, { keyframes: keyframes.map(([t, g]) => [t, toLevel(g, mode)]) }, ctx);
-  return mode;
+  return retryStale(async () => {                     // gemessen: „The script object is no longer valid.“ mitten im Bau – alles frisch holen, Änderung zuletzt
+    const idx = await levelComponentIndex(locate);
+    if (idx < 0) throw new Error('Lautstärke-Effekt am Audioclip nicht gefunden');
+    const param = fx.findParam(await fx.componentAt(locate, idx), LEVEL.param, 1);
+    if (!param) throw new Error('Pegel-Parameter nicht gefunden');
+    const mode = levelMode(await param.getStartValue());
+    await fx.setParam(ppro, project, param, { keyframes: keyframes.map(([t, g]) => [t, toLevel(g, mode)]) }, ctx);
+    return mode;
+  });
 }
 
 async function levelComponentIndex(locate) {

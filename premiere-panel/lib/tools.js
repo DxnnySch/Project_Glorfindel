@@ -19,12 +19,14 @@ async function describe(ppro, it) {
   const kind = typeof it.createAddVideoTransitionAction === 'function' ? 'video' : 'audio';
   const start = (await it.getStartTime()).seconds;
   const end = (await it.getEndTime()).seconds;
-  let path = null, isSeq = false;
+  let path = null, isSeq = false, src = '';
   try {
-    const clip = asClip(ppro, await it.getProjectItem());
+    const pi = await it.getProjectItem();
+    const clip = asClip(ppro, pi);
     if (clip) { isSeq = await clip.isSequence(); if (!isSeq) path = (await clip.getMediaFilePath()) || null; }
+    src = (pi && pi.name) || '';                                                  // Name der Quelle: bei Artwork „Artwork 01 <Bild>“, der Clip selbst heißt nur wie das Bild
   } catch (e) { /* Grafik ohne Datei */ }
-  return { kind, track: await it.getTrackIndex(), start, end, dur: end - start, name: await it.getName(), path, isSeq };
+  return { kind, track: await it.getTrackIndex(), start, end, dur: end - start, name: await it.getName(), path, isSeq, src };
 }
 
 class Tools {
@@ -186,41 +188,125 @@ class Tools {
       guid = sel.guid;
       jobs = [];
       for (const it of sel.items) {
-        let src = it;
-        if (!typed && !it.path && !/^artwork\b/i.test(it.name)) {                     // z. B. ein Text-/Credit-Clip: der Clip darunter liefert den Namen
+        const named = (c) => (c.isSeq && /^artwork\b/i.test(c.src || '') ? { ...c, name: c.src } : c);   // Artwork-Clip heißt wie das Bild; die Sequenz dahinter „Artwork 01 <Bild>“
+        let src = named(it);
+        if (!typed && !src.path && !/^artwork\b/i.test(src.name)) {                   // z. B. ein Text-/Credit-Clip: der Clip darunter liefert den Namen
           const under = await this.clipBeneath(guid, it.track, it.start);
-          if (under) src = under; else { warnings.push('Unter „' + it.name + '“ liegt kein Bild.'); continue; }
+          if (under) src = named(under); else { warnings.push('Unter „' + it.name + '“ liegt kein Bild.'); continue; }
         }
         jobs.push({ start: it.start, dur: it.dur, text: typed || null, path: src.path, name: src.name });
       }
     }
     let n = 0;
     const done = [];
-    const cfg = await this.config();
     const ctx = {};
     for (const j of jobs) {
-      let r;
-      try { r = await this.rpc('tools.credit', { art, path: j.path, name: j.name, text: j.text, dur: j.dur }); } catch (e) { warnings.push(errText(e)); continue; }
-      await retryStale(async () => {
-        const project = await getProj(this.ppro);
-        await mogrt.insertTemplate(this.ppro, project, await sequenceByGuid(this.ppro, project, guid), { path: r.mogrt, start: j.start, track: r.track });
-      });
-      const loc = async () => {
-        const ti = await trackItemAt(this.ppro, await sequenceByGuid(this.ppro, await getProj(this.ppro), guid), 'video', r.track, j.start);
-        if (!ti) throw new Error('eingesetzter Credit nicht auf V' + (r.track + 1) + ' gefunden');
-        return ti;
-      };
-      const ti = await loc();
-      if (Math.abs((await ti.getEndTime()).seconds - (j.start + j.dur)) > 0.004) await txp(this.ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(this.ppro, j.start + j.dur))));
-      await retryStale(async () => { const t2 = await loc(); await txp(this.ppro, 'Name', (add) => add(t2.createSetNameAction(r.text))); });
-      const h = Math.min(r.uebergang, j.dur / 2);
-      if (h >= 0.05) {
-        try { await trans.addVideoTransitions(this.ppro, loc, { ein: h, aus: h }, { match_name: cfg.uebergang.match_name }, ctx); }
-        catch (e) { warnings.push('Übergang am Credit „' + r.text + '“ nicht gesetzt: ' + errText(e)); }
-      }
-      n++; done.push(r.text);
+      try { done.push(await this.placeCredit(guid, art, j, ctx, warnings)); n++; } catch (e) { warnings.push(errText(e)); }
     }
     return { text: n + ' Credit' + (n === 1 ? '' : 's') + ' gesetzt' + (done.length ? ': ' + done.join(' · ') : ''), warnings };
+  }
+
+  /** Clips einer Videospur, die nach `t` enden (Zeit, Name) – zum Vergleich vor/nach dem Einsetzen einer Vorlage. */
+  async itemsAfter(guid, track, t) {
+    const seq = await sequenceByGuid(this.ppro, await getProj(this.ppro), guid);
+    let list = [];
+    try { list = (await seq.getVideoTrack(track)).getTrackItems(this.ppro.Constants.TrackItemType.CLIP, false) || []; } catch (e) { return []; }
+    const out = [];
+    for (const raw of list) {
+      if (!raw) continue;
+      const s = (await raw.getStartTime()).seconds, e = (await raw.getEndTime()).seconds;
+      if (e > t + 0.004) out.push({ start: s, end: e, name: await raw.getName() });
+    }
+    return out.sort((a, b) => a.start - b.start);
+  }
+
+  /** `insertMogrtFromPath` fügt EIN statt zu überschreiben (gemessen in Test10.prproj: spätere Clips derselben Spur rücken um die Vorlagenlänge
+   *  nach hinten, ein Clip an der Einfügestelle wird geteilt). Danach wie beim Überschreiben aufräumen: was im Bereich des neuen Credits lag,
+   *  entfällt (ganz darin: entfernt, darüber hinaus: vorne gekürzt), alles Spätere rückt an seinen alten Platz. `before`: Clips vor dem Einsetzen. */
+  async restoreShifted(guid, track, t, dur, before, warnings) {
+    const ppro = this.ppro;
+    const end = t + dur;
+    const old = before.map((x) => ({ ...x, start: Math.max(x.start, t) }));          // ein geteilter Clip: der rechte Teil wurde verschoben
+    const now = (await this.itemsAfter(guid, track, t)).filter((x) => x.start > t + 0.004);
+    if (now.length !== old.length) { if (old.length) warnings.push('V' + (track + 1) + ': Clips hinter dem Credit wurden beim Einsetzen verschoben – bitte prüfen.'); return; }
+    const seqOf = async () => sequenceByGuid(ppro, await getProj(ppro), guid);
+    for (let i = 0; i < old.length; i++) {
+      const o = old[i];
+      let cur = now[i].start;
+      const shift = cur - o.start;
+      if (Math.abs(shift) < 0.004) continue;
+      const at = (s) => async () => { const ti = await trackItemAt(ppro, await seqOf(), 'video', track, s); if (!ti) throw new Error('nicht gefunden'); return ti; };
+      try {
+        if (o.end <= end + 0.004) {                    // ganz im Bereich des neuen Credits: entfällt (wie beim Überschreiben)
+          await retryStale(() => mogrt.removeClip(ppro, seqOf, at(cur)));
+          warnings.push('„' + o.name + '“ (V' + (track + 1) + ', ' + fmt(o.start) + ') lag im Bereich des neuen Credits und wurde ersetzt.');
+          continue;
+        }
+        if (o.start < end - 0.004) {                   // ragt hinein: vorne kürzen
+          const ns = cur + (end - o.start);
+          await retryStale(async () => { const ti = await at(cur)(); await txp(ppro, 'Kürzen', (add) => add(ti.createSetStartAction(tt(ppro, ns)))); });
+          cur = ns;
+        }
+        const back = cur - Math.max(o.start, end);
+        await retryStale(async () => { const ti = await at(cur)(); await txp(ppro, 'Zurückschieben', (add) => add(ti.createMoveAction(ppro.TickTime.createWithSeconds(-back)))); });
+      } catch (e) {
+        warnings.push('„' + o.name + '“ (V' + (track + 1) + ') wurde beim Einsetzen um ' + shift.toFixed(2) + ' s nach hinten verschoben und ließ sich nicht zurückholen: ' + errText(e) + ' – bitte von Hand zurückschieben.');
+      }
+    }
+  }
+
+  /** Einen Credit setzen (Vorlage mit festem Text vom Server, Länge, Name, Überblendung). Gibt den Credit-Text zurück; Fehler werden geworfen.
+   *  Wie im Bau: nach dem Einsetzen auf die Grafik warten; kommt sie nicht, einmal neu einsetzen, dann das PNG des Servers (mit Hinweis). */
+  async placeCredit(guid, art, j, ctx, warnings = []) {
+    const ppro = this.ppro;
+    const cfg = await this.config();
+    const r = await this.rpc('tools.credit', { art, path: j.path, name: j.name, text: j.text, dur: j.dur });
+    const seqOf = async () => sequenceByGuid(ppro, await getProj(ppro), guid);
+    const loc = async () => {
+      const ti = await trackItemAt(ppro, await seqOf(), 'video', r.track, j.start);
+      if (!ti) throw new Error('eingesetzter Credit nicht auf V' + (r.track + 1) + ' gefunden');
+      return ti;
+    };
+    const before = await retryStale(() => this.itemsAfter(guid, r.track, j.start));
+    let state = null, ok = false;
+    for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+      await retryStale(async () => {
+        const project = await getProj(ppro);
+        await mogrt.insertTemplate(ppro, project, await sequenceByGuid(ppro, project, guid), { path: r.mogrt, start: j.start, track: r.track });
+      });
+      if (!mogrt.canVerify(ppro)) { ok = true; break; }
+      state = await mogrt.waitForGraphic(loc);
+      if (state.ok) { ok = true; break; }
+      await retryStale(() => mogrt.removeClip(ppro, seqOf, loc));
+    }
+    if (!ok) {
+      const why = 'Premiere hat die Grafik der Vorlage nicht geladen (nur ' + ((state && state.comps.join(', ')) || 'keine Komponenten') + ')';
+      if (!r.png) throw new Error('Credit „' + r.text + '“: ' + why + '.');
+      await media.importFiles(ppro, await getProj(ppro), [r.png], TOOL_BIN);
+      await placeClip(ppro, guid, async () => media.rawByPath(ppro, await media.getBin(ppro, await getProj(ppro), TOOL_BIN), r.png), j.start, r.track, -1);
+      warnings.push('Credit „' + r.text + '“: ' + why + ' – als PNG gesetzt.');
+    }
+    await retryStale(async () => {
+      const ti = await loc();
+      if (Math.abs((await ti.getEndTime()).seconds - (j.start + j.dur)) > 0.004) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, j.start + j.dur))));
+    });
+    await this.restoreShifted(guid, r.track, j.start, j.dur, before, warnings);
+    await retryStale(async () => { const t2 = await loc(); await txp(ppro, 'Name', (add) => add(t2.createSetNameAction(r.text))); });
+    const h = Math.min(r.uebergang, j.dur / 2);
+    if (h >= 0.05) {
+      try { await trans.addVideoTransitions(ppro, loc, { ein: h, aus: h }, { match_name: cfg.uebergang.match_name }, ctx); }
+      catch (e) { throw new Error('Übergang am Credit „' + r.text + '“ nicht gesetzt: ' + errText(e)); }
+    }
+    return r.text;
+  }
+
+  /** Sequenz wieder aktiv machen (eine neu angelegte Sequenz wird in Premiere automatisch aktiv und geöffnet). */
+  async activate(guid) {
+    await retryStale(async () => {
+      const project = await getProj(this.ppro);
+      await project.setActiveSequence(await sequenceByGuid(this.ppro, project, guid));
+      invalidate();
+    });
   }
 
   /** Gewählte Bilder in verschachtelte Artwork-Sequenzen mit Maske und Spurmaske-Key umwandeln (an derselben Stelle) und die Standardeffekte setzen. */
@@ -232,7 +318,9 @@ class Tools {
     const warnings = [];
     let n = 0;
     for (const it of imgs) {
-      try { await this.artworkOne(guid, it, ctx, warnings); n++; } catch (e) { warnings.push('Artwork „' + it.name + '“: ' + errText(e)); }
+      try { await this.artworkOne(guid, it, ctx, warnings); n++; } catch (e) { warnings.push('Artwork „' + it.name + '“: ' + errText(e)); continue; }
+      try { await this.placeCredit(guid, 'artwork', { start: it.start, dur: it.dur, text: null, path: it.path, name: it.name }, {}, warnings); }
+      catch (e) { warnings.push('Bildcredit zu „' + it.name + '“: ' + errText(e)); }
     }
     if (items.length > imgs.length) warnings.push((items.length - imgs.length) + ' ausgewählte Clip(s) ohne Bilddatei übersprungen.');
     return { text: n + ' Artwork' + (n === 1 ? '' : 's') + ' gebaut', warnings };
@@ -265,17 +353,20 @@ class Tools {
     const parts = [[nspec.image, nspec.image_track, nspec.image_scale, nspec.image_position], [nspec.mask, nspec.mask_track, nspec.mask_scale, nspec.mask_position]];
     for (const [file, track] of parts) {
       await placeClip(ppro, nguid, () => rawItem(file), 0, track, -1);
-      const ti = await nloc(track)();
-      if (Math.abs((await ti.getEndTime()).seconds - nspec.dur) > 0.004) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, nspec.dur))));
+      await retryStale(async () => {
+        const ti = await nloc(track)();
+        if (Math.abs((await ti.getEndTime()).seconds - nspec.dur) > 0.004) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, nspec.dur))));
+      });
     }
     for (const [, track, scale, position] of parts) await fx.setMotion(ppro, await getProject(), nloc(track), { position, scale }, ctx);
     const matte = { id: 'spurmaske', match_name: 'AE.ADBE Legacy Key Track Matte', display: 'Spurmaske-Key',
       params: [{ index: 0, names: ['Maske:', 'Matte:', 'Mask:'], value: nspec.matte_track }, { index: 1, names: ['Compositing mit', 'Composite Using'], value: 0 }] };
     const rm = await fx.addEffect(ppro, await getProject(), nloc(nspec.image_track), matte, ctx);
     if (rm.fehlend.length) warnings.push('Spurmaske-Key (' + name + '): ' + rm.fehlend.join(', '));
-    // Das Bild in der Hauptsequenz durch die Artwork-Sequenz ersetzen
-    const mainLoc = this.locator(guid, it);
-    await mogrt.removeClip(ppro, async () => sequenceByGuid(ppro, await getProject(), guid), mainLoc);
+    // Das Bild in der Hauptsequenz durch die Artwork-Sequenz ersetzen.
+    // Premiere macht die eben angelegte Artwork-Sequenz aktiv; die Hauptsequenz erst wieder aktivieren (wie im Bau, „Hauptsequenz wieder aktivieren“),
+    // sonst landeten Entfernen und Setzen nicht in der Hauptsequenz und das Bild blieb stehen.
+    await this.activate(guid);
     const seqItem = async () => {
       for (const x of await walkItems(ppro, await (await getProject()).getRootItem())) {
         if (x.name !== name) continue;
@@ -284,10 +375,20 @@ class Tools {
       }
       return null;
     };
+    // Überschreiben statt erst Entfernen: die Artwork-Sequenz ist genau so lang wie das Bild und ersetzt es; scheitert das Setzen, bleibt das Bild stehen
     await placeClip(ppro, guid, seqItem, it.start, it.track, -1);
     const after = this.locator(guid, it);
-    const ti = await after();
-    if (Math.abs((await ti.getEndTime()).seconds - it.end) > 0.004) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, it.end))));
+    const placed = await retryStale(async () => describe(ppro, await after()));
+    if (!placed.isSeq) {
+      throw new Error('Artwork-Sequenz „' + name + '“ ist angelegt, aber Premiere hat sie nicht an die Stelle des Bildes gesetzt (V' + (it.track + 1) + ', ' + fmt(it.start)
+        + '; dort liegt „' + placed.name + '“). Bitte die Sequenz aus dem Projektfenster von Hand auf das Bild ziehen.');
+    }
+    await retryStale(async () => {
+      const ti = await after();
+      if (Math.abs((await ti.getEndTime()).seconds - it.end) > 0.004) await txp(ppro, 'Länge', (add) => add(ti.createSetEndAction(tt(ppro, it.end))));
+    });
+    const rest = (await this.itemsAfter(guid, it.track, it.start)).filter((x) => x.start > it.start + 0.004 && x.start < it.end - 0.004 && x.name === it.name);
+    if (rest.length) warnings.push('Vom Bild „' + it.name + '“ ist hinter der Artwork-Sequenz ein Rest stehen geblieben (' + fmt(rest[0].start) + ') – bitte löschen.');
     await retryStale(async () => { const t2 = await after(); await txp(ppro, 'Name', (add) => add(t2.createSetNameAction(name))); });
     for (const e of spec.effects) {
       ctx.offset = await this.keyframeOffset(it, after);

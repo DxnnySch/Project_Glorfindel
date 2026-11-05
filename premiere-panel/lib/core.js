@@ -11,6 +11,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase();
 const errText = (e) => (e && e.message) || String(e);
 const isStale = (e) => /no longer valid/i.test(errText(e));
+// Kurz nach einer Änderung liefert Premiere manchmal Listen mit leeren Einträgen (gemessen: „Cannot read properties of null (reading 'guid')“
+// beim Suchen der Sequenz, „… (reading 'name')“ beim Suchen eines Mediums). Wie ein ungültiges Objekt: frisch holen und noch einmal versuchen.
+const isTransient = (e) => isStale(e) || /Cannot read propert(y|ies) of (null|undefined)/i.test(errText(e));
 
 /** Sekunden -> TickTime */
 function tt(ppro, seconds) {
@@ -65,11 +68,15 @@ async function txp(ppro, undoName, build) {
   tx(await getProj(ppro), undoName, build);
 }
 
-/** `fn` ausführen; bei ungültigen Objekten `refresh` (holt Caches neu) und noch einmal versuchen. */
+/** `fn` ausführen; bei ungültigen Objekten (oder leeren Listeneinträgen direkt nach einer Änderung) `refresh` (holt Caches neu)
+ *  und nach kurzer Pause noch einmal versuchen. `fn` muss so gebaut sein, dass ein erneuter Lauf nichts doppelt anlegt
+ *  (die Änderung steht am Ende, ein ungültiges Objekt fällt vorher beim Erzeugen der Aktion auf). */
 async function retryStale(fn, refresh, tries = 2) {
   for (let i = 0; ; i++) {
     try { return await fn(); } catch (e) {
-      if (!isStale(e) || i >= tries) throw e;
+      if (!isTransient(e) || i >= tries) throw e;
+      invalidate();
+      await sleep(150 * (i + 1));
       if (refresh) await refresh();
     }
   }
@@ -89,8 +96,9 @@ async function guarded(report, what, fn) {
 async function walkItems(ppro, root) {
   const out = [];
   async function visit(folder) {
-    const items = await folder.getItems();
+    const items = (await folder.getItems()) || [];
     for (const it of items) {
+      if (!it) continue;                              // leerer Eintrag kurz nach einer Änderung
       out.push(it);
       if (it.type === ppro.ProjectItem.TYPE_BIN) {
         try { await visit(ppro.FolderItem.cast(it)); } catch (e) { /* leeres/gesperrtes Fach */ }
@@ -112,4 +120,4 @@ function rawValue(kf) {
   return v;
 }
 
-module.exports = { rawValue, TICKS_PER_SECOND, sleep, norm, errText, isStale, tt, tx, txp, at, getProj, invalidate, withTimeout, retryStale, guarded, walkItems, asClip };
+module.exports = { rawValue, TICKS_PER_SECOND, sleep, norm, errText, isStale, isTransient, tt, tx, txp, at, getProj, invalidate, withTimeout, retryStale, guarded, walkItems, asClip };

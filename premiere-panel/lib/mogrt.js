@@ -119,6 +119,47 @@ async function setText(ppro, project, locate, text, names = TEXT_NAMES) {
   return pick.name;
 }
 
+// ---- Ist die Grafik der Vorlage geladen? ----
+// Gemessen an Test8–Test10.prproj (Premiere 27.1): `insertMogrtFromPath` liefert sofort einen Clip „Grafik“, die Grafik selbst (Komponente
+// „Text“ [AE.ADBE Text] mit „Quelltext“, Quellbereich der Vorlage) lädt Premiere erst danach. Bei den meisten Credits kam sie nie an: leere
+// Ebene mit richtigem Namen, ohne Komponenten. Ein Credit, dessen Grafik schon da war, behielt sie über Länge, Name und Übergänge hinweg.
+// Darum: nach dem Einsetzen warten, bis die Grafik da ist, und erst dann weiterarbeiten; kommt sie nicht, PNG-Rückfall mit Hinweis.
+const GRAPHIC_MATCH = ['AE.ADBE Text', 'AE.ADBE Capsule'];
+const INTRINSIC = ['deckkraft', 'bewegung', 'vektorbewegung', 'opacity', 'motion', 'vector motion', 'zeitverzerrung', 'time remapping'];
+const timing = { timeout: 12000, step: 300 };      // Tests verkürzen das; der Bauplan kann `calibration.mogrt_wait_ms` vorgeben
+
+/** Ob sich das Laden der Grafik prüfen lässt: erst Premiere 27.x zeigt die Text-Komponente eingesetzter Vorlagen (26.5 nur Deckkraft/Bewegung). */
+const canVerify = (ppro) => typeof ppro.MogrtText === 'function';
+
+/** Komponenten des Clips und ob eine Grafik (Text/Vorlage) darunter ist. */
+async function graphicState(locate) {
+  const chain = await (await locate()).getComponentChain();
+  const comps = [];
+  let ok = false;
+  for (const c of await fx.listComponents(chain)) {
+    let match = '';
+    try { match = await c.comp.getMatchName(); } catch (e) { /* ältere API */ }
+    comps.push(c.name || match || '?');
+    if (GRAPHIC_MATCH.includes(match) || (c.name && !INTRINSIC.includes(String(c.name).toLowerCase()))) ok = true;
+  }
+  return { ok, comps };
+}
+
+/** Warten, bis die Grafik des eingesetzten Clips geladen ist. Liest nur (ändert nichts), ungültige Objekte werden frisch geholt.
+ *  Rückgabe: {ok, comps, ms, error}. */
+async function waitForGraphic(locate, opts = {}) {
+  const timeout = opts.timeout != null ? opts.timeout : timing.timeout;
+  const step = opts.step != null ? opts.step : timing.step;
+  const t0 = Date.now();
+  let last = { ok: false, comps: [] }, error = null;
+  for (;;) {
+    try { last = await graphicState(locate); error = null; } catch (e) { error = (e && e.message) || String(e); invalidate(); }
+    const ms = Date.now() - t0;
+    if (last.ok || ms >= timeout) return { ...last, ms, error };
+    await sleep(step);
+  }
+}
+
 /** Den eingesetzten Vorlagen-Clip wieder entfernen (ohne Lücke zu schließen), z. B. wenn sich sein Text nicht setzen ließ. */
 async function removeClip(ppro, seqOf, locate) {
   let sel;
@@ -128,4 +169,4 @@ async function removeClip(ppro, seqOf, locate) {
   await txp(ppro, 'Vorlage entfernen', (add) => add(editor.createRemoveItemsAction(sel, false, ppro.Constants.MediaType.ANY)));
 }
 
-module.exports = { insertTemplate, setText, removeClip, readText, isMogrtText, withText, TEXT_NAMES };
+module.exports = { insertTemplate, setText, removeClip, readText, isMogrtText, withText, TEXT_NAMES, graphicState, waitForGraphic, canVerify, timing, GRAPHIC_MATCH };

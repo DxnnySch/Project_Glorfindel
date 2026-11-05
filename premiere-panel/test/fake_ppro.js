@@ -148,8 +148,14 @@ class TrackItem {
   async getName() { return this.name; }
   async isAdjustmentLayer() { return !!this.item.adjustment; }
   async getProjectItem() { return this.item; }
-  async getComponentChain() { return this.chain; }
+  async getComponentChain() {
+    if (this.pending && --this.pending.polls <= 0) { this.chain.comps.push(this.pending.graphic); this.pending = null; }   // Grafik der Vorlage ist nachgeladen
+    return this.chain;
+  }
   createSetEndAction(t) { if (!(t instanceof TickTime)) throw new Error('TickTime erwartet'); return new Action(() => { this.end = t.seconds; }, 'setend'); }
+  createSetStartAction(t) { if (!(t instanceof TickTime)) throw new Error('TickTime erwartet'); return new Action(() => { this.inPt += t.seconds - this.start; this.start = t.seconds; }, 'setstart'); }
+  // wie in der API: verschiebt den Clip um die angegebene Zeit (auch nach links)
+  createMoveAction(t) { if (!(t instanceof TickTime)) throw new Error('TickTime erwartet'); return new Action(() => { this.start += t.seconds; this.end += t.seconds; }, 'move'); }
   createSetNameAction(n) { return new Action(() => { this.name = n; }, 'name'); }
 }
 
@@ -256,6 +262,7 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
       const s = new Sequence(project, name, p.video, p.audio, { fps: 60 });
       s.item = new ClipItem(project, name, null, { hasVideo: true, hasAudio: true, length: 0 }); s.item.seq = s;
       root.children.push(s.item); project.sequences.push(s);
+      project.active = s;                               // wie in Premiere: die neue Sequenz wird aktiv (und geöffnet)
       return s;
     },
     async createSequence() { throw new Error('createSequence mit Vorgabe ist veraltet – createSequenceWithPresetPath verwenden'); },
@@ -321,16 +328,35 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
             if (v >= seq.tracks.video.length) throw new Error('Videospur ' + (v + 1) + ' existiert nicht');
             const item = new ClipItem(project, path.split(/[\/]/).pop().replace(/\.mogrt$/i, ''), null, { hasVideo: true, length: 5 });
             const ti = new TrackItem(seq, 'video', v, item, time.seconds, time.seconds + 5, 0);
-            if (/OhneText/.test(path)) { trim(seq.tracks.video[v], time.seconds, time.seconds + 5); seq.tracks.video[v].items.push(ti); bump(); return [ti]; }   // wie in Premiere 26.5.2 gemessen: Grafik ohne erreichbaren Textparameter
+            project.mogrtInserts = (project.mogrtInserts || 0) + 1;
+            // Wie in Test10.prproj gemessen: Einfügen (nicht Überschreiben) – spätere Clips derselben Spur rücken um die Vorlagenlänge nach hinten
+            const ripple = (track, t, len) => {
+              const out = [];
+              for (const x of track.items) {
+                if (x.start >= t - 1e-9) { x.start += len; x.end += len; out.push(x); continue; }
+                if (x.end > t + 1e-9) {                       // an der Einfügestelle geteilt
+                  const right = new TrackItem(seq, x.kind, x.idx, x.item, t + len, x.end + len, x.inPt + (t - x.start));
+                  right.name = x.name; x.end = t; out.push(x, right); continue;
+                }
+                out.push(x);
+              }
+              track.items = out;
+            };
+            ripple(seq.tracks.video[v], time.seconds, 5);
+            seq.tracks.video[v].items.push(ti);
+            bump();
+            if (/OhneText/.test(path)) return [ti];          // wie in Premiere 26.5.2 gemessen: Grafik ohne erreichbaren Textparameter
             const legacy = /JsonText/.test(path);                              // ältere Annahme: Textdokument als JSON-Zeichenkette
             const tp0 = legacy ? new Param('Text', 'str', JSON.stringify({ textEditValue: 'Ihr Titel', fontTextRunLength: [9], fontSizeEditValue: 50 })) : new Param('Quelltext', 'mogrt', new MogrtText('Ihr Titel'));
             const tp = tp0; if (/NoRead/.test(path)) tp.unreadable = true;            // wie gemeldet: getStartValue wirft „Illegal Parameter type“
-            ti.chain.comps.push(new Component('Grafikparameter', []));
-            ti.chain.comps.at(-1).match = 'AE.ADBE Capsule';
-            ti.chain.comps.at(-1).params.push(tp, new Param('Laufweite', 'num', 0));
-            trim(seq.tracks.video[v], time.seconds, time.seconds + 5);
-            seq.tracks.video[v].items.push(ti);
-            bump();
+            const graphic = new Component('Grafikparameter', []);
+            graphic.match = 'AE.ADBE Capsule';
+            graphic.params.push(tp, new Param('Laufweite', 'num', 0));
+            // Wie in Premiere 27.1 gemessen: die Grafik lädt erst nach dem Einsetzen (bis dahin nur Bewegung/Deckkraft) – oder gar nicht.
+            // `project.mogrtLoad(path, n)` (n = laufende Nummer des Einsetzens) -> Anzahl Abfragen der Komponenten bis zur Grafik, oder null = nie
+            const polls = project.mogrtLoad ? project.mogrtLoad(path, project.mogrtInserts) : 0;
+            if (polls === 0) ti.chain.comps.push(graphic);
+            else if (polls != null) ti.pending = { polls, graphic };
             return [ti];
           },
           createRemoveItemsAction(sel, ripple, mediaType) {
@@ -343,7 +369,8 @@ function create({ presets = {}, aeComps = ['Play-Pause'], mogrts = ['C:/vorlagen
             item = unwrap(item);
             if (!(time instanceof TickTime)) throw new Error('TickTime erwartet');
             return new Action(() => {
-              const len = (item.inPt != null ? item.outPt - item.inPt : item.length);
+              const seqLen = (q) => Math.max(0, ...[...q.tracks.video, ...q.tracks.audio].flatMap((tr) => tr.items.map((x) => x.end)));
+              const len = (item.inPt != null ? item.outPt - item.inPt : item.seq && !item.length ? seqLen(item.seq) : item.length);   // Sequenz: so lang wie ihr Inhalt
               if (item.hasVideo && v >= 0) {
                 if (v >= seq.tracks.video.length) throw new Error('Videospur ' + (v + 1) + ' existiert nicht');
                 const tr = seq.tracks.video[v];

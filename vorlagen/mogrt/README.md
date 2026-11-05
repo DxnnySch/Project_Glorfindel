@@ -26,3 +26,9 @@ Premiere lässt den Text einer eingesetzten Grafik per Skript nicht setzen (auch
 * Die Vorlage braucht ein freigegebenes Textfeld (Essential Graphics → Bearbeiten), sonst bleibt der Credit ein PNG.
 * Nach einem Neuexport einfach die neue Datei mit höherer Nummer hier ablegen.
 * Ist die Datei anders aufgebaut als erwartet, meldet der Bau das nicht als Fehler: der Credit kommt dann als PNG.
+
+## Warten auf die Grafik (Panel 0.6.2)
+Premiere 27.1 legt beim Einsetzen sofort einen Clip „Grafik“ an und lädt die Grafik der Vorlage (Komponente „Text“ mit „Quelltext“) erst danach.
+Wurde der Clip vorher verändert (Länge, Name, Übergänge, nächstes Einsetzen), blieb oft eine **leere Ebene mit richtigem Namen** stehen (Test8–Test10).
+Das Panel wartet deshalb nach jedem Einsetzen, bis die Text-Komponente da ist (bis 12 s), setzt bei Misserfolg die Vorlage einmal neu ein und nimmt sonst
+für diesen Credit das PNG (Hinweis im Bericht). Am Ende des Baus prüft es alle Credits noch einmal. Unter Premiere 26.x ist das Laden nicht prüfbar.

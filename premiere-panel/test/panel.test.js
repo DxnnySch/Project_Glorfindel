@@ -13,6 +13,8 @@ const { selftest } = require('../lib/selftest');
 const { Bridge } = require('../lib/bridge');
 const fx = require('../lib/effects');
 const { getProj } = require('../lib/core');
+const mogrtLib = require('../lib/mogrt');
+Object.assign(mogrtLib.timing, { timeout: 80, step: 1 });   // Warten auf die Grafik der Vorlage: in Tests kurz
 
 const PLAN = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'plan.json'), 'utf8'));
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -477,6 +479,7 @@ test('Credits als Text: fehlt die Vorlage, wird das PNG gesetzt (mit Hinweis), d
 test('Credits als Text: lässt sich der Text nicht setzen, wird die Vorlage wieder entfernt und das PNG gesetzt (kein Standardtext)', async () => {
   const { ppro, project } = newEnv();
   project.mogrts.push('C:/vorlagen/mogrt/Credit OhneText.mogrt');
+  delete ppro.MogrtText;                                                    // Premiere 26.5: Grafik-Komponenten nicht sichtbar, Laden nicht prüfbar
   const plan = clone(PLAN);
   for (const c of plan.clips) if (c.mogrt) c.mogrt.path = 'C:/vorlagen/mogrt/Credit OhneText.mogrt';
   const rep = await runPlan(ppro, plan);
@@ -489,7 +492,8 @@ test('Credits als Text: lässt sich der Text nicht setzen, wird die Vorlage wied
 
 test('Credits als Text: steht der Text schon in der Vorlage (baked), wird er nicht gesetzt und die Vorlage bleibt', async () => {
   const { ppro, project } = newEnv();
-  project.mogrts.push('C:/vorlagen/mogrt/Credit OhneText.mogrt');            // eine Vorlage, deren Text sich per Skript nicht setzen lässt
+  project.mogrts.push('C:/vorlagen/mogrt/Credit OhneText.mogrt');
+  delete ppro.MogrtText;          // eine Vorlage, deren Text sich per Skript nicht setzen lässt; Premiere 26.5: Laden der Grafik nicht prüfbar
   const plan = clone(PLAN);
   for (const c of plan.clips) if (c.mogrt) { c.mogrt.path = 'C:/vorlagen/mogrt/Credit OhneText.mogrt'; c.mogrt.baked = true; }
   const rep = await runPlan(ppro, plan);
@@ -515,4 +519,100 @@ test('Credits als Text: Doppelbild-Credit wird seitlich verschoben, Einzelbild b
   const plain = PLAN.clips.find((c) => c.kind === 'credit' && c.mogrt && c.mogrt.dx === 0);
   const ti = trackItems(main, 'video', plain.track).find((t) => Math.abs(t.start - plain.start) < 0.004);
   assert.deepEqual([param(ti.chain.comps.find((k) => k.name === 'Bewegung'), 'Position').value.x], [0.5]);
+});
+
+// ---- Grafik der Vorlage lädt verzögert (gemessen in Test8–Test10.prproj, Premiere 27.1) ----
+const creditTi = (project, c) => trackItems(mainSeq(project), 'video', c.track).find((t) => Math.abs(t.start - c.start) < 0.004);
+const hasGraphic = (ti) => ti.chain.comps.some((k) => k.match === 'AE.ADBE Capsule');
+const credits = () => PLAN.clips.filter((c) => c.kind === 'credit');
+const bakedPlan = () => { const p = clone(PLAN); for (const c of p.clips) if (c.mogrt) c.mogrt.baked = true; return p; };
+/** Einsetzen beobachten: `hook(ti, time, track)` für jeden eingesetzten Vorlagen-Clip. */
+const onInsert = (ppro, hook) => {
+  const getEditor = ppro.SequenceEditor.getEditor;
+  ppro.SequenceEditor.getEditor = (seq) => {
+    const ed = getEditor(seq);
+    const ins = ed.insertMogrtFromPath;
+    ed.insertMogrtFromPath = (p, t, v, a) => { const r = ins(p, t, v, a); hook(r[0], t.seconds, v); return r; };
+    return ed;
+  };
+};
+
+test('Credits: lädt Premiere die Grafik erst nach dem Einsetzen, wartet der Bau und ändert den Clip vorher nicht', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrtLoad = () => 4;                           // Grafik erst nach einigen Abfragen da
+  const early = [];
+  onInsert(ppro, (ti) => {
+    for (const k of ['createSetEndAction', 'createSetNameAction', 'createAddVideoTransitionAction']) {
+      const f = ti[k].bind(ti);
+      ti[k] = (...b) => { if (ti.pending) early.push(k); return f(...b); };
+    }
+  });
+  const rep = await runPlan(ppro, bakedPlan());
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.deepEqual(early, [], 'kein Eingriff am Clip, bevor die Grafik geladen ist');
+  assert.equal(rep.placed.credit_text, credits().length);
+  for (const c of credits()) assert.ok(hasGraphic(creditTi(project, c)), c.name + ' @' + c.start);
+  assert.ok(!rep.warnings.some((w) => /nicht geladen/.test(w)), rep.warnings.join('|'));
+});
+
+test('Credits: kommt die Grafik beim ersten Einsetzen nicht, wird der leere Clip entfernt und neu eingesetzt', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrtLoad = (p, n) => (n === 1 ? null : 2);    // erstes Einsetzen: leere Ebene (wie die meisten Credits in Test10)
+  const rep = await runPlan(ppro, bakedPlan());
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.equal(rep.placed.credit_text, credits().length);
+  const c = credits()[0];
+  const onTrack = trackItems(mainSeq(project), 'video', c.track).filter((t) => t.start < c.end - 0.004 && t.end > c.start + 0.004);
+  assert.equal(onTrack.length, 1, 'keine leere Ebene zurückgeblieben');
+  assert.ok(hasGraphic(onTrack[0]));
+});
+
+test('Credits: bleibt die Grafik einer Vorlage leer, kommt für diesen Credit das PNG (mit Hinweis), die anderen bleiben Vorlagen', async () => {
+  const { ppro, project } = newEnv();
+  const bad = credits()[1];
+  let next = null, tries = 0;
+  onInsert(ppro, () => {});
+  const getEditor = ppro.SequenceEditor.getEditor;
+  ppro.SequenceEditor.getEditor = (seq) => { const ed = getEditor(seq); const ins = ed.insertMogrtFromPath; ed.insertMogrtFromPath = (p, t, v, a) => { next = [t.seconds, v]; return ins(p, t, v, a); }; return ed; };
+  project.mogrtLoad = () => { if (Math.abs(next[0] - bad.start) < 1e-6 && next[1] === bad.track) { tries++; return null; } return 0; };
+  const rep = await runPlan(ppro, bakedPlan());
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.equal(tries, 2, 'zweimal versucht');
+  assert.ok(rep.warnings.some((w) => w.includes('@' + bad.start.toFixed(2)) && /nicht geladen.*als PNG gesetzt/.test(w)), rep.warnings.join('|'));
+  const ti = creditTi(project, bad);
+  assert.match(ti.item.name, /\.png$/);
+  assert.ok(Math.abs(ti.end - bad.end) < 0.004);
+  assert.equal(ti.name, bad.name);
+  for (const c of credits().filter((x) => x !== bad)) assert.ok(hasGraphic(creditTi(project, c)), c.name + ' @' + c.start);
+  assert.equal(rep.placed.credit, credits().length);
+  assert.equal(rep.placed.credit_text, credits().length - 1);
+});
+
+test('Credits: laden drei Vorlagen in Folge nicht, kommen alle weiteren Credits gleich als PNG', async () => {
+  const { ppro, project } = newEnv();
+  project.mogrtLoad = () => null;
+  const rep = await runPlan(ppro, bakedPlan());
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.equal(project.mogrtInserts, 6, 'drei Credits je zweimal versucht, danach keine Vorlage mehr');
+  assert.ok(rep.warnings.some((w) => /Drei Credit-Vorlagen in Folge/.test(w)));
+  assert.equal(rep.placed.credit, credits().length);
+  assert.ok(creditItems(mainSeq(project)).every((t) => /\.png$/.test(t.item.name)), 'überall das PNG, keine leeren Ebenen');
+});
+
+test('Credits: geht die Grafik nach dem Setzen verloren, ersetzt die Schlussprüfung den Credit durch das PNG', async () => {
+  const { ppro, project } = newEnv();
+  const bad = credits()[0];
+  onInsert(ppro, (ti, t, v) => {
+    if (Math.abs(t - bad.start) > 1e-6 || v !== bad.track) return;
+    const f = ti.createSetNameAction.bind(ti);
+    ti.createSetNameAction = (nm) => { ti.chain.comps = ti.chain.comps.filter((k) => k.match !== 'AE.ADBE Capsule'); return f(nm); };
+  });
+  const rep = await runPlan(ppro, bakedPlan());
+  assert.deepEqual(rep.errors, [], JSON.stringify(rep.errors));
+  assert.ok(rep.warnings.some((w) => /nach dem Bau leer.*durch das PNG ersetzt/.test(w)), rep.warnings.join('|'));
+  const ti = creditTi(project, bad);
+  assert.match(ti.item.name, /\.png$/);
+  assert.equal(ti.name, bad.name);
+  assert.equal(rep.placed.credit, credits().length);
+  assert.equal(rep.placed.credit_text, credits().length - 1);
 });
