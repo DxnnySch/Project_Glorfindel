@@ -175,6 +175,6 @@ export function createPlayer(E) {
       const go = () => { if (t != null) { video.pause(); rangeStop = null; video.currentTime = t; } drawTimeline(); };
       if (video.readyState >= 1) go(); else video.addEventListener('loadedmetadata', go, { once: true });
     },
-    dispose() { cancelAnimationFrame(raf); video?.pause(); },
+    dispose() { cancelAnimationFrame(raf); if (video) { video.pause(); video.removeAttribute('src'); video.load(); video = null; } },
   };
 }

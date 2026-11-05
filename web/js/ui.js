@@ -62,14 +62,14 @@ export function toast(msg, kind = 'info', ms = 4200) {
 
 export function modal({ title, body, actions = [], wide = false, onClose }) {
   const ov = h('div', { class: 'overlay' });
-  const close = () => { ov.remove(); onClose?.(); };
+  const esc = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => { document.removeEventListener('keydown', esc); ov.remove(); onClose?.(); };
   const m = h('div', { class: `modal ${wide ? 'wide' : ''}`, role: 'dialog' },
     h('div', { class: 'modal-head' }, h('h2', { class: 'grow' }, title), h('button', { class: 'btn ghost icon', onClick: close, 'aria-label': 'Schließen' }, icon('x'))),
     h('div', { class: 'modal-body' }, body),
     actions.length ? h('div', { class: 'modal-foot' }, actions.map((a) => btn(a.label, { kind: a.kind, icon: a.icon, onClick: async () => { if ((await a.onClick?.(close)) !== false && !a.keep) close(); } }))) : null);
   ov.append(m);
   ov.addEventListener('mousedown', (e) => { if (e.target === ov) close(); });
-  const esc = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } };
   document.addEventListener('keydown', esc);
   $('#overlays').append(ov);
   const first = m.querySelector('.modal-body input:not([type=checkbox]), .modal-body textarea');

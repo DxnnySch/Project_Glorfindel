@@ -31,8 +31,10 @@ export function openMapEditor(map, onSaved) {
   };
   viewport.addEventListener('wheel', (e) => { e.preventDefault(); const r = viewport.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
   viewport.addEventListener('mousedown', (e) => { if (e.button === 1 || e.button === 2 || spaceDown) { e.preventDefault(); panning = { x: e.clientX, y: e.clientY, px: panX, py: panY }; viewport.style.cursor = 'grabbing'; } }, true);
-  window.addEventListener('mousemove', (e) => { if (panning) { panX = panning.px + e.clientX - panning.x; panY = panning.py + e.clientY - panning.y; applyView(); } });
-  window.addEventListener('mouseup', () => { if (panning) { panning = null; viewport.style.cursor = ''; } });
+  const panMove = (e) => { if (panning) { panX = panning.px + e.clientX - panning.x; panY = panning.py + e.clientY - panning.y; applyView(); } };
+  const panUp = () => { if (panning) { panning = null; viewport.style.cursor = ''; } };
+  window.addEventListener('mousemove', panMove);
+  window.addEventListener('mouseup', panUp);
   viewport.addEventListener('contextmenu', (e) => e.preventDefault());
   const zoomBar = h('div', { class: 'row gap-s' }, btn('', { icon: 'minus', size: 'sm', title: 'Verkleinern', onClick: () => zoomAt(1 / 1.4, viewport.clientWidth / 2, viewport.clientHeight / 2) }), zoomLabel,
     btn('', { icon: 'plus', size: 'sm', title: 'Vergrößern (auch Mausrad)', onClick: () => zoomAt(1.4, viewport.clientWidth / 2, viewport.clientHeight / 2) }),
@@ -105,7 +107,7 @@ export function openMapEditor(map, onSaved) {
   const dauer = h('input', { type: 'number', min: 1, value: m.dauer, style: { width: '80px' }, onInput: (e) => { m.dauer = +e.target.value; } });
   const hint = h('textarea', { rows: 3, placeholder: 'Hinweise für die Animation (z. B. „erst Eregion, dann Fahrt nach Osten“)', value: m.hinweise || '', onInput: (e) => { m.hinweise = e.target.value; } });
   const save = async () => { try { const r = await api.put(epUrl(S.ep, `/maps/${m.id}`), m); onSaved?.(r); toast('Karte gespeichert.', 'ok'); } catch (e) { toast(e.message, 'err'); return false; } };
-  const dlg = modal({ title: `Karte: ${m.titel || m.id}`, wide: true, onClose: () => { document.removeEventListener('keydown', keys); document.removeEventListener('keyup', keys); },
+  const dlg = modal({ title: `Karte: ${m.titel || m.id}`, wide: true, onClose: () => { document.removeEventListener('keydown', keys); document.removeEventListener('keyup', keys); window.removeEventListener('mousemove', panMove); window.removeEventListener('mouseup', panUp); playing = false; cancelAnimationFrame(raf); },
     body: h('div', { class: 'grid', style: { gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)' } },
       h('div', { class: 'col' }, toolBar, zoomBar, viewport, info),
       h('div', { class: 'col' }, h('div', { class: 'row' }, field('Dauer (s)', dauer)), list, h('label', { class: 'field' }, h('span', {}, 'Hinweise'), hint))),
