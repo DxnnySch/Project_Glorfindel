@@ -187,34 +187,76 @@ def video_filter(height: int | None = None, crop: list[int] | None = None, fps: 
     return ",".join(parts) or "null"
 
 
+_NVENC: bool | None = None
+
+
+def nvenc_available() -> bool:
+    """NVIDIA-Encoder nutzbar? ffmpeg kennt `h264_nvenc` UND ein kurzer Testlauf klappt (Treiber/Karte vorhanden)."""
+    global _NVENC
+    if _NVENC is None:
+        try:
+            ff = _bin("ffmpeg")
+            enc = run([ff, "-hide_banner", "-encoders"], timeout=20)
+            ok = "h264_nvenc" in enc.stdout
+            if ok:
+                r = run([ff, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x144:r=24:d=0.2", "-c:v", "h264_nvenc",
+                         "-f", "null", "-"], timeout=30)
+                ok = r.returncode == 0
+            _NVENC = ok
+        except Exception:  # noqa: BLE001
+            _NVENC = False
+    return _NVENC
+
+
+def _proxy_video_args(encoder: str) -> list[str]:
+    # Profil/Pixelformat fest, damit jeder Browser die Datei abspielt, egal welcher Encoder sie erzeugt hat
+    if encoder == "nvenc":
+        return ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "28", "-b:v", "0", "-g", "1", "-bf", "0",
+                "-profile:v", "high", "-pix_fmt", "yuv420p"]
+    return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-g", "1", "-pix_fmt", "yuv420p"]
+
+
 def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None = None,
-               fps: float | None = None, on_progress=None) -> Path:
+               fps: float | None = None, on_progress=None, encoder: str = "auto", info: dict | None = None) -> Path:
     """540p H.264, jeder Frame ein Keyframe (-g 1) für exaktes Scrubben/Frame-Stepping.
 
     `crop` und `fps` normalisieren Bildschirmaufnahmen (variable Bildrate, Letterbox) auf die Folge.
+    `encoder`: "auto" (NVIDIA-Encoder, wenn vorhanden, sonst CPU), "nvenc" oder "cpu". Schlägt der NVIDIA-Weg fehl,
+    geht es automatisch mit der CPU weiter. `info` bekommt "encoder" (was wirklich benutzt wurde) und "sekunden".
     """
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_suffix(".part.mp4")
-    # Ton immer Mono: Stereo-AAC macht Firefox beim Springen in langen Dateien extrem langsam (Sekunden bis Hänger),
-    # Mono springt in Millisekunden. Für ein Arbeits-Proxy reicht Mono. Datenspuren/Kapitel (Timecode) bleiben draußen.
-    cmd = [_bin("ffmpeg"), "-y", "-v", "error", "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?",
-           "-vf", video_filter(height, crop, fps), "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
-           "-g", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-ac", "1",
-           "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)]
     try:
         dur = probe(src)["duration"]
     except Exception:  # noqa: BLE001
         dur = None
-    try:
-        r = run_ffmpeg(cmd, dur, on_progress)
-    except BaseException:
+    use_gpu = encoder == "nvenc" or (encoder == "auto" and nvenc_available())
+    # Versuche der Reihe nach: GPU mit GPU-Dekodierung, GPU, CPU
+    attempts = ([("nvenc", True), ("nvenc", False)] if use_gpu else []) + [("cpu", False)]
+    t0 = time.time()
+    last_err = ""
+    for enc, hw in attempts:
+        # Ton immer Mono: Stereo-AAC macht Firefox beim Springen in langen Dateien extrem langsam (Sekunden bis Hänger),
+        # Mono springt in Millisekunden. Für ein Arbeits-Proxy reicht Mono. Datenspuren/Kapitel (Timecode) bleiben draußen.
+        cmd = ([_bin("ffmpeg"), "-y", "-v", "error"] + (["-hwaccel", "cuda"] if hw else []) +
+               ["-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", video_filter(height, crop, fps)] +
+               _proxy_video_args(enc) +
+               ["-c:a", "aac", "-b:a", "96k", "-ac", "1",
+                "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)])
+        try:
+            r = run_ffmpeg(cmd, dur, on_progress)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        if r.returncode == 0:
+            tmp.replace(dst)
+            if info is not None:
+                info.update({"encoder": "h264_nvenc" + (" + GPU-Dekodierung" if hw else "") if enc == "nvenc" else "libx264 (CPU)",
+                             "sekunden": round(time.time() - t0, 1)})
+            return dst
         tmp.unlink(missing_ok=True)
-        raise
-    if r.returncode != 0:
-        tmp.unlink(missing_ok=True)
-        raise RuntimeError(f"Proxy fehlgeschlagen: {r.stderr.strip()[:300]}")
-    tmp.replace(dst)
-    return dst
+        last_err = r.stderr.strip()[:300]
+    raise RuntimeError(f"Proxy fehlgeschlagen: {last_err}")
 
 
 def proxy_needs_fix(path: Path) -> bool:

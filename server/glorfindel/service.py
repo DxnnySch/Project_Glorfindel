@@ -196,7 +196,11 @@ class Episode:
                         if on_progress:
                             on_progress(f, info)
 
-                    media.make_proxy(self.source_path(s), tmp, crop=s.crop, fps=s.normalize_fps, on_progress=progress)
+                    info: dict = {}
+                    media.make_proxy(self.source_path(s), tmp, crop=s.crop, fps=s.normalize_fps, on_progress=progress,
+                                     encoder=self.settings.proxy_encoder, info=info)
+                    store.log_change(self.p.gl, self.settings.user,
+                                     f"Proxy {sid} erzeugt: {info.get('encoder')}, {media.fmt_clock(info.get('sekunden', 0))} Min.")
                     part = dst.with_name(dst.name + ".part")
                     shutil.copyfile(tmp, part)
                     part.replace(dst)

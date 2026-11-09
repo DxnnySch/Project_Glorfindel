@@ -72,3 +72,22 @@ def test_proxy_lock_by_other_machine(episode_root, monkeypatch):
     store.acquire_lock(ep.p.locks, "proxy_q1", "maurice")
     with pytest.raises(RuntimeError, match="maurice"):
         ep.ensure_proxy("q1")
+
+
+@needs_ffmpeg
+def test_proxy_encoder_fallback_and_info(tmp_path, monkeypatch):
+    """Kein NVIDIA-Encoder (hier): „auto“ nimmt die CPU; erzwungenes nvenc fällt auf die CPU zurück; Profil bleibt kompatibel."""
+    import json, subprocess
+    from glorfindel import media
+    monkeypatch.setattr(media, "_NVENC", None)
+    src = make_clip(tmp_path / "c.mp4")
+    info = {}
+    out = media.make_proxy(src, tmp_path / "p" / "a.mp4", height=64, info=info)
+    assert info["encoder"].startswith(("libx264", "h264_nvenc"))
+    forced = {}
+    out2 = media.make_proxy(src, tmp_path / "p" / "b.mp4", height=64, encoder="nvenc", info=forced)
+    assert out2.exists() and forced["sekunden"] >= 0
+    pr = json.loads(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                    "stream=codec_name,pix_fmt", "-of", "json", str(out2)],
+                                   capture_output=True, text=True).stdout)["streams"][0]
+    assert pr["codec_name"] == "h264" and pr["pix_fmt"] == "yuv420p"
