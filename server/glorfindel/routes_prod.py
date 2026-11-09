@@ -462,13 +462,34 @@ def get_dialog(ep: Episode = Depends(ep_of)):
     return {**d, "available": bool(d.get("words"))}
 
 
+@router.get("/ep/{season}/{episode}/dialog/subtitles")
+def dialog_subtitles(ep: Episode = Depends(ep_of)):
+    """Untertitel-Dateien neben den Quellen (z. B. Amazon-Download)."""
+    from . import dialog
+    return dialog.subtitle_candidates(ep)
+
+
+class SubtitleImport(BaseModel):
+    path: str
+    source: str | None = None
+
+
+@router.post("/ep/{season}/{episode}/dialog/subtitles")
+def import_dialog_subtitles(body: SubtitleImport, ep: Episode = Depends(ep_of)):
+    from . import dialog
+    try:
+        return dialog.import_subtitles(ep, body.path, body.source)
+    except (FileNotFoundError, ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+
+
 @router.post("/ep/{season}/{episode}/dialog/transcribe")
-def transcribe_dialog(sprache: str = "auto", ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+def transcribe_dialog(sprache: str = "auto", whisper: bool = False, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     from . import dialog
     pr = ep.project()
     pr.dialog_sprache = sprache
     ep.save_project(pr)
-    return {"job": state.jobs.submit("Dialog der Episode transkribieren", lambda progress: dialog.transcribe(ep, state.llm(), sprache, progress))}
+    return {"job": state.jobs.submit("Dialog der Episode transkribieren", lambda progress: dialog.transcribe(ep, state.llm(), sprache, progress, subtitles_first=not whisper))}
 
 
 @router.put("/ep/{season}/{episode}/dialog")

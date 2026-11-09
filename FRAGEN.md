@@ -114,3 +114,11 @@ Premiere lädt die Grafik einer eingesetzten Vorlage erst nach dem Einsetzen (Ur
 **Umgesetzt (mein Standard):** Das Panel wartet je Credit bis zu 12 s auf die Grafik, versucht es einmal neu, sonst kommt für diesen Credit das PNG (mit Hinweis); nach drei Fehlschlägen in Folge alle weiteren Credits als PNG. „Credit setzen“ ersetzt, was auf der Credit-Spur im Bereich liegt (wie Überschreiben).
 Die Umschreibung aller Kennungen je Text in der Vorlage (`FRESH_SOURCE_ID` in `mogrt_text.py`) ist aus, weil sie nachweislich nicht die Ursache war und in Premiere nie lief.
 **Antwort:**
+
+## F15 – Amazon-Download: Untertitel, Proxys, HQ in OneDrive  🟡
+**Umgesetzt (mein Standard):** Liegt neben einer Quelldatei eine Untertitel-Datei mit gleichem Namensanfang (`.srt`, `.vtt`, `.ttml`, `.dfxp`, Deutsch zuerst), übernimmt „Dialog“ sie statt zu transkribieren (Zeiten über die Anker der Quelle in Episodenzeit). Whisper nur noch, wenn keine Untertitel da sind oder `?whisper=true`. Amazon-Dateien mit Untertiteln brauchen das Transkribieren also nicht mehr.
+**Offen:**
+1. Proxys bleiben (Browser spielt kein HEVC/4K-HQ und Bildschritt braucht jedes Bild als Keyframe). Schneller wäre ein Proxy per NVIDIA-Encoder (`h264_nvenc`) – nicht in der Cloud testbar. Soll ich das mit Rückfall auf CPU einbauen? **Standard:** ja, wenn du es auf deinem Rechner testest.
+2. Reicht ein Proxy nur der Referenz (kein Proxy für HQ)? **Standard:** HQ bekommt keinen Proxy, solange er nicht angefordert wird.
+3. HQ-Dateien selbst bleiben nicht in OneDrive geteilt (zu groß); die anderen brauchen sie dank geteilter Proxys und Untertitel nicht.
+**Antwort:**

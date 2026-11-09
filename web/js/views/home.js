@@ -31,7 +31,7 @@ export async function render(main, ctx) {
       stat(fmtDur(rep.total_s), 'Gesamtlänge (geschätzt)'), stat(`${Math.round(rep.series_share * 100)} %`, `Serienanteil (Ziel ${Math.round(S.settings.thresholds.target_series_share * 100)} %)`),
       stat(rep.scenes.filter((r) => r.light === 'rot').length, 'Szenen mit zu langem Segment'), stat(sc.filter((x) => x.fixiert).length, 'Dramaturgisch fixiert')),
     ck.process && (ck.process.proxy || ck.process.dialog || ck.process.board) ? h('div', { class: 'card', style: { marginTop: '18px', borderColor: 'var(--accent)' } }, h('div', { class: 'row' }, icon('wand'),
-      h('div', { class: 'grow' }, h('b', {}, 'Folge verarbeiten'), h('div', { class: 'help' }, `Nacheinander: ${[ck.process.proxy && 'Vorschau-Video', ck.process.dialog && 'Dialog transkribieren', ck.process.board && 'Szenen erkennen'].filter(Boolean).join(' → ')}. Jeder Schritt zeigt Fortschritt und Restzeit; du kannst währenddessen weiterarbeiten.`)),
+      h('div', { class: 'grow' }, h('b', {}, 'Folge verarbeiten'), h('div', { class: 'help' }, `Nacheinander: ${[ck.process.proxy && 'Vorschau-Video', ck.process.dialog && 'Dialog (Untertitel oder Transkription)', ck.process.board && 'Szenen erkennen'].filter(Boolean).join(' → ')}. Jeder Schritt zeigt Fortschritt und Restzeit; du kannst währenddessen weiterarbeiten.`)),
       btn('Jetzt verarbeiten', { kind: 'primary', icon: 'play', onClick: async () => {
         try {
           const rid = d.project.reference_source;

@@ -3,13 +3,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from . import align, media, stt, store
+from . import align, media, stt, store, subtitles
 from .progress import as_progress
 from .service import Episode
 
 
 def path(ep: Episode) -> Path:
     return ep.p.gl / "dialog.json"
+
+
+path_of = path   # `path` wird in Funktionen von Parametern verdeckt
 
 
 def load(ep: Episode) -> dict:
@@ -22,8 +25,45 @@ def text_between(words: list[dict], t0: float, t1: float, pad: float = 0.1) -> s
     return " ".join(sel).strip()
 
 
-def transcribe(ep: Episode, llm=None, sprache: str = "auto", progress=None) -> dict:
+def subtitle_candidates(ep: Episode) -> list[dict]:
+    """Untertitel-Dateien neben den Quelldateien (z. B. von Amazon): [{source, path, sprache}]."""
+    out = []
+    for s in ep.sources():
+        f = ep.source_path(s)
+        for c in subtitles.find_candidates(f):
+            out.append({"source": s.id, "path": str(c), "sprache": subtitles.language_of(c)})
+    return out
+
+
+def import_subtitles(ep: Episode, path: str | Path, source_id: str | None = None) -> dict:
+    """Untertitel als Dialog übernehmen (statt zu transkribieren). Zeiten der Quelle -> Episodenzeit über deren Anker."""
+    from .paths import to_abs
+    f = to_abs(ep.p.root, str(path))
+    if not f.is_file():
+        raise FileNotFoundError(f"Untertitel nicht gefunden: {f}")
+    sid = source_id or next((c["source"] for c in subtitle_candidates(ep) if Path(c["path"]) == f), None) \
+        or ep.project().reference_source
+    if not sid:
+        raise ValueError("Keine Quelle für die Untertitel gewählt.")
+    from .timemap import TimeMap
+    tm = TimeMap(ep.source(sid).anchors)
+    words = subtitles.cues_to_words(subtitles.parse_file(f), tm)
+    if not words:
+        raise RuntimeError(f"In {f.name} wurden keine Untertitel gefunden.")
+    lang = subtitles.language_of(f)
+    store.write_json(path_of(ep), {"sprache": lang, "quelle": sid, "untertitel": f.name, "words": words})
+    store.log_change(ep.p.gl, ep.settings.user, f"Dialog aus Untertiteln übernommen ({f.name}, {len(words)} Wörter)")
+    return {"words": len(words), "datei": f.name, "sprache": lang}
+
+
+def transcribe(ep: Episode, llm=None, sprache: str = "auto", progress=None, subtitles_first: bool = True) -> dict:
     pg = as_progress(progress)
+    if subtitles_first:                                  # Untertitel vorhanden: keine Transkription nötig
+        cands = [c for c in subtitle_candidates(ep) if sprache in ("", "auto") or c["sprache"] in ("", sprache)]
+        if cands:
+            pg.plan([("Untertitel übernehmen", 1)])
+            pg.step(0, Path(cands[0]["path"]).name)
+            return import_subtitles(ep, cands[0]["path"], cands[0]["source"])
     pg.plan([("Quelle prüfen", 1), ("Dialog transkribieren", 30), ("Speichern", 1)])
     pg.step(0)
     pr = ep.project()
