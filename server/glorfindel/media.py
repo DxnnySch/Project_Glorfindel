@@ -199,8 +199,7 @@ def nvenc_available() -> bool:
             enc = run([ff, "-hide_banner", "-encoders"], timeout=20)
             ok = "h264_nvenc" in enc.stdout
             if ok:
-                r = run([ff, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x144:r=24:d=0.2", "-c:v", "h264_nvenc",
-                         "-f", "null", "-"], timeout=30)
+                r = run([ff, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x144:r=24:d=0.2"] + _proxy_video_args("nvenc") + ["-f", "null", "-"], timeout=30)
                 ok = r.returncode == 0
             _NVENC = ok
         except Exception:  # noqa: BLE001
@@ -209,9 +208,10 @@ def nvenc_available() -> bool:
 
 
 def _proxy_video_args(encoder: str) -> list[str]:
+    # NVENC: "-g 1" lehnt der Treiber ab (GOP muss > B-Frames+1 sein); "-g 0" = nur Intra-Frames, also jedes Bild ein Keyframe
     # Profil/Pixelformat fest, damit jeder Browser die Datei abspielt, egal welcher Encoder sie erzeugt hat
     if encoder == "nvenc":
-        return ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "28", "-b:v", "0", "-g", "1", "-bf", "0",
+        return ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "28", "-b:v", "0", "-g", "0", "-bf", "0",
                 "-profile:v", "high", "-pix_fmt", "yuv420p"]
     return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-g", "1", "-pix_fmt", "yuv420p"]
 
@@ -231,8 +231,8 @@ def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None =
     except Exception:  # noqa: BLE001
         dur = None
     use_gpu = encoder == "nvenc" or (encoder == "auto" and nvenc_available())
-    # Versuche der Reihe nach: GPU mit GPU-Dekodierung, GPU, CPU
-    attempts = ([("nvenc", True), ("nvenc", False)] if use_gpu else []) + [("cpu", False)]
+    # Versuche der Reihe nach: GPU, CPU. Ohne CUDA-Dekodierung: gemessen ist sie langsamer (Bilder müssen zum Skalieren zurück in den RAM)
+    attempts = ([("nvenc", False)] if use_gpu else []) + [("cpu", False)]
     t0 = time.time()
     last_err = ""
     for enc, hw in attempts:
