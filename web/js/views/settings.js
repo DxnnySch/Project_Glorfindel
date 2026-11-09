@@ -12,7 +12,7 @@ export async function render(main) {
   const transcription = h('select', { onChange: (e) => { s.transcription = e.target.value; } },
     [['auto', 'Automatisch (lokal, wenn möglich)'], ['lokal', 'Nur lokal (Whisper auf diesem Rechner)'], ['scads', 'ScaDS.AI Whisper – sendet Audio an ScaDS.AI']].map(([v, l]) => h('option', { value: v, selected: s.transcription === v }, l)));
   const save = async () => {
-    try { await api.put('/api/settings', s); await loadGlobal(); toast('Einstellungen gespeichert.', 'ok');
+    try { const r = await api.put('/api/settings', s); await loadGlobal(); toast(r && r.episodes ? `Einstellungen gespeichert – ${r.episodes} Folge${r.episodes === 1 ? '' : 'n'} in „${r.episodes_dir || '.'}“ gefunden.` : 'Einstellungen gespeichert.', 'ok', 6000);
       if (s.onedrive_root) location.hash = S.ep ? location.hash : '#/home'; } catch (e) { toast(e.message, 'err'); }
   };
   const theme = h('select', { onChange: (e) => { localStorage.setItem('gl-theme', e.target.value); document.documentElement.dataset.theme = e.target.value; } },
@@ -67,5 +67,6 @@ export async function render(main) {
         h('div', { class: 'card col' }, h('h2', {}, 'Längenampel & Sprechtempo'),
           h('div', { class: 'grid g2' }, field('Max. Segmentlänge (s)', inp('max_segment_s', th, 'number')), field('Warnschwelle (Anteil)', inp('warn_ratio', th, 'number')),
             field('Ziel-Serienanteil', inp('target_series_share', th, 'number')), field('Wörter pro Sekunde', inp('words_per_second', th, 'number')), field('Sekunden pro Stichpunkt', inp('bullet_seconds', th, 'number'))),
-          check('Conform-Dateien in OneDrive ablegen (statt lokal)', s, 'keep_hq_in_onedrive'))))));
+          check('Conform-Dateien in OneDrive ablegen (statt lokal)', s, 'keep_hq_in_onedrive'),
+          check('Proxys und Szenenvorschläge mit den anderen teilen (Ordner „arbeit“ in der Folge, spart den anderen das Erzeugen)', s, 'share_work_files'))))));
 }

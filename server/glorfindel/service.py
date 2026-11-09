@@ -32,6 +32,35 @@ def list_episodes(settings: Settings) -> list[dict]:
     return out
 
 
+def detect_episodes_dir(root: str | Path, max_depth: int = 4) -> str | None:
+    """Findet unterhalb des OneDrive-Stamms den Ordner, der Folgenordner (`S2 E7/glorfindel/projekt.json`) enthält.
+
+    So müssen weitere Rechner nur den OneDrive-Ordner angeben; bereits angelegte Projekte werden erkannt.
+    Gibt den Pfad relativ zum Stamm zurück (POSIX), bei mehreren Treffern den mit den meisten Folgen.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return None
+    found: dict[Path, int] = {}
+
+    def walk(d: Path, depth: int) -> None:
+        try:
+            entries = [e for e in d.iterdir() if e.is_dir()]
+        except OSError:
+            return
+        for e in entries:
+            if parse_slug(e.name) and (e / "glorfindel" / "projekt.json").exists():
+                found[d] = found.get(d, 0) + 1
+            elif depth < max_depth and not e.name.startswith("."):
+                walk(e, depth + 1)
+
+    walk(root, 0)
+    if not found:
+        return None
+    best = max(found, key=lambda k: (found[k], -len(k.parts)))
+    return best.relative_to(root).as_posix() if best != root else ""
+
+
 class Episode:
     def __init__(self, settings: Settings, season: int, episode: int):
         self.settings = settings
@@ -139,14 +168,41 @@ class Episode:
         raise KeyError(sid)
 
     def proxy_path(self, sid: str) -> Path:
-        return self.p.cache() / f"proxy_{sid}.mp4"
+        return self.p.work() / f"proxy_{sid}.mp4"
 
     def ensure_proxy(self, sid: str, on_progress=None) -> Path:
+        """Proxy erzeugen, falls er (auch bei einem anderen Rechner) noch fehlt.
+
+        Kodiert wird im lokalen Cache und erst am Ende in den Folgenordner verschoben, damit OneDrive keine
+        halbfertigen Dateien hochlädt. Eine weiche Sperre verhindert, dass zwei Rechner dasselbe kodieren.
+        """
         dst = self.proxy_path(sid)
         with _PROXY_LOCKS.setdefault(str(dst), threading.Lock()):  # Auto-Proxy und manueller Auftrag nie gleichzeitig
             if not dst.exists():
-                s = self.source(sid)
-                media.make_proxy(self.source_path(s), dst, crop=s.crop, fps=s.normalize_fps, on_progress=on_progress)
+                key = f"proxy_{sid}"
+                lk = store.acquire_lock(self.p.locks, key, self.settings.user)
+                if not lk["held"]:
+                    raise RuntimeError(f"Proxy {sid} wird gerade von {lk['by']} erzeugt – bitte kurz warten, "
+                                       "er erscheint dann automatisch.")
+                try:
+                    s = self.source(sid)
+                    tmp = self.p.cache() / f"proxy_{sid}.mp4"
+                    last = [time.time()]
+
+                    def progress(f, info):
+                        if time.time() - last[0] > 30:   # Sperre am Leben halten (läuft sonst nach 2 Minuten ab)
+                            store.acquire_lock(self.p.locks, key, self.settings.user)
+                            last[0] = time.time()
+                        if on_progress:
+                            on_progress(f, info)
+
+                    media.make_proxy(self.source_path(s), tmp, crop=s.crop, fps=s.normalize_fps, on_progress=progress)
+                    part = dst.with_name(dst.name + ".part")
+                    shutil.copyfile(tmp, part)
+                    part.replace(dst)
+                    tmp.unlink(missing_ok=True)
+                finally:
+                    store.release_lock(self.p.locks, key, self.settings.user)
             elif media.proxy_needs_fix(dst):      # älterer Proxy (Stereo-Ton): einmalig auf Mono umbauen
                 media.fix_proxy_audio(dst, on_progress)
         return dst

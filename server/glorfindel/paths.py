@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 from .config import Settings, app_dir
@@ -53,3 +54,39 @@ class EpisodePaths:
         d = app_dir() / "cache" / self.slug.replace(" ", "_")
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+    def work(self) -> Path:
+        """Arbeitsdateien, die alle Rechner brauchen (Proxys, Szenenvorschläge, Vorschaubilder, Wellenformen).
+
+        Standard: `<Folge>/glorfindel/arbeit` in OneDrive, damit andere Rechner sie direkt vorfinden.
+        Ohne `share_work_files` bleibt alles im lokalen Cache. Ältere lokale Dateien werden einmal übernommen.
+        """
+        if not self.settings.share_work_files:
+            return self.cache()
+        d = self.gl / "arbeit"
+        d.mkdir(parents=True, exist_ok=True)
+        self._adopt_local(d)
+        return d
+
+    _adopted: set[str] = set()
+
+    def _adopt_local(self, d: Path) -> None:
+        key = str(d)
+        if key in EpisodePaths._adopted:
+            return
+        EpisodePaths._adopted.add(key)
+        local = self.cache()
+        for src in [*local.glob("proxy_*.mp4"), local / "board.json", local / "thumbs", *local.glob("wave_*.json")]:
+            dst = d / src.name
+            if src.exists() and not dst.exists():
+                try:
+                    if src.is_dir():
+                        shutil.copytree(src, dst)
+                        shutil.rmtree(src, ignore_errors=True)
+                    else:
+                        tmp = dst.with_name(dst.name + ".part")
+                        shutil.copy2(src, tmp)
+                        tmp.replace(dst)
+                        src.unlink(missing_ok=True)
+                except OSError:
+                    pass

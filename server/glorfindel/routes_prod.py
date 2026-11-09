@@ -129,20 +129,20 @@ def board_detect(body: DetectBody, ep: Episode = Depends(ep_of), state: AppState
         progress.step(3, f"{len(shots)} Schnitte und {len(sil)} Tonpausen zu Szenen bündeln")
         scenes = detect.propose_scenes(shots, sil, min_len=body.min_scene_s)
         progress.step(4, f"{len(scenes)} Vorschläge")
-        ths = detect.thumbnails(proxy, [s["start"] for s in scenes], ep.p.cache() / "thumbs",
+        ths = detect.thumbnails(proxy, [s["start"] for s in scenes], ep.p.work() / "thumbs",
                                 on_progress=lambda k, n: progress.sub(k, n, f"Vorschaubild {k + 1} von {n}", "Vorschaubilder"))
         for s, t in zip(scenes, ths):
             s["thumb"] = t.name
         progress.step(5)
         out = {"source": sid, "scenes": scenes, "shots": len(shots)}
-        store.write_json(ep.p.cache() / "board.json", out)
+        store.write_json(ep.p.work() / "board.json", out)
         return out
     return {"job": state.jobs.submit("Szenenerkennung", work)}
 
 
 @router.get("/ep/{season}/{episode}/board")
 def board(ep: Episode = Depends(ep_of)):
-    return store.read_json(ep.p.cache() / "board.json", {"scenes": []})
+    return store.read_json(ep.p.work() / "board.json", {"scenes": []})
 
 
 class BoardScene(BaseModel):
@@ -163,15 +163,15 @@ def save_board(body: BoardBody, ep: Episode = Depends(ep_of)):
     for s in body.scenes:
         if s.end <= s.start:
             raise HTTPException(400, f"Ende muss nach dem Anfang liegen ({s.start:.1f}–{s.end:.1f} s)")
-    data = store.read_json(ep.p.cache() / "board.json", {})
+    data = store.read_json(ep.p.work() / "board.json", {})
     data.update(source=body.source or data.get("source", ""), scenes=[s.model_dump() for s in body.scenes])
-    store.write_json(ep.p.cache() / "board.json", data)
+    store.write_json(ep.p.work() / "board.json", data)
     return {"ok": True}
 
 
 @router.get("/ep/{season}/{episode}/thumb/{name}")
 def thumb(name: str, ep: Episode = Depends(ep_of)):
-    f = ep.p.cache() / "thumbs" / Path(name).name
+    f = ep.p.work() / "thumbs" / Path(name).name
     if not f.exists():
         raise HTTPException(404)
     return FileResponse(f)
@@ -239,7 +239,7 @@ def waveform(rid: str, ep: Episode = Depends(ep_of)):
     rec = next((r for r in pipeline.load_alignment(ep)["recordings"] if r["id"] == rid), None)
     if not rec:
         raise HTTPException(404)
-    cache = ep.p.cache() / f"wave_{rid}.json"
+    cache = ep.p.work() / f"wave_{rid}.json"
     peaks = store.read_json(cache)
     if peaks is None:
         peaks = media.waveform_peaks(_rec_file(ep, rec["path"]), buckets=3000)

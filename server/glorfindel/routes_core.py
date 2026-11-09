@@ -15,7 +15,7 @@ from .config import Settings
 from .deps import AppState
 from .models import Anchor, CommentBlock, Scene, Segment, Strand
 from .scenes import episode_report, normalize_block, scene_report, validate_segments
-from .service import Episode, list_episodes
+from .service import Episode, detect_episodes_dir, list_episodes
 
 router = APIRouter()
 
@@ -40,9 +40,14 @@ def get_settings(state: AppState = Depends(st)):
 
 @router.put("/settings")
 def put_settings(new: Settings, state: AppState = Depends(st)):
+    # Neuer/geänderter OneDrive-Stamm: Ordner mit vorhandenen Folgen selbst finden
+    if new.onedrive_root and Path(new.onedrive_root).is_dir() and not list_episodes(new):
+        found = detect_episodes_dir(new.onedrive_root)
+        if found is not None:
+            new.episodes_dir = found
     state.settings = new
     state.save()
-    return {"ok": True}
+    return {"ok": True, "episodes_dir": new.episodes_dir, "episodes": len(list_episodes(new)) if new.onedrive_root else 0}
 
 
 @router.get("/detect-onedrive")
@@ -541,7 +546,7 @@ def cockpit(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     ref_id = pr_.reference_source
     todo = {"proxy": bool(ref_id) and not ep.proxy_path(ref_id).exists(),
             "dialog": bool(ref_id) and not dialog_mod.load(ep).get("words"),
-            "board": bool(ref_id) and not (store.read_json(ep.p.cache() / "board.json", {}).get("scenes") or scs)}
+            "board": bool(ref_id) and not (store.read_json(ep.p.work() / "board.json", {}).get("scenes") or scs)}
     add(int(todo["proxy"]), "Vorschau-Video (Proxy) der Episode erzeugen", "home")
     add(int(todo["dialog"]), "Dialog der Episode transkribieren (zum Markieren von Dialogstellen)", "home")
     add(int(todo["board"]), "Szenen der Episode erkennen und nach Strängen sortieren", "home")

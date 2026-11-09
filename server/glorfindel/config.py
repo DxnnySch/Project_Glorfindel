@@ -80,6 +80,7 @@ class Settings(BaseModel):
     thresholds: Thresholds = Field(default_factory=Thresholds)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     keep_hq_in_onedrive: bool = False
+    share_work_files: bool = True   # Proxys, Szenenvorschläge, Vorschaubilder, Wellenformen im Folgenordner (OneDrive) statt nur lokal
     premiere: PremiereSettings = Field(default_factory=PremiereSettings)
 
 

@@ -47,7 +47,7 @@ def migrate(ep: Episode) -> dict:
         return {"done": False, "reason": "bereits umgestellt"}
     scenes = ep.scenes()
     todo = [s for s in scenes if not s.bereich]
-    board = store.read_json(ep.p.cache() / "board.json", None)
+    board = store.read_json(ep.p.work() / "board.json", None)
     proposals = [p for p in (board or {}).get("scenes", []) if "start" in p and "end" in p]
     if todo and not proposals:
         return {"done": False, "reason": "keine Szenenerkennung auf diesem Rechner (Board)"}  # später erneut versuchen
