@@ -9,7 +9,7 @@ const STATUS = { neu: 'Neu', skript_fertig: 'Skript fertig', aufgenommen: 'Aufge
 
 export async function render(main, ctx) {
   const ep = S.ep;
-  const ui = remember(`${ep.season}-${ep.episode}:editor`, { query: '', filt: '', sel: '', allEp: false, listScroll: 0, mainScroll: 0 });
+  const ui = remember(`${ep.season}-${ep.episode}:editor`, { query: '', filt: '', sel: '', allEp: false, listScroll: 0, mainScroll: 0, byAblauf: false });
   const [scenes0, assets, maps, dialog] = await Promise.all([api.get(epUrl(ep, '/scenes')), api.get(epUrl(ep, '/assets')), api.get(epUrl(ep, '/maps')), api.get(epUrl(ep, '/dialog')).catch(() => ({ available: false, words: [] }))]);
   let scenes = scenes0;
   const normalize = (s) => { if (s.segmente?.length) s.kommentar.forEach((b) => { if (b.segment == null) b.segment = s.segmente.length - 1; }); return s; };
@@ -34,7 +34,7 @@ export async function render(main, ctx) {
   const setState = (t) => { stateEl.textContent = t; };
 
   // ---------- Speichern ----------
-  const clean = (s) => { const { report, lock, problems, ausgabe, ...rest } = s; return rest; };
+  const clean = (s) => { const { report, lock, problems, ausgabe, ablauf_pos, ...rest } = s; return rest; };
   const save = debounce(async () => {
     if (!sel || saving || blocked) return;
     saving = true; setState('Speichert …');
@@ -53,7 +53,7 @@ export async function render(main, ctx) {
   async function refreshCoverage() {   // welche Szenen ein Segment überdeckt, ändert sich beim Speichern – Inhalt bleibt unangetastet
     try {
       const fresh = new Map((await api.get(epUrl(ep, '/scenes'))).map((x) => [x.id, x]));
-      for (const s of scenes) { const f = fresh.get(s.id); if (!f) continue; s.nr = f.nr; s.segmente_info = f.segmente_info; s.beruehrt = f.beruehrt; s.ausgabe = f.ausgabe; if (s !== sel) { s.report = f.report; s.problems = f.problems; } else { s.problems = f.problems; } }
+      for (const s of scenes) { const f = fresh.get(s.id); if (!f) continue; s.nr = f.nr; s.segmente_info = f.segmente_info; s.beruehrt = f.beruehrt; s.ausgabe = f.ausgabe; s.ablauf_pos = f.ablauf_pos; if (s !== sel) { s.report = f.report; s.problems = f.problems; } else { s.problems = f.problems; } }
       drawList(); drawBanner(); segs.updateSpans();
     } catch { /* nächstes Speichern versucht es erneut */ }
   }
@@ -129,12 +129,15 @@ export async function render(main, ctx) {
       const fsel = h('select', { onChange: (e) => { ui.filt = e.target.value; drawList(); } }, h('option', { value: '' }, 'Alle Szenen'), h('option', { value: 'ohne_segment' }, 'Nicht im Video (ohne Segment)'), h('option', { value: 'mit_segment' }, 'Im Video (mit Segment)'), h('option', { value: 'ohne_kommentar' }, 'Ohne Kommentar'), h('option', { value: 'rot' }, 'Zu langes Segment'),
         ...S.data.strands.map((x) => h('option', { value: `st:${x.id}` }, `Strang: ${x.name}`)), ...Object.entries(STATUS).map(([k, v]) => h('option', { value: `status:${k}` }, `Status: ${v}`)));
       fsel.value = ui.filt;
-      listEl.append(h('div', { class: 'scene-list-head' }, h('div', { class: 'row' }, h('b', { class: 'grow', title: 'Szenen sind die Messeinheiten aus der Szenenerkennung. Ins Video kommen nur Segmente.' }, 'Szenen'), h('span', { class: 'help', id: 'scene-count' })), h('div', { class: 'col gap-s', style: { marginTop: '8px' } }, search, fsel)));
+      listEl.append(h('div', { class: 'scene-list-head' }, h('div', { class: 'row' }, h('b', { class: 'grow', title: 'Szenen sind die Messeinheiten aus der Szenenerkennung. Ins Video kommen nur Segmente.' }, 'Szenen'), h('span', { class: 'help', id: 'scene-count' })), h('div', { class: 'col gap-s', style: { marginTop: '8px' } }, search, fsel,
+        h('label', { class: 'check', title: 'Nur die Anzeige: Szenen in der Reihenfolge des Ablaufs (Video/Word) zeigen. Zum Verschieben den Ablauf nutzen.' },
+          h('input', { type: 'checkbox', checked: ui.byAblauf, onChange: (e) => { ui.byAblauf = e.target.checked; drawList(); } }), 'Nach Ablauf sortieren'))));
       listBody = h('div'); listEl.append(groupBar, listBody);
       listEl.addEventListener('scroll', () => { ui.listScroll = listEl.scrollTop; });
     }
     clear(listBody);
     const shown = scenes.filter(matches);
+    if (ui.byAblauf) shown.sort((a, b) => a.ablauf_pos - b.ablauf_pos);   // reine Ansicht; `scenes` (Messeinheiten) bleibt unverändert
     $('#scene-count', listEl).textContent = shown.length === scenes.length ? `${scenes.length}` : `${shown.length} von ${scenes.length}`;
     drawGroupBar();
     let prevGroup = '';
@@ -151,13 +154,13 @@ export async function render(main, ctx) {
         onClick: (e) => { e.stopPropagation(); const on = e.target.checked; const li = shown.indexOf(s);
           if (e.shiftKey && lastChecked != null) { const [a, b] = [lastChecked, li].sort((x, y) => x - y); shown.slice(a, b + 1).forEach((x) => (on ? checked.add(x.id) : checked.delete(x.id))); } else (on ? checked.add(s.id) : checked.delete(s.id));
           lastChecked = li; drawList(); } });
-      const el = h('div', { class: `scene-item ${sel?.id === s.id ? 'active' : ''} ${unused ? 'unused' : ''} ${g ? 'grouped' : ''}`, draggable: 'true', style: { borderLeftColor: g?.farbe || st?.color || 'transparent' },
+      const el = h('div', { class: `scene-item ${sel?.id === s.id ? 'active' : ''} ${unused ? 'unused' : ''} ${g ? 'grouped' : ''}`, draggable: ui.byAblauf ? 'false' : 'true', style: { borderLeftColor: g?.farbe || st?.color || 'transparent' },
         onClick: () => select(s.id),
         onDragstart: (e) => { e.dataTransfer.setData('text/plain', s.id); },
         onDragover: (e) => { e.preventDefault(); el.classList.add('dragover'); }, onDragleave: () => el.classList.remove('dragover'),
-        onDrop: async (e) => { e.preventDefault(); el.classList.remove('dragover'); const from = e.dataTransfer.getData('text/plain'); if (from && from !== s.id) await move(from, s.id); } },
+        onDrop: async (e) => { e.preventDefault(); el.classList.remove('dragover'); if (ui.byAblauf) return; const from = e.dataTransfer.getData('text/plain'); if (from && from !== s.id) await move(from, s.id); } },
       pick,
-      h('span', { class: 'no', title: s.nr ? `Szene ${s.nr} (Messeinheit der Szenenerkennung)${s.ausgabe ? ` · Position im Video: ${s.ausgabe}` : ''}` : '' }, String(s.nr || s.ausgabe || i + 1).padStart(2, '0')),
+      h('span', { class: 'no', title: ui.byAblauf ? `Position im Ablauf: ${s.ablauf_pos}${s.nr ? ` · Szene ${s.nr} (Messeinheit)` : ''}` : s.nr ? `Szene ${s.nr} (Messeinheit der Szenenerkennung)${s.ausgabe ? ` · Position im Video: ${s.ausgabe}` : ''}` : '' }, String(ui.byAblauf ? s.ablauf_pos : (s.nr || s.ausgabe || i + 1)).padStart(2, '0')),
       h('div', { class: 'grow' }, h('div', { class: 't' }, s.titel || '(ohne Titel)'),
         h('small', {}, h('span', { class: `dot ${light}`, title: lightLabel[light] || 'kein Material' }), st ? st.name : 'ohne Strang', '·', STATUS[s.status] || s.status, s.fixiert ? icon('lock') : null,
           s.lock && s.lock.user !== S.settings.user ? h('span', { class: 'chip' }, `${s.lock.user}`) : null),
