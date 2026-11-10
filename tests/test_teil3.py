@@ -116,6 +116,19 @@ def test_dialog_ablauf_and_board_creation(tmp_path, monkeypatch):
     assert c.put("/api/ep/2/1/ablauf", json={"order": None}).status_code == 200
 
 
+def test_ablauf_position_for_scenes_without_content(tmp_path, monkeypatch):
+    """Szenen ohne Segment/Kommentar haben keine `ausgabe`; die Ablauf-Ansicht braucht trotzdem ihre Position."""
+    c, root = _client(tmp_path, monkeypatch)
+    c.post("/api/ep/2/1/board/create-scenes", json=[{"start": s, "end": s + 5, "strang": "eregion", "titel": f"S{s}"} for s in (5, 20, 40)])
+    ids = [s["id"] for s in c.get("/api/ep/2/1/scenes").json()]
+    assert all(s["ausgabe"] is None for s in c.get("/api/ep/2/1/scenes").json())
+    assert c.put("/api/ep/2/1/ablauf", json={"order": ids[::-1]}).status_code == 200
+    by_pos = sorted(c.get("/api/ep/2/1/scenes").json(), key=lambda s: s["ablauf_pos"])
+    assert [s["id"] for s in by_pos] == ids[::-1]
+    assert c.put("/api/ep/2/1/ablauf", json={"order": None}).status_code == 200
+    assert [s["id"] for s in sorted(c.get("/api/ep/2/1/scenes").json(), key=lambda s: s["ablauf_pos"])] == ids
+
+
 def test_speaker_export_endpoint(tmp_path, monkeypatch):
     c, root = _client(tmp_path, monkeypatch)
     c.post("/api/ep/2/1/scenes", json={"titel": "A", "segmente": [{"in": 1, "out": 4, "notiz": "Hinweis"}], "kommentar": [{"sprecher": "philipp", "text": "Hallo Welt"}]})

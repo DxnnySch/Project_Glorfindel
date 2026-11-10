@@ -14,7 +14,19 @@ export async function render(main, ctx) {
     if (!ref) { toast('Zuerst eine Referenz importieren.', 'warn'); return; }
     try { await runJob('Szenen werden erkannt (das dauert einige Minuten) …', () => api.post(epUrl(ep, '/board/detect'), { source: ref.id })); ctx.refresh(); } catch (e) { toast(e.message, 'err'); }
   };
-  const saveStrands = () => api.put(epUrl(ep, '/strands'), strands.map((s, i) => ({ ...s, order: i }))).then(() => { drawLanes?.(); toast('Stränge gespeichert.', 'ok'); }).catch((e) => toast(e.message, 'err'));
+  const saveStrands = async () => {
+    try {
+      await api.put(epUrl(ep, '/strands'), strands.map((s, i) => ({ ...s, order: i })));
+      drawLanes?.(); toast('Stränge gespeichert.', 'ok');
+      // Eine manuelle Reihenfolge im Ablauf hat Vorrang vor der Strang-Reihenfolge – sonst bliebe das Umsortieren ohne Wirkung.
+      const reordered = strands.map((s) => s.id).join() !== d.strands.map((s) => s.id).join();
+      if (reordered && (S.data.project.ablauf || []).length
+        && confirm('Für diese Folge ist im „Ablauf“ eine manuelle Reihenfolge gesetzt. Sie hat Vorrang, deshalb wirkt die neue Strang-Reihenfolge noch nicht auf Schnitt und Word.\n\nManuelle Reihenfolge verwerfen und nach Strängen sortieren?')) {
+        await api.put(epUrl(ep, '/ablauf'), { order: [] });
+        toast('Reihenfolge: automatisch nach Strängen.', 'ok', 1800); ctx.refresh();
+      }
+    } catch (e) { toast(e.message, 'err'); }
+  };
   const used = (id) => d.scenes.filter((x) => x.strang === id).length;
   const strandRow = (s, i) => h('div', { class: 'row' }, h('input', { type: 'color', value: s.color, onInput: (e) => { s.color = e.target.value; } }), h('input', { type: 'text', value: s.name, onInput: (e) => { s.name = e.target.value; } }),
     h('span', { class: 'help', style: { minWidth: '70px' } }, `${used(s.id)} Szene(n)`),

@@ -322,13 +322,15 @@ def scenes(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     from .scenes import coverage, in_video, overlap_problems
     units.migrate(ep)                      # einmalig: Szenen = Messeinheiten, keine automatischen Segmente
     allsc = ep.scenes()
-    out_no = {x.id: i + 1 for i, x in enumerate(x for x in pipeline.ordered_scenes(ep, True) if in_video(x))}
+    ordered = pipeline.ordered_scenes(ep, True)
+    out_no = {x.id: i + 1 for i, x in enumerate(x for x in ordered if in_video(x))}
+    pos = {x.id: i + 1 for i, x in enumerate(ordered)}   # Position im Ablauf, auch für Szenen ohne Segment/Kommentar
     cov, overl = coverage(allsc), overlap_problems(allsc)
     by_id = {x.id: x for x in allsc}
     out = []
     for s in allsc:
         touched = [{**t, "titel": by_id[t["scene"]].titel, "nr": cov["nr"].get(t["scene"])} for t in cov["touched"].get(s.id, []) if t["scene"] != s.id]
-        out.append({**s.model_dump(by_alias=True), "ausgabe": out_no.get(s.id), "nr": cov["nr"].get(s.id),
+        out.append({**s.model_dump(by_alias=True), "ausgabe": out_no.get(s.id), "ablauf_pos": pos[s.id], "nr": cov["nr"].get(s.id),
                     "segmente_info": cov["segments"].get(s.id, []), "beruehrt": touched,
                     "report": scene_report(s, th), "lock": store.lock_status(ep.p.locks, s.id),
                     "problems": validate_segments(s, _ref_duration(ep)) + overl.get(s.id, [])})

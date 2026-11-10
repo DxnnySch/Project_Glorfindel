@@ -7,7 +7,7 @@ export async function render(main, ctx) {
   const ep = S.ep;
   const [scenes, assets, maps] = await Promise.all([api.get(epUrl(ep, '/scenes')), api.get(epUrl(ep, '/assets')), api.get(epUrl(ep, '/maps'))]);
   const manual = (S.data.project.ablauf || []).length > 0;
-  let order = [...scenes].sort((a, b) => (a.ausgabe || 999) - (b.ausgabe || 999));
+  let order = [...scenes].sort((a, b) => a.ablauf_pos - b.ablauf_pos);   // nicht nach `ausgabe`: die fehlt Szenen ohne Segment/Kommentar
   const host = h('div', { class: 'col' });
   let drag = null;   // { kind: 'scene'|'group', ids: [...] }
 
