@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import json
+import os
 import secrets
 import threading
 import time
@@ -40,6 +41,40 @@ def get_token() -> str:
     return t
 
 
+LOG_MAX_BYTES = 2_000_000
+_log_lock = threading.Lock()
+
+
+def log_path() -> Path:
+    return app_dir() / "logs" / "bridge.log"
+
+
+def _write_logfile(t: float, level: str, text: str) -> None:
+    """Protokoll sofort auf die Platte (flush + fsync): übersteht einen Absturz von Premiere oder des Servers.
+    Die Datei wird ab 2 MB zu bridge.log.1 rotiert. Fehler beim Schreiben dürfen die Bridge nie stören."""
+    try:
+        p = log_path()
+        with _log_lock:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if p.exists() and p.stat().st_size > LOG_MAX_BYTES:
+                p.replace(p.with_name("bridge.log.1"))
+            stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t)) + f".{int(t % 1 * 1000):03d}"
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(f"{stamp} [{level}] {text}\n")
+                f.flush()
+                os.fsync(f.fileno())
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _brief(value: Any, limit: int = 300) -> str:
+    try:
+        s = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:  # noqa: BLE001
+        s = repr(value)
+    return s if len(s) <= limit else s[:limit] + f"… ({len(s)} Zeichen)"
+
+
 class BridgeHub:
     def __init__(self) -> None:
         self.ws: Any = None
@@ -62,7 +97,9 @@ class BridgeHub:
                 "protocol": PROTOCOL, "log": list(self.log)[-60:]}
 
     def _log(self, level: str, text: str) -> None:
-        self.log.append({"t": time.time(), "level": level, "text": text})
+        now = time.time()
+        self.log.append({"t": now, "level": level, "text": text})
+        _write_logfile(now, level, text)
 
     # ---------- Verbindung (vom WebSocket-Endpunkt aufgerufen) ----------
     async def serve(self, ws) -> None:
@@ -119,7 +156,9 @@ class BridgeHub:
             slot = self._pending.get(msg.get("id"))
             if msg.get("name") == "log":
                 self._log(msg.get("data", {}).get("level", "info"), str(msg.get("data", {}).get("text", "")))
-            elif slot and slot.get("on_event"):
+            else:
+                self._log("event", f"#{msg.get('id')} {msg.get('name')} {_brief(msg.get('data'), 200)}")
+            if msg.get("name") != "log" and slot and slot.get("on_event"):
                 try:
                     slot["on_event"](msg.get("name"), msg.get("data"))
                 except Exception:  # noqa: BLE001
@@ -144,6 +183,8 @@ class BridgeHub:
         slot = {"tevent": threading.Event(), "result": None, "on_event": on_event}
         self._pending[cid] = slot
         payload = json.dumps({"t": "call", "id": cid, "op": op, "args": args or {}})
+        self._log("call", f"#{cid} {op} → Premiere ({len(payload)} Bytes) {_brief(args, 200)}")   # vor dem Senden: letzter Eintrag vor einem Absturz
+        t0 = time.time()
         ws = self.ws
         fut = asyncio.run_coroutine_threadsafe(ws.send_text(payload), self.loop)
         try:
@@ -154,7 +195,9 @@ class BridgeHub:
             self._pending.pop(cid, None)
         res = slot["result"] or {}
         if not res.get("ok"):
+            self._log("error", f"#{cid} {op} fehlgeschlagen nach {time.time() - t0:.1f} s: {res.get('error')}")
             raise BridgeError(res.get("error") or "Unbekannter Fehler in Premiere")
+        self._log("call", f"#{cid} {op} fertig nach {time.time() - t0:.1f} s")
         return res.get("data")
 
 

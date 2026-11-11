@@ -52,17 +52,17 @@
    "image_track": 2,
    "mask_track": 4,
    "matte_track": 5,
-   "image_scale": 76.8,
-   "mask_scale": 80.0,
+   "image_scale": 66.96,
+   "mask_scale": 83.7,
    "image_position": [
-    0.5,
+    0.27,
     0.5
    ],
    "mask_position": [
-    0.5,
+    0.27,
     0.5
    ],
-   "mask_name": "Maske.png",
+   "mask_name": "Maske Quadrat.png",
    "motiv": null
   },
   {
@@ -70,7 +70,7 @@
    "name": "Artwork 02 alan lee - hafen",
    "dur": 1.5000000000000036,
    "image": "m8",
-   "mask": "m10",
+   "mask": "m9",
    "image_track": 2,
    "mask_track": 4,
    "matte_track": 5,
@@ -91,19 +91,19 @@
    "id": "n3",
    "name": "Artwork 03 john howe",
    "dur": 6.916666666666666,
-   "image": "m13",
-   "mask": "m10",
+   "image": "m11",
+   "mask": "m9",
    "image_track": 2,
    "mask_track": 4,
    "matte_track": 5,
-   "image_scale": 143.75,
-   "mask_scale": 125.0,
+   "image_scale": 96.255,
+   "mask_scale": 83.7,
    "image_position": [
-    0.5,
+    0.73,
     0.5
    ],
    "mask_position": [
-    0.5,
+    0.73,
     0.5
    ],
    "mask_name": "Maske Quadrat.png",
@@ -113,8 +113,8 @@
    "id": "n4",
    "name": "Artwork 04 john howe",
    "dur": 1.5000000000000036,
-   "image": "m13",
-   "mask": "m10",
+   "image": "m11",
+   "mask": "m9",
    "image_track": 2,
    "mask_track": 4,
    "matte_track": 5,
@@ -179,26 +179,16 @@
   },
   {
    "id": "m9",
-   "path": "C:/vorlagen/masken/Maske.png",
-   "kind": "mask"
-  },
-  {
-   "id": "m10",
    "path": "C:/vorlagen/masken/Maske Quadrat.png",
    "kind": "mask"
   },
   {
+   "id": "m10",
+   "path": "F:/OneDrive/credits/credit_m10.png",
+   "kind": "credit"
+  },
+  {
    "id": "m11",
-   "path": "F:/OneDrive/credits/credit_m11.png",
-   "kind": "credit"
-  },
-  {
-   "id": "m12",
-   "path": "F:/OneDrive/credits/credit_m12.png",
-   "kind": "credit"
-  },
-  {
-   "id": "m13",
    "path": "F:/OneDrive/Bilder/john howe.jpg",
    "kind": "artwork",
    "size": [
@@ -207,17 +197,12 @@
    ]
   },
   {
-   "id": "m14",
-   "path": "F:/OneDrive/credits/credit_m14.png",
+   "id": "m12",
+   "path": "F:/OneDrive/credits/credit_m12.png",
    "kind": "credit"
   },
   {
-   "id": "m15",
-   "path": "F:/OneDrive/credits/credit_m15.png",
-   "kind": "credit"
-  },
-  {
-   "id": "m16",
+   "id": "m13",
    "path": "C:/cache/anim/Schwarzstreifen.png",
    "kind": "bars"
   }
@@ -2217,7 +2202,7 @@
    "end": 34.15,
    "track": 7,
    "scene": "",
-   "media": "m16",
+   "media": "m13",
    "name": "Schwarzstreifen"
   },
   {
@@ -2343,7 +2328,7 @@
    "track": 9,
    "scene": "sz_01",
    "art": "artwork",
-   "media": "m11",
+   "media": "m10",
    "name": "© alan lee",
    "fade": 0.42,
    "text_modus": "mogrt",
@@ -2351,7 +2336,7 @@
     "path": "C:/vorlagen/mogrt/Credit Artwork.mogrt",
     "baked": false,
     "text": "© alan lee",
-    "dx": 0.0,
+    "dx": -0.23,
     "text_names": [
      "TextLayer",
      "Text",
@@ -2372,7 +2357,7 @@
    "track": 9,
    "scene": "sz_02",
    "art": "artwork",
-   "media": "m12",
+   "media": "m10",
    "name": "© alan lee",
    "fade": 0.42,
    "text_modus": "mogrt",
@@ -2401,7 +2386,7 @@
    "track": 12,
    "scene": "sz_01",
    "art": "artwork",
-   "media": "m14",
+   "media": "m12",
    "name": "© john howe",
    "fade": 0.42,
    "text_modus": "mogrt",
@@ -2409,7 +2394,7 @@
     "path": "C:/vorlagen/mogrt/Credit Artwork.mogrt",
     "baked": false,
     "text": "© john howe",
-    "dx": 0.0,
+    "dx": 0.23,
     "text_names": [
      "TextLayer",
      "Text",
@@ -2430,7 +2415,7 @@
    "track": 12,
    "scene": "sz_02",
    "art": "artwork",
-   "media": "m15",
+   "media": "m12",
    "name": "© john howe",
    "fade": 0.42,
    "text_modus": "mogrt",
@@ -2509,7 +2494,7 @@
  ],
  "stats": {
   "clips": 24,
-  "media": 16,
+  "media": 13,
   "duration": 34.15,
   "by_kind": {
    "adjust": 2,

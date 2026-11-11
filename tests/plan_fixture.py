@@ -26,7 +26,7 @@ def make_plan() -> dict:
     scenes = [
         Scene(id="sz_01", titel="Schmiede", segmente=[seg(100, 106), seg(120, 125)],
               kommentar=[CommentBlock(sprecher="philipp", text=" ".join(["wort"] * 40),
-                                      anker=[AssetRef(asset="a1", von=2, bis=14), AssetRef(asset="a2", von=8, bis=26)])]),
+                                      anker=[AssetRef(asset="a1", von=2, bis=14, layout="doppel_links"), AssetRef(asset="a2", von=8, bis=26, layout="doppel_rechts")])]),
         Scene(id="sz_02", titel="Hafen", segmente=[seg(300, 304)],
               kommentar=[CommentBlock(sprecher="danny", text="kurz und knapp hier", anker=[AssetRef(asset="a1", von=0, bis=3, layout="doppel_links"),
                                                                                          AssetRef(asset="a2", von=0, bis=3, layout="doppel_rechts")])]),

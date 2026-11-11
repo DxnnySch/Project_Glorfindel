@@ -168,3 +168,16 @@ def test_detect_shots_scenes_and_thumbs(tmp_path):
     assert detect_silences(vid) == [] or isinstance(detect_silences(vid), list)
     th = thumbnails(vid, [0.5, 4.0], tmp_path / "th")
     assert all(t.exists() for t in th)
+
+
+@needs_ffmpeg
+@pytest.mark.parametrize("dur", [0.5, 1.5])
+def test_detect_shots_finds_start_of_soft_dissolve(tmp_path, dur):
+    """Weiche Blende: ContentDetector allein verpasst sie (lange Blende) oder meldet ihr Ende (kurze Blende)."""
+    vid = tmp_path / "x.mp4"
+    flt = (f"testsrc2=s=320x180:r=24:d=6[a];smptebars=s=320x180:r=24:d=6[b];"
+           f"[a][b]xfade=transition=fade:duration={dur}:offset=4.5,format=yuv420p")
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-filter_complex", flt, "-t", "10", str(vid)], check=True)
+    starts = [a for a, _ in detect_shots(vid)][1:]
+    assert len(starts) == 1 and starts[0] == pytest.approx(4.5, abs=0.2)
+    assert [a for a, _ in detect_shots(vid, dissolves=False)][1:] != starts   # belegt den Fehler ohne Blendendetektor

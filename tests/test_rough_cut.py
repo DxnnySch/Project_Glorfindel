@@ -62,13 +62,11 @@ def test_artworks_alternate_tracks_credits_and_blur():
     arts = [c for tk in ("V3", "V4") for c in p["tracks"].get(tk, []) if c["type"] == "artwork"]
     assert len(arts) == 2
     a1, a2 = sorted(arts, key=lambda c: c["start"])
-    overlap = a2["start"] < a1["end"]
-    assert overlap and {t for t in ("V3", "V4") if any(c is a1 for c in p["tracks"][t])} != \
-        {t for t in ("V3", "V4") if any(c is a2 for c in p["tracks"][t])}
-    # gleichzeitige Artworks bekommen getrennte Credit-Spuren (V10/V13), sonst würde das zweite Credit das erste abschneiden
-    credits = sorted(p["tracks"]["V10"] + p["tracks"]["V13"], key=lambda c: c["start"])
+    # Einzelbilder ragen nicht in das spätere Bild hinein: Ende von a1 = Start von a2 (markiert war 2–12 bzw. 8–20)
+    assert a1["end"] == pytest.approx(a2["start"], abs=1 / 60)
+    credits = sorted(p["tracks"].get("V10", []) + p["tracks"].get("V13", []), key=lambda c: c["start"])
     assert [c["text"] for c in credits] == ["© alan lee", "© john howe"]
-    assert len(p["tracks"]["V10"]) == 1 and len(p["tracks"]["V13"]) == 1
+    assert credits[0]["start"] == a1["start"] and credits[0]["end"] == a1["end"]
     assert credits[0]["start"] == a1["start"] and credits[0]["end"] == a1["end"]
     fancy = a1["effects"][0]
     assert fancy["recipe"] == "fancy_in" and fancy["contour"] == "#112233"
@@ -76,6 +74,16 @@ def test_artworks_alternate_tracks_credits_and_blur():
     assert blur[0]["effects"][0]["recipe"] == "gauss_in"
     assert blur[0]["end"] - blur[0]["start"] == pytest.approx(2.0, abs=1 / 60)
     assert any("John" not in w and "john howe" in w for w in p["warnings"])  # Credit aus Dateiname
+
+
+def test_doppelbild_overlaps_but_single_images_do_not():
+    sc = [Scene(id="x", segmente=[seg(0, 5)], standbild="ende",
+                kommentar=[CommentBlock(text=" ".join(["w"] * 30), anker=[
+                    AssetRef(asset="a1", von=2, bis=20, layout="doppel_links"),
+                    AssetRef(asset="a2", von=8, bis=24, layout="doppel_rechts")])])]
+    p = build_package(sc, slug="S", template=TPL, th=TH, assets=ASSETS)
+    arts = sorted([c for tk in ("V3", "V4") for c in p["tracks"].get(tk, []) if c["type"] == "artwork"], key=lambda c: c["start"])
+    assert arts[1]["start"] < arts[0]["end"]
 
 
 def test_warnings_for_long_segment_and_missing_recording():

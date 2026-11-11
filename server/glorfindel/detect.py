@@ -7,8 +7,101 @@ from pathlib import Path
 from . import media
 
 
-def detect_shots(video: Path, threshold: float = 27.0, min_scene_len: int = 8, on_progress=None) -> list[tuple[float, float]]:
-    """Schnitte per ContentDetector. Gibt [(start_s, end_s)] zurück. Am besten auf dem 540p-Proxy.
+def _make_dissolve_detector():
+    """Detektor für weiche Blenden. ContentDetector vergleicht nur benachbarte Bilder; bei einer Blende
+    ändert sich jedes Bild nur wenig, die Summe über Sekunden aber stark. Hier wird deshalb jedes Bild mit
+    dem von ca. `window_s` Sekunden davor verglichen (kleines Graubild). Gemeldet wird der Beginn der Blende."""
+    from collections import deque
+
+    import cv2
+    import numpy as np
+    from scenedetect import SceneDetector
+
+    class DissolveDetector(SceneDetector):
+        def __init__(self, window_s: float = 1.0, threshold: float = 28.0, hard: float = 20.0,
+                     smooth: float = 10.0, min_gap_s: float = 1.0):
+            super().__init__()
+            self.window_s, self.thr, self.hard, self.smooth, self.min_gap_s = window_s, threshold, hard, smooth, min_gap_s
+            self.buf: deque = deque()
+            self.prev = None
+            self.k = 0
+            self.n = 0
+            self.base_n = None        # Beginn des aktuellen Anstiegs (kleinster Abstand)
+            self.base_w = 0.0
+            self.peak = 0.0
+            self.hist: list[tuple[int, float]] = []
+            self.cooldown = False
+            self.last_cut = -10 ** 9
+            self.suppress_until = -1
+            self.emitted: list[float] = []
+
+        def _refine(self, n: int, w: float) -> int:
+            """Anstieg von 50 % bis 100 % der Höhe als Gerade bis zur Ausgangshöhe zurückverlängern."""
+            h = self.base_w + 0.5 * (w - self.base_w)
+            t1 = next(((m, x) for m, x in self.hist if x >= h), None)
+            if not t1 or n - t1[0] < 2:
+                return self.base_n
+            slope = (w - t1[1]) / (n - t1[0])
+            if slope <= 0:
+                return self.base_n
+            return max(self.base_n, int(round(t1[0] - (t1[1] - self.base_w) / slope)))
+
+        @property
+        def event_buffer_length(self) -> int:
+            return int(self.k * 2) + 2
+
+        def process_frame(self, timecode, frame_img):
+            fps = timecode.frame_rate
+            if not self.k:
+                self.k = max(4, round(self.window_s * fps))
+            g = cv2.resize(cv2.cvtColor(frame_img, cv2.COLOR_BGR2GRAY), (32, 18), interpolation=cv2.INTER_AREA).astype(np.float32)
+            n = self.n = self.n + 1
+            cuts = []
+            c = float(np.abs(g - self.prev).mean()) if self.prev is not None else 0.0
+            self.prev = g
+            self.buf.append(g)
+            if len(self.buf) > self.k + 1:
+                self.buf.popleft()
+            if c > self.hard:                      # harter Schnitt: Sache des ContentDetectors
+                self.suppress_until = n + self.k
+                self.base_n = None
+                self.cooldown = False
+            if len(self.buf) < self.k + 1:
+                return cuts
+            w = float(np.abs(g - self.buf[0]).mean())
+            if self.base_n is None or w <= self.base_w or n - self.base_n > 2 * self.k or n <= self.suppress_until:
+                self.base_n, self.base_w, self.peak = n, w, w   # neuer Ausgangspunkt
+                self.hist = [(n, w)]
+                self.cooldown = self.cooldown and n <= self.suppress_until
+                return cuts
+            self.peak = max(self.peak, w)
+            self.hist.append((n, w))
+            if w < self.peak - 3.0:                  # Anstieg bricht ab: von hier neu beginnen
+                self.base_n, self.base_w, self.peak = n, w, w
+                self.hist = [(n, w)]
+                self.cooldown = False
+                return cuts
+            if c >= self.smooth:                     # ruckartig statt gleitend: keine Blende
+                self.base_n, self.base_w, self.peak = n, w, w
+                self.hist = [(n, w)]
+                return cuts
+            if w - self.base_w >= self.thr and not self.cooldown:
+                start = self._refine(n, w)
+                if start - self.last_cut >= self.min_gap_s * fps:
+                    tc = timecode - (n - start)
+                    cuts.append(tc)
+                    self.emitted.append(tc.seconds)
+                    self.last_cut = start
+                self.cooldown = True
+            return cuts
+
+    return DissolveDetector()
+
+
+def detect_shots(video: Path, threshold: float = 27.0, min_scene_len: int = 8, on_progress=None,
+                 dissolves: bool = True) -> list[tuple[float, float]]:
+    """Schnitte per ContentDetector (harte Schnitte) plus Blendendetektor (weiche Blenden).
+    Gibt [(start_s, end_s)] zurück. Am besten auf dem 540p-Proxy.
     `on_progress(fraction, text)` wird etwa zweimal pro Sekunde aufgerufen."""
     import threading
     import time
@@ -17,6 +110,9 @@ def detect_shots(video: Path, threshold: float = 27.0, min_scene_len: int = 8, o
     stream = open_video(str(video))
     sm = SceneManager()
     sm.add_detector(ContentDetector(threshold=threshold, min_scene_len=min_scene_len))
+    dd = _make_dissolve_detector() if dissolves else None
+    if dd:
+        sm.add_detector(dd)
     total = max(1, getattr(stream.duration, "frame_num", None) or stream.duration.get_frames()) if stream.duration else 1
     err: list[BaseException] = []
 
@@ -40,7 +136,23 @@ def detect_shots(video: Path, threshold: float = 27.0, min_scene_len: int = 8, o
     scenes = sm.get_scene_list()
     if not scenes:
         return [(0.0, media.probe(video)["duration"])]
-    return [(a.seconds, b.seconds) for a, b in scenes]
+    shots = [(a.seconds, b.seconds) for a, b in scenes]
+    if dd and dd.emitted:
+        shots = _merge_dissolve_cuts(shots, dd.emitted)
+    return shots
+
+
+def _merge_dissolve_cuts(shots: list[tuple[float, float]], dissolve_starts: list[float], span: float = 2.0) -> list[tuple[float, float]]:
+    """Der ContentDetector meldet oft das Ende einer kurzen Blende; der Beginn zählt, das spätere Ergebnis fällt weg."""
+    ds = set(round(d, 3) for d in dissolve_starts)
+    cuts = [a for a, _ in shots[1:]]
+    keep = []
+    for c in cuts:
+        if round(c, 3) not in ds and any(d < c <= d + span for d in ds):
+            continue
+        keep.append(c)
+    edges = [shots[0][0]] + keep + [shots[-1][1]]
+    return [(edges[i], edges[i + 1]) for i in range(len(edges) - 1)]
 
 
 def detect_silences(video: Path, noise_db: int = -35, min_len: float = 0.8, on_progress=None) -> list[tuple[float, float]]:

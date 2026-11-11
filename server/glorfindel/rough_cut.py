@@ -163,14 +163,20 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                 tl.warnings.append(f"{sc.titel or sc.id} [{sc.id}], Block {bi + 1}: noch keine Aufnahme zugeordnet (Schätzung)")
             # ---- Anker: Artworks / Karten ----
             pending = [a for a in block.anker]
-            for a in pending:
+            a_starts = [b_start + (starts[a.von] if a.von < len(starts) else dur) for a in pending]
+            for ai, a in enumerate(pending):
                 ident = a.asset or a.karte
-                a_start = b_start + (starts[a.von] if a.von < len(starts) else dur)
+                a_start = a_starts[ai]
                 if a.bis is None or a.einheit != block_unit(block):
                     a_end = b_start + dur
                 else:
                     a_end = b_start + (starts[a.bis] if a.bis < len(starts) else dur)
                 a_end = max(a_end, a_start + tm["min_artwork"])
+                # Nicht in ein späteres Bild/eine spätere Karte hineinragen (Doppelbilder liegen absichtlich nebeneinander)
+                if a.layout == "einzel":
+                    later = [s for o, s in zip(pending, a_starts) if o is not a and o.layout == "einzel" and s > a_start + 1e-6]
+                    if later:
+                        a_end = min(a_end, min(later))
                 tl.mark(a_start, f"{'Karte' if a.karte else 'Bild'}: {ident}", "map" if a.karte else "asset")
                 if a.karte:
                     mp = maps.get(a.karte, {})
