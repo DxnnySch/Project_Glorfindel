@@ -31,12 +31,26 @@ def free_port(preferred: int) -> int:
     raise RuntimeError("Kein freier Port gefunden")
 
 
+def _quiet_connection_resets() -> None:
+    """Windows/Proactor meldet jede vom Browser abgebrochene Verbindung (Video springen, Ansicht wechseln) als Fehler
+    „WinError 10054“. Harmlos – nur diese Meldung ausblenden, echte Fehler bleiben sichtbar."""
+    import logging
+
+    class _Filter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            exc = record.exc_info[1] if record.exc_info else None
+            return not isinstance(exc, (ConnectionResetError, ConnectionAbortedError))
+
+    logging.getLogger("asyncio").addFilter(_Filter())
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="glorfindel")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
     _cuda_dll_dirs()
+    _quiet_connection_resets()
     import uvicorn
     from .api import create_app
     port = free_port(args.port)
