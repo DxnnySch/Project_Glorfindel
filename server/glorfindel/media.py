@@ -207,7 +207,13 @@ def nvenc_available() -> bool:
     return _NVENC
 
 
-def _proxy_video_args(encoder: str) -> list[str]:
+def _proxy_video_args(encoder: str, gop: int | None = None) -> list[str]:
+    """`gop` gesetzt = Full-HD-Ansicht (kleinere Datei, normale Keyframe-Abstände); sonst Arbeits-Proxy mit Intra-Frames."""
+    if gop:
+        if encoder == "nvenc":
+            return ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "24", "-b:v", "0", "-g", str(gop), "-bf", "0",
+                    "-profile:v", "high", "-pix_fmt", "yuv420p"]
+        return ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-g", str(gop), "-pix_fmt", "yuv420p"]
     # NVENC: "-g 1" lehnt der Treiber ab (GOP muss > B-Frames+1 sein); "-g 0" = nur Intra-Frames, also jedes Bild ein Keyframe
     # Profil/Pixelformat fest, damit jeder Browser die Datei abspielt, egal welcher Encoder sie erzeugt hat
     if encoder == "nvenc":
@@ -217,7 +223,8 @@ def _proxy_video_args(encoder: str) -> list[str]:
 
 
 def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None = None,
-               fps: float | None = None, on_progress=None, encoder: str = "auto", info: dict | None = None) -> Path:
+               fps: float | None = None, on_progress=None, encoder: str = "auto", info: dict | None = None,
+               gop: int | None = None) -> Path:
     """540p H.264, jeder Frame ein Keyframe (-g 1) für exaktes Scrubben/Frame-Stepping.
 
     `crop` und `fps` normalisieren Bildschirmaufnahmen (variable Bildrate, Letterbox) auf die Folge.
@@ -240,7 +247,7 @@ def make_proxy(src: Path, dst: Path, height: int = 540, crop: list[int] | None =
         # Mono springt in Millisekunden. Für ein Arbeits-Proxy reicht Mono. Datenspuren/Kapitel (Timecode) bleiben draußen.
         cmd = ([_bin("ffmpeg"), "-y", "-v", "error"] + (["-hwaccel", "cuda"] if hw else []) +
                ["-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", video_filter(height, crop, fps)] +
-               _proxy_video_args(enc) +
+               _proxy_video_args(enc, gop) +
                ["-c:a", "aac", "-b:a", "96k", "-ac", "1",
                 "-write_tmcd", "0", "-map_chapters", "-1", "-movflags", "+faststart", str(tmp)])
         try:

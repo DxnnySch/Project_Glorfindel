@@ -265,6 +265,7 @@ export async function render(main, ctx) {
     if (typing || !player.video()) return;
     const k = e.key.toLowerCase(), v = player.video();
     if (k === ' ' || k === 'k') { e.preventDefault(); player.toggle(); }
+    else if (k === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) player.toggleFs();
     else if (k === 'i') player.markIn();
     else if (k === 'o') player.markOut();
     else if (k === 'j') player.seek(v.currentTime - 2);

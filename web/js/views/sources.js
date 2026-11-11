@@ -14,6 +14,26 @@ export async function render(main, ctx) {
   };
   const proxy = async (s) => { try { await runJob(`Proxy für ${s.id} …`, () => api.post(epUrl(ep, `/sources/${s.id}/proxy`))); toast('Proxy fertig.', 'ok'); ctx.refresh(); } catch (e) { toast(e.message, 'err'); } };
   const setRole = async (s, role) => { try { await api.patch(epUrl(ep, `/sources/${s.id}`), { role }); ctx.refresh(); } catch (e) { toast(e.message, 'err'); } };
+  // HQ-Modus: Vorschau-Proxy aus der HQ-Datei (zeitgleich zur Referenz), Dialog aus deren Untertiteln
+  const hqSrc = d.sources.find((s) => s.role === 'hq' && s.id !== d.project.reference_source);
+  const setHq = async (on) => {
+    try {
+      await api.patch(epUrl(ep, '/project'), { hq_modus: on });
+      if (on) {
+        await runJob('HQ-Proxy erzeugen', () => api.post(epUrl(ep, `/sources/${d.project.reference_source}/proxy`)));
+        const sub = (await api.get(epUrl(ep, '/dialog/subtitles'))).find((c) => c.source === hqSrc.id);
+        if (sub) { await api.post(epUrl(ep, '/dialog/subtitles'), { path: sub.path, source: sub.source }); toast(`HQ-Modus an – Dialog aus ${sub.path.split(/[\\/]/).pop()}.`, 'ok'); }
+        else toast('HQ-Modus an. Neben der HQ-Datei wurde keine Untertitel-Datei gefunden – der Dialog bleibt unverändert.', 'info', 8000);
+      } else toast('HQ-Modus aus – die Vorschau zeigt wieder die Referenz.', 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+    ctx.refresh();
+  };
+  const hqCard = hqSrc ? h('div', { class: 'card', style: { marginBottom: '14px' } }, h('div', { class: 'row' }, icon('film'),
+    h('div', { class: 'grow' }, h('b', {}, 'HQ-Modus'), h('div', { class: 'help' }, hqSrc.anchors.length
+      ? 'Die Vorschau stammt aus der HQ-Datei (zeitgleich zur Referenz) und der Dialog aus ihren Untertiteln (SRT, VTT, TTML), sofern vorhanden. Aus: wie bisher.'
+      : 'Zuerst für die HQ-Quelle mindestens einen Anker setzen (gleiches Bild in Referenz und HQ).')),
+    h('label', { class: 'row gap-s' }, h('input', { type: 'checkbox', checked: !!d.project.hq_modus, disabled: !hqSrc.anchors.length && !d.project.hq_modus, onChange: (e) => setHq(e.target.checked) }), 'HQ vorhanden – nutzen')))
+    : null;
   const crop = async (s) => {
     try { const r = await api.post(epUrl(ep, `/sources/${s.id}/detect-crop`));
       if (!r.crop) { toast('Keine Letterbox erkannt.', 'info'); return; }
@@ -42,6 +62,7 @@ export async function render(main, ctx) {
   main.append(h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', { class: 'grow' }, h('h1', {}, 'Quellen'), h('p', {}, 'Die Referenz bestimmt die Zeitachse aller Szenen. Weitere Fassungen (HQ, Screener) werden über Ankerpunkte darauf abgebildet.')),
       btn('Referenz importieren', { kind: 'primary', icon: 'plus', onClick: () => add('referenz') }), btn('Weitere Quelle', { icon: 'plus', onClick: () => add('hq') })),
+    hqCard,
     d.sources.length ? h('div', { class: 'card' }, h('table', {}, h('thead', {}, h('tr', {}, ['Datei', 'Rolle', 'Format', 'Zeitabbildung', ''].map((t) => h('th', {}, t)))), h('tbody', {}, rows)))
       : h('div', { class: 'card' }, empty('film', 'Noch keine Quellen', 'Wähle die Episode (die Referenz-Zeitachse) aus deinem OneDrive.', btn('Referenz wählen', { kind: 'primary', onClick: () => add('referenz') })))));
 }

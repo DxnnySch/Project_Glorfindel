@@ -113,6 +113,43 @@ def conform(hq: Path, tm: TimeMap, out_dur: float, dst: Path, fps: float = 24000
     return dst
 
 
+def make_aligned_proxy(hq: Path, tm: TimeMap, out_dur: float, dst: Path, fps: float, height: int = 540,
+                       encoder: str = "auto", info: dict | None = None, on_progress=None) -> Path:
+    """Arbeits-Proxy (540p, jedes Bild ein Keyframe, Mono-Ton) aus der HQ-Datei, zeitgleich zur Referenz.
+
+    Gleiche Zeitabbildung wie `conform`, aber im Format des normalen Proxys, damit der Player nichts umrechnen muss.
+    """
+    import time
+    pinfo = media.probe(hq)
+    size = (round(height * pinfo["width"] / pinfo["height"] / 2) * 2, height)
+    segs = plan_segments(tm, out_dur, pinfo["duration"])
+    if not segs:
+        raise ValueError("Keine Überschneidung zwischen HQ-Datei und Referenz – Anker prüfen")
+    fg, _ = build_filtergraph(segs, size, fps, pinfo["has_audio"])
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_suffix(".part.mp4")
+    use_gpu = encoder == "nvenc" or (encoder == "auto" and media.nvenc_available())
+    t0, last_err = time.time(), ""
+    for enc in (["nvenc"] if use_gpu else []) + ["cpu"]:
+        cmd = [media._bin("ffmpeg"), "-y", "-v", "error", "-i", str(hq), "-filter_complex", fg, "-map", "[vout]"]
+        if pinfo["has_audio"]:
+            cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "96k", "-ac", "1"]
+        cmd += media._proxy_video_args(enc) + ["-t", f"{out_dur:.6f}", "-movflags", "+faststart", str(tmp)]
+        try:
+            r = media.run_ffmpeg(cmd, out_dur, on_progress)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        if r.returncode == 0:
+            tmp.replace(dst)
+            if info is not None:
+                info.update({"encoder": "h264_nvenc" if enc == "nvenc" else "libx264 (CPU)", "sekunden": round(time.time() - t0, 1)})
+            return dst
+        tmp.unlink(missing_ok=True)
+        last_err = r.stderr.strip()[-300:]
+    raise RuntimeError(f"HQ-Proxy fehlgeschlagen: {last_err}")
+
+
 def render_stills_from_hq(hq: Path, tm: TimeMap, still_times_ref: dict[str, float], out_dir: Path,
                           fps: float, size: tuple[int, int] | None = None) -> dict[str, Path]:
     """Standbilder (letzter Frame je Szene) aus HQ – gleicher Dateiname wie beim Screener."""

@@ -201,11 +201,21 @@ def change_log(limit: int = 100, ep: Episode = Depends(ep_of)):
 class ProjectPatch(BaseModel):
     title: str | None = None
     fps: float | None = None
+    hq_modus: bool | None = None
 
 
 @router.patch("/ep/{season}/{episode}/project")
 def patch_project(body: ProjectPatch, ep: Episode = Depends(ep_of)):
     pr = ep.project()
+    if body.hq_modus is not None and body.hq_modus != pr.hq_modus:
+        if body.hq_modus:
+            hq = ep.hq_source()
+            if hq is None:
+                raise HTTPException(409, "Keine HQ-Quelle vorhanden – unter „Quellen“ eine weitere Quelle mit Rolle „HQ deutsch“ importieren.")
+            if not hq.anchors:
+                raise HTTPException(409, "Die HQ-Quelle hat noch keine Anker – zuerst unter „Quellen“ mindestens einen Anker setzen.")
+        pr.hq_modus = body.hq_modus
+        store.log_change(ep.p.gl, ep.settings.user, f"HQ-Modus {'an' if pr.hq_modus else 'aus'}")
     if body.title is not None:
         pr.title = body.title
     if body.fps is not None:
@@ -223,6 +233,17 @@ class ImportSource(BaseModel):
 def _proxy_job(ep: Episode, sid: str, progress) -> str:
     """Proxy mit Live-Fortschritt (ffmpeg: Videozeit, Geschwindigkeit)."""
     s = ep.source(sid)
+    if ep.project().hq_modus and sid == ep.project().reference_source:   # HQ-Modus: Vorschau aus der HQ-Datei, zeitgleich zur Referenz
+        hq = ep.hq_source()
+        progress.plan([("Vorbereiten", 1), (f"HQ-Proxy kodieren (540p, zeitgleich zur Referenz) – {Path(hq.path).name if hq else '?'}", 20), ("Fertigstellen", 1)])
+        progress.step(0, "HQ-Quelle öffnen")
+        if ep.hq_proxy_path(sid).exists():
+            progress.step(2, "HQ-Proxy war schon vorhanden")
+            return str(ep.hq_proxy_path(sid))
+        progress.step(1, "ffmpeg startet …")
+        out = ep.ensure_hq_proxy(on_progress=lambda f, info: progress.fraction(f, info["text"]))
+        progress.step(2, "Datei umbenennen")
+        return str(out)
     progress.plan([("Vorbereiten", 1), (f"Proxy kodieren (540p, jedes Bild ein Keyframe) – {Path(s.path).name}", 20), ("Fertigstellen", 1)])
     progress.step(0, "Quelle öffnen")
     if ep.proxy_path(sid).exists():
@@ -254,14 +275,29 @@ def make_proxy(sid: str, ep: Episode = Depends(ep_of), state: AppState = Depends
     return {"job": state.jobs.submit(f"Proxy {sid}", work)}
 
 
+@router.post("/ep/{season}/{episode}/sources/{sid}/hd")
+def make_hd(sid: str, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
+    """Full-HD-Ansicht für den Vollbildmodus (nur auf Wunsch, nur einmal pro Quelle)."""
+    def work(progress):
+        progress.plan([("Vorbereiten", 1), (f"Full-HD-Ansicht kodieren (1080p) – {Path(ep.source(sid).path).name}", 20), ("Fertigstellen", 1)])
+        progress.step(0, "Quelle öffnen")
+        if ep.hd_path(sid).exists():
+            return str(ep.hd_path(sid))
+        progress.step(1, "ffmpeg startet …")
+        out = ep.ensure_proxy(sid, on_progress=lambda f, info: progress.fraction(f, info["text"]), hd=True)
+        progress.step(2, "Fertig")
+        return str(out)
+    return {"job": state.jobs.submit(f"Full-HD-Ansicht {sid}", work)}
+
+
 @router.get("/ep/{season}/{episode}/sources/{sid}/proxy-status")
 def proxy_status(sid: str, ep: Episode = Depends(ep_of)):
-    return {"ready": ep.proxy_path(sid).exists()}
+    return {"ready": ep.view_proxy_path(sid).exists(), "hd": ep.hd_path(sid).exists(), "hq": ep.view_proxy_path(sid) == ep.hq_proxy_path(sid)}
 
 
 @router.get("/ep/{season}/{episode}/media/{sid}")
-def stream_proxy(sid: str, ep: Episode = Depends(ep_of)):
-    f = ep.proxy_path(sid)
+def stream_proxy(sid: str, q: str = "", ep: Episode = Depends(ep_of)):
+    f = ep.hd_path(sid) if q == "hd" else ep.view_proxy_path(sid)
     if not f.exists():
         raise HTTPException(404, "Proxy fehlt – zuerst erzeugen")
     return FileResponse(f, media_type="video/mp4")
@@ -298,6 +334,7 @@ def patch_source(sid: str, body: SourcePatch, ep: Episode = Depends(ep_of)):
                 s.normalize_fps = body.normalize_fps
             ep._save_sources(srcs)
             ep.proxy_path(sid).unlink(missing_ok=True)  # Proxy neu erzeugen
+            ep.hd_path(sid).unlink(missing_ok=True)
             return s.model_dump()
     raise HTTPException(404, "Quelle unbekannt")
 
@@ -546,7 +583,7 @@ def cockpit(ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     from . import dialog as dialog_mod
     pr_ = ep.project()
     ref_id = pr_.reference_source
-    todo = {"proxy": bool(ref_id) and not ep.proxy_path(ref_id).exists(),
+    todo = {"proxy": bool(ref_id) and not (ep.hq_proxy_path(ref_id) if pr_.hq_modus else ep.proxy_path(ref_id)).exists(),
             "dialog": bool(ref_id) and not dialog_mod.load(ep).get("words"),
             "board": bool(ref_id) and not (store.read_json(ep.p.work() / "board.json", {}).get("scenes") or scs)}
     add(int(todo["proxy"]), "Vorschau-Video (Proxy) der Episode erzeugen", "home")

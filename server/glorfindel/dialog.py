@@ -32,6 +32,8 @@ def subtitle_candidates(ep: Episode) -> list[dict]:
         f = ep.source_path(s)
         for c in subtitles.find_candidates(f):
             out.append({"source": s.id, "path": str(c), "sprache": subtitles.language_of(c)})
+    if ep.project().hq_modus and (hq := ep.hq_source()):   # HQ-Modus: Untertitel der HQ-Datei zuerst (stabile Sortierung)
+        out.sort(key=lambda c: c["source"] != hq.id)
     return out
 
 

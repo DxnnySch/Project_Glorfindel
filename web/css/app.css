@@ -290,3 +290,7 @@ td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: mi
 .scene-pick { width: 15px; height: 15px; margin: 0 6px 0 0; flex: none; cursor: pointer; opacity: .45; } .scene-item:hover .scene-pick, .scene-pick:checked { opacity: 1; }
 
 .group-head .btn.sm { padding: 3px 5px; } .group-head .chip { flex: none; }
+
+.player:fullscreen { display: flex; flex-direction: column; border-radius: 0; }
+.player:fullscreen video { flex: 1; min-height: 0; max-height: none; object-fit: contain; }
+.player:fullscreen .job-card { position: absolute; top: 16px; right: 16px; z-index: 5; width: 360px; }

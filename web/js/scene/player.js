@@ -141,6 +141,36 @@ export function createPlayer(E) {
     if (f !== lastWord) { wordEls[lastWord]?.classList.remove('dnow'); const el = wordEls[f]; if (el && t - words[f].end < 1.2) { el.classList.add('dnow'); const r = dlgBox.getBoundingClientRect(), er = el.getBoundingClientRect(); if (er.top < r.top || er.bottom > r.bottom) dlgBox.scrollTop += er.top - r.top - r.height / 3; } lastWord = f; }
   }
 
+  // ---- Vollbild mit Full-HD-Ansicht ----
+  let hdOn = false, hdBusy = false;
+  const fsBtn = btn('', { icon: 'expand', kind: 'ghost', size: 'sm', title: 'Vollbild (F) – nutzt die Full-HD-Ansicht', onClick: () => toggleFs() });
+  function swapSrc(url) {
+    if (!video) return;
+    const t = video.currentTime, play = !video.paused;
+    video.addEventListener('loadedmetadata', () => { video.currentTime = t; if (play) video.play(); }, { once: true });
+    video.src = url;
+  }
+  async function useHd() {
+    if (hdOn || hdBusy || !video) return;
+    hdBusy = true;
+    try {
+      const st = await api.get(epUrl(ep, `/sources/${ref.id}/proxy-status`));
+      if (!st.hd) await runJob('Full-HD-Ansicht wird erzeugt …', () => api.post(epUrl(ep, `/sources/${ref.id}/hd`)), box);
+      if (document.fullscreenElement === box) { swapSrc(epUrl(ep, `/media/${ref.id}?q=hd`)); hdOn = true; }
+    } catch (e) { toast(e.message, 'err'); } finally { hdBusy = false; }
+  }
+  function toggleFs() {
+    if (!video) return;
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    box.requestFullscreen().then(useHd).catch((e) => toast(`Vollbild nicht möglich: ${e.message}`, 'err'));
+  }
+  const onFsChange = () => {
+    const on = document.fullscreenElement === box;
+    fsBtn.replaceChildren(icon(on ? 'shrink' : 'expand'));
+    if (!on && hdOn && video) { hdOn = false; swapSrc(epUrl(ep, `/media/${ref.id}`)); }   // zurück auf den schnellen Proxy
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
+
   // ---- Video ----
   function build() {
     if (!ref) { box.append(empty('film', 'Keine Referenz', 'Importiere zuerst die Referenz-Episode unter „Quellen“.')); return; }
@@ -159,7 +189,7 @@ export function createPlayer(E) {
       btn('', { icon: 'stepb', kind: 'ghost', size: 'sm', title: 'Ein Bild zurück (←)', onClick: () => step(-1) }), btn('', { icon: 'step', kind: 'ghost', size: 'sm', title: 'Ein Bild vor (→)', onClick: () => step(1) }), tc,
       btn('I  Anfang', { size: 'sm', title: 'Anfang des Segments markieren (I)', onClick: markIn }), btn('O  Ende', { size: 'sm', title: 'Ende markieren (O) – danach entsteht das Segment', onClick: markOut }), pendEl,
       btn('', { icon: 'image', kind: 'ghost', size: 'sm', title: 'Dieses Bild speichern und als Karte öffnen (darin markieren)', onClick: async () => { try { await captureFrame(ep, ref.id, video.currentTime, '', async () => { E.maps = await api.get(epUrl(ep, '/maps')); }); } catch (e) { toast(e.message, 'err'); } } }),
-      h('span', { class: 'grow' }),
+      h('span', { class: 'grow' }), fsBtn,
       h('label', { class: 'check help', title: 'Zeitleiste und Dialog auf die ganze Episode ausdehnen' }, h('input', { type: 'checkbox', checked: !!ui.allEp, onChange: (e) => { ui.allEp = e.target.checked; drawTimeline(); drawDialog(); } }), 'ganze Episode'));
     box.append(video, tl, bar);
   }
@@ -167,7 +197,7 @@ export function createPlayer(E) {
   build();
   const el = h('div', { class: 'col' }, box, h('div', { class: 'card tight dlg-card' }, h('div', { class: 'card-head' }, h('h3', {}, 'Dialog der Episode'), h('span', { class: 'help grow' }, 'Klick = springen · Wörter ziehen = Stelle markieren'), E.dialog.available ? null : null), dlgBox, dlgBar));
   return {
-    el, video: () => video, seek, playRange, step, toggle, markIn, markOut, drawTimeline, drawDialog,
+    el, video: () => video, toggleFs, seek, playRange, step, toggle, markIn, markOut, drawTimeline, drawDialog,
     onScene() { lastWord = -1; drawDialog(); drawTimeline(); },
     jumpToScene() {
       const s = scene(); if (!s || !video) return;
@@ -175,6 +205,6 @@ export function createPlayer(E) {
       const go = () => { if (t != null) { video.pause(); rangeStop = null; video.currentTime = t; } drawTimeline(); };
       if (video.readyState >= 1) go(); else video.addEventListener('loadedmetadata', go, { once: true });
     },
-    dispose() { cancelAnimationFrame(raf); if (video) { video.pause(); video.removeAttribute('src'); video.load(); video = null; } },
+    dispose() { document.removeEventListener('fullscreenchange', onFsChange); if (document.fullscreenElement === box) document.exitFullscreen(); cancelAnimationFrame(raf); if (video) { video.pause(); video.removeAttribute('src'); video.load(); video = null; } },
   };
 }

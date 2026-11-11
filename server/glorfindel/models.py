@@ -96,5 +96,6 @@ class Project(BaseModel):
     reference_source: str = ""
     ablauf: list[str] = Field(default_factory=list)  # manuelle Gesamtreihenfolge der Szenen (leer = nach Strängen)
     dialog_sprache: str = "auto"
+    hq_modus: bool = False  # HQ-Datei (+ Untertitel) vorhanden: Vorschau-Proxy aus HQ, Dialog bevorzugt aus deren Untertiteln
     gruppen: list[dict] = Field(default_factory=list)  # Szenengruppen: [{id, titel, farbe}]
     einheiten_migriert: bool = False  # Szenen = Messeinheiten (Bereich), Segmente frei: Altdaten einmalig umgestellt

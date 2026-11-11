@@ -11,6 +11,7 @@ from . import media, store
 from .config import Settings
 from .models import Anchor, Project, Scene, Source, Strand
 from .paths import EpisodePaths, parse_slug, to_abs, to_rel
+from .timemap import TimeMap
 
 DEFAULT_STRANDS = [
     ("eregion", "Eregion", "#c0392b"), ("numenor", "Númenor", "#2980b9"),
@@ -170,23 +171,74 @@ class Episode:
     def proxy_path(self, sid: str) -> Path:
         return self.p.work() / f"proxy_{sid}.mp4"
 
-    def ensure_proxy(self, sid: str, on_progress=None) -> Path:
+    def hd_path(self, sid: str) -> Path:
+        return self.p.work() / f"proxy_{sid}_hd.mp4"
+
+    # ---- HQ-Modus: Vorschau der Referenz-Zeitachse stammt aus der HQ-Datei ----
+    def hq_source(self) -> Source | None:
+        """Die HQ-Quelle (Rolle „hq“, nicht die Referenz), bevorzugt eine mit Ankern."""
+        ref = self.project().reference_source
+        hqs = [s for s in self.sources() if s.role == "hq" and s.id != ref]
+        return next((s for s in hqs if s.anchors), hqs[0] if hqs else None)
+
+    def hq_proxy_path(self, sid: str) -> Path:
+        return self.p.work() / f"proxy_{sid}_hq.mp4"
+
+    def view_proxy_path(self, sid: str) -> Path:
+        """Datei, die der Player für die Referenz zeigt: im HQ-Modus der aus HQ erzeugte Proxy (sobald er existiert)."""
+        if self.project().hq_modus and sid == self.project().reference_source and self.hq_proxy_path(sid).exists():
+            return self.hq_proxy_path(sid)
+        return self.proxy_path(sid)
+
+    def ensure_hq_proxy(self, on_progress=None) -> Path:
+        """Proxy aus der HQ-Datei, zeitgleich zur Referenz (über die Anker der HQ-Quelle), im selben Format wie der normale Proxy."""
+        from . import conform
+        pr = self.project()
+        hq = self.hq_source()
+        if not pr.reference_source or hq is None:
+            raise RuntimeError("Keine HQ-Quelle vorhanden – unter „Quellen“ eine weitere Quelle mit Rolle „HQ deutsch“ importieren.")
+        if not hq.anchors:
+            raise RuntimeError("Die HQ-Quelle hat noch keine Anker – unter „Quellen“ mindestens einen Anker setzen (gleiches Bild in Referenz und HQ).")
+        ref = self.source(pr.reference_source)
+        dst = self.hq_proxy_path(ref.id)
+        with _PROXY_LOCKS.setdefault(str(dst), threading.Lock()):
+            if dst.exists():
+                return dst
+            key = f"proxy_{ref.id}_hq"
+            lk = store.acquire_lock(self.p.locks, key, self.settings.user)
+            if not lk["held"]:
+                raise RuntimeError(f"Der HQ-Proxy wird gerade von {lk['by']} erzeugt – bitte kurz warten.")
+            try:
+                tmp = self.p.cache() / dst.name
+                info: dict = {}
+                conform.make_aligned_proxy(self.source_path(hq), TimeMap(hq.anchors), ref.duration, tmp,
+                                           fps=ref.fps or pr.fps, encoder=self.settings.proxy_encoder, info=info, on_progress=on_progress)
+                store.log_change(self.p.gl, self.settings.user, f"HQ-Proxy {ref.id} aus {hq.id} erzeugt: {info.get('encoder')}, {media.fmt_clock(info.get('sekunden', 0))} Min.")
+                part = dst.with_name(dst.name + ".part")
+                shutil.copyfile(tmp, part)
+                part.replace(dst)
+                tmp.unlink(missing_ok=True)
+            finally:
+                store.release_lock(self.p.locks, key, self.settings.user)
+        return dst
+
+    def ensure_proxy(self, sid: str, on_progress=None, hd: bool = False) -> Path:
         """Proxy erzeugen, falls er (auch bei einem anderen Rechner) noch fehlt.
 
         Kodiert wird im lokalen Cache und erst am Ende in den Folgenordner verschoben, damit OneDrive keine
         halbfertigen Dateien hochlädt. Eine weiche Sperre verhindert, dass zwei Rechner dasselbe kodieren.
         """
-        dst = self.proxy_path(sid)
+        dst = self.hd_path(sid) if hd else self.proxy_path(sid)
         with _PROXY_LOCKS.setdefault(str(dst), threading.Lock()):  # Auto-Proxy und manueller Auftrag nie gleichzeitig
             if not dst.exists():
-                key = f"proxy_{sid}"
+                key = f"proxy_{sid}_hd" if hd else f"proxy_{sid}"
                 lk = store.acquire_lock(self.p.locks, key, self.settings.user)
                 if not lk["held"]:
                     raise RuntimeError(f"Proxy {sid} wird gerade von {lk['by']} erzeugt – bitte kurz warten, "
                                        "er erscheint dann automatisch.")
                 try:
                     s = self.source(sid)
-                    tmp = self.p.cache() / f"proxy_{sid}.mp4"
+                    tmp = self.p.cache() / dst.name
                     last = [time.time()]
 
                     def progress(f, info):
@@ -197,17 +249,18 @@ class Episode:
                             on_progress(f, info)
 
                     info: dict = {}
-                    media.make_proxy(self.source_path(s), tmp, crop=s.crop, fps=s.normalize_fps, on_progress=progress,
-                                     encoder=self.settings.proxy_encoder, info=info)
+                    height = min(1080, s.crop[3] if s.crop else (s.height or 1080)) if hd else 540
+                    media.make_proxy(self.source_path(s), tmp, height=height, crop=s.crop, fps=s.normalize_fps, on_progress=progress,
+                                     encoder=self.settings.proxy_encoder, info=info, gop=24 if hd else None)
                     store.log_change(self.p.gl, self.settings.user,
-                                     f"Proxy {sid} erzeugt: {info.get('encoder')}, {media.fmt_clock(info.get('sekunden', 0))} Min.")
+                                     f"{'Full-HD-Ansicht' if hd else 'Proxy'} {sid} erzeugt: {info.get('encoder')}, {media.fmt_clock(info.get('sekunden', 0))} Min.")
                     part = dst.with_name(dst.name + ".part")
                     shutil.copyfile(tmp, part)
                     part.replace(dst)
                     tmp.unlink(missing_ok=True)
                 finally:
                     store.release_lock(self.p.locks, key, self.settings.user)
-            elif media.proxy_needs_fix(dst):      # älterer Proxy (Stereo-Ton): einmalig auf Mono umbauen
+            elif not hd and media.proxy_needs_fix(dst):      # älterer Proxy (Stereo-Ton): einmalig auf Mono umbauen
                 media.fix_proxy_audio(dst, on_progress)
         return dst
 
