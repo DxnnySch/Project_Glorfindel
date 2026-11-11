@@ -71,9 +71,8 @@ def test_plan_has_nested_artworks_and_anim_media():
     assert len(set(names)) == len(names), "Namen der Artwork-Sequenzen eindeutig"
     n = plan["nested"][0]
     assert (n["image_track"], n["mask_track"], n["matte_track"]) == (2, 4, 5)
-    assert n["mask_name"] == "Maske.png" and n["mask_scale"] == 80.0               # Querformat-Bild (2000×1000) → Querformat-Maske, 1536 px breit
-    hoch = next(x for x in plan["nested"] if "howe" in x["name"])
-    assert hoch["mask_name"] == "Maske Quadrat.png" and hoch["mask_scale"] == 125.0     # Hochformat (800×1200) → abgerundetes Quadrat, 1000 px hoch
+    # Alle Bilder der Fixture liegen als Doppelbild nebeneinander: immer die abgerundete Quadrat-Maske (Querformat-Wahl: pick_mask-Test unten)
+    assert all(x["mask_name"] == "Maske Quadrat.png" and x["mask_scale"] == 83.7 for x in plan["nested"])
     assert all("media" in c for c in plan["clips"] if c["kind"] == "anim")
     bars = [c for c in plan["clips"] if c["kind"] == "bars"]
     assert len(bars) == 1 and bars[0]["track"] == 7
