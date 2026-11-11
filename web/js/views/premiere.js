@@ -49,7 +49,7 @@ export async function render(main, ctx) {
   }
 
   // ---------- Bauen ----------
-  const ui = { strand: true };
+  const ui = { strand: true, audio: false };
   function showReport(r, title) {
     report = r;
     const rep = r.report || r;
@@ -63,7 +63,7 @@ export async function render(main, ctx) {
   }
   async function build() {
     try {
-      const r = await runJob('Rohschnitt in Premiere bauen', () => api.post(epUrl(ep, '/premiere/build'), { by_strand: ui.strand }));
+      const r = await runJob('Rohschnitt in Premiere bauen', () => api.post(epUrl(ep, '/premiere/build'), { by_strand: ui.strand, audio_order: ui.audio }));
       showReport(r, `Rohschnitt v${r.version} in Premiere gebaut`);
       toast(`Fertig: Sequenz „${r.sequence}“ in Premiere.`, 'ok', 8000);
       await refresh();
@@ -76,6 +76,8 @@ export async function render(main, ctx) {
       h('p', { class: 'muted' }, 'Erzeugt in deinem geöffneten Premiere-Projekt eine neue Sequenz („Rohschnitt … vN“, bestehende bleiben unberührt) mit Szenen aus einer verschachtelten Episoden-Sequenz, Standbildern, Sprecher-Spuren, Pause/Play, Artworks mit Fancy In/Out, Credits und Markern – wie im Ursprungsschnitt.'),
       h('p', { class: 'help' }, 'Effekte (Zoom schnell/langsam, Fancy In/Out, Karten-Animation …) und Artwork-Größe wählst du unter ', h('a', { href: '#/settings' }, 'Einstellungen → Premiere-Rohschnitt'), '.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: ui.strand, onChange: (e) => { ui.strand = e.target.checked; } }), 'Reihenfolge nach Strängen / Ablauf'),
+      h('label', { class: 'check', title: 'Szenen und Kommentare folgen der Aufnahme; Gesprochenes ohne Skript (Begrüßung, Überleitungen) bleibt an seiner Stelle' },
+        h('input', { type: 'checkbox', checked: ui.audio, onChange: (e) => { ui.audio = e.target.checked; } }), 'Reihenfolge wie in der Aufnahme (Zwischenstücke behalten)'),
       h('div', { class: 'row gap-s' }, btn('In Premiere bauen', { kind: 'primary', icon: 'play', disabled: !ok, onClick: build }),
         !bridge.connected ? h('span', { class: 'help' }, 'Zuerst Premiere verbinden.') : !ok ? h('span', { class: 'help' }, 'Noch keine Segmente im Szenen-Editor markiert.') : null),
       st.sequence ? h('div', { class: 'help' }, `Zuletzt gebaut: ${st.sequence}`) : null);

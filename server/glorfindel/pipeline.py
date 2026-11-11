@@ -164,6 +164,7 @@ def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=None,
         plan += [(f"Aufnahme {k + 1}/{n} ({rec['speaker']}): transkribieren", 12), (f"Aufnahme {k + 1}/{n}: Eigennamen per KI prüfen", 2), (f"Aufnahme {k + 1}/{n}: mit dem Skript abgleichen", 2)]
     plan += [("Szenenstatus aktualisieren", 1), ("Ergebnis speichern", 1)]
     pg.plan(plan)
+    all_tr: dict[str, list[dict]] = {}
     for k, rec in enumerate(data["recordings"]):
         names = (plan[3 * k][0], plan[3 * k + 1][0])
         if (transcripts or {}).get(rec["id"]):
@@ -173,6 +174,7 @@ def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=None,
             pg.skip(names[1])
         else:
             tr = transcribe_recording(ep, rec, llm, pg, names)
+        all_tr[rec["id"]] = tr
         pg.step(plan[3 * k + 2][0], f"{len(tr)} Wörter Transkript mit den Kommentarblöcken vergleichen")
         text_units, bullet_units = [], []
         for sc in scenes:
@@ -196,6 +198,7 @@ def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=None,
                 new = results.setdefault(sid, [])
                 new[:] = [b for b in new if b["block"] != old["block"]] + [old]
     data["scenes"] = {sid: sorted(bl, key=lambda b: b["block"]) for sid, bl in results.items()}
+    data["zusatz"] = zusatz_stuecke(data, all_tr, scenes)
     pg.step("Szenenstatus aktualisieren")
     for i, sc in enumerate(scenes):
         pg.sub(i, len(scenes), f"Szene „{sc.titel or sc.id}“", "Szenen")
@@ -207,6 +210,23 @@ def run_alignment(ep: Episode, llm=None, prefer: str = "last", progress=None,
     save_alignment(ep, data)
     store.log_change(ep.p.gl, ep.settings.user, "Aufnahme-Abgleich ausgeführt")
     return data
+
+
+def zusatz_stuecke(data: dict, transcripts: dict[str, list[dict]], scenes: list[Scene]) -> list[dict]:
+    """Gesprochenes ohne Skriptblock (Begrüßung, Überleitungen, Schluss) je Aufnahme, in Aufnahme-Reihenfolge."""
+    from .extras import find_extras
+    texts = [b.text for sc in scenes for b in sc.kommentar if b.text.strip()] + \
+            [" ".join(b.stichpunkte) for sc in scenes for b in sc.kommentar if b.modus == "stichpunkte" and b.stichpunkte]
+    out = []
+    for rec in data["recordings"]:
+        tr = transcripts.get(rec["id"])
+        if not tr:
+            continue
+        ivs = [(b["in"], b["out"], (sid, b["block"])) for sid, bl in data["scenes"].items() for b in bl
+               if b.get("rec") == rec["id"] and not b.get("missing") and b.get("in") is not None and b.get("out") is not None]
+        for x in find_extras(tr, ivs, texts):
+            out.append({**x, "rec": rec["id"], "speaker": rec["speaker"]})
+    return out
 
 
 def set_block_timing(ep: Episode, scene_id: str, block: int, t_in: float, t_out: float) -> dict:
@@ -283,14 +303,21 @@ def _crop_still(path: Path, t: float, fps: float, dst: Path, crop: list[int]) ->
 
 
 # ---------- Rohschnitt ----------
+def rough_cut_scenes(ep: Episode, by_strand: bool = True, audio_order: bool = False) -> list[Scene]:
+    """Szenen im Rohschnitt in ihrer Reihenfolge; Standbilder und Paket müssen dieselbe Liste benutzen."""
+    scenes = scenes_in_video(ordered_scenes(ep, by_strand))
+    return rough_cut.order_by_audio(scenes, load_alignment(ep)) if audio_order else scenes
+
+
+
 def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None = None, by_strand: bool = True,
-                    with_stills: bool = True, speakers: set[str] | None = None, progress=None) -> dict:
+                    with_stills: bool = True, speakers: set[str] | None = None, progress=None, audio_order: bool = False) -> dict:
     from .progress import as_progress
     pg = as_progress(progress)
     pg.plan([("Szenen ordnen und prüfen", 1), ("Schnittpaket berechnen (Spuren, Marker, Credits)", 3), ("Standbilder erzeugen", 12 if with_stills else 0.01),
              ("Premiere-XML schreiben", 1), ("Speichern und protokollieren", 1)])
-    pg.step(0, "Reihenfolge nach Strängen" if by_strand else "Reihenfolge wie im Szenen-Editor")
-    scenes = scenes_in_video(ordered_scenes(ep, by_strand))
+    pg.step(0, "Reihenfolge wie in der Aufnahme" if audio_order else "Reihenfolge nach Strängen" if by_strand else "Reihenfolge wie im Szenen-Editor")
+    scenes = rough_cut_scenes(ep, by_strand, audio_order)
     tpl_file = templates_dir / "rohschnitt_vorlage.json"
     template = rough_cut.load_template(tpl_file if tpl_file.exists() else None)
     template["sequence"] = {**template["sequence"], "fps": ep.settings.premiere.sequence_fps}      # Bildrate der Hauptsequenz (Einstellungen → Premiere)
@@ -311,7 +338,8 @@ def build_rough_cut(ep: Episode, templates_dir: Path, still_source: str | None =
     pkg = rough_cut.build_package(
         scenes, slug=ep.p.slug, template=template, th=ep.settings.thresholds,
         alignment=load_alignment(ep), assets=load_assets(ep), maps=load_maps(ep), free_blocks=ep.free_blocks(),
-        version=version, episode_fps=pr.fps, speaker_filter=speakers, group_titles={g["id"]: g.get("titel", "") for g in pr.gruppen})
+        version=version, episode_fps=pr.fps, speaker_filter=speakers, group_titles={g["id"]: g.get("titel", "") for g in pr.gruppen},
+        audio_order=audio_order)
     ref = ep.source(pr.reference_source)
     rec_paths = {r["id"]: r["path"] for r in load_alignment(ep)["recordings"]}
     for tr in pkg["tracks"].values():

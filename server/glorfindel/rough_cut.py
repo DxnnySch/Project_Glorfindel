@@ -98,6 +98,26 @@ def block_timing(block: CommentBlock, align: dict | None, th: Thresholds) -> tup
     return dur, [i * per for i in range(n)]
 
 
+def _audio_pos(alignment: dict | None, scene_id: str, block: int) -> tuple[int, float] | None:
+    """(Nummer der Aufnahme, Zeit in der Aufnahme) eines abgeglichenen Blocks; None, wenn nicht abgeglichen."""
+    recs = {r["id"]: i for i, r in enumerate((alignment or {}).get("recordings", []))}
+    al = next((a for a in (alignment or {}).get("scenes", {}).get(scene_id, []) if a.get("block") == block), None)
+    if not al or al.get("missing") or al.get("in") is None:
+        return None
+    return recs.get(al.get("rec"), 0), float(al["in"])
+
+
+def order_by_audio(scenes: list[Scene], alignment: dict | None) -> list[Scene]:
+    """Szenen in der Reihenfolge, in der sie in der Aufnahme gesprochen werden. Szenen ohne Abgleich behalten ihre Skriptposition
+    (sie rücken hinter die vorherige Szene)."""
+    keys, last = [], (0, 0.0)
+    for sc in scenes:
+        pos = [p for bi in range(len(sc.kommentar)) if (p := _audio_pos(alignment, sc.id, bi)) is not None]
+        last = min(pos) if pos else last
+        keys.append(last)
+    return [sc for _, sc in sorted(zip(keys, scenes), key=lambda x: x[0])]    # stabil: gleiche Schlüssel behalten die Skriptreihenfolge
+
+
 def block_unit(block: CommentBlock) -> str:
     return "stichpunkt" if block.modus == "stichpunkte" else "wort"
 
@@ -106,8 +126,13 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                   alignment: dict | None = None, assets: dict[str, dict] | None = None,
                   maps: dict[str, dict] | None = None, free_blocks: list[dict] | None = None,
                   still_names: dict[str, str] | None = None, version: int = 1,
-                  episode_fps: float = 23.976, speaker_filter: set[str] | None = None, group_titles: dict[str, str] | None = None) -> dict:
+                  episode_fps: float = 23.976, speaker_filter: set[str] | None = None, group_titles: dict[str, str] | None = None,
+                  audio_order: bool = False) -> dict:
+    """`audio_order`: Die Aufnahme bestimmt Reihenfolge und Inhalt – Szenen und Blöcke folgen der Aufnahmezeit, und Gesprochenes
+    ohne Skriptblock (alignment["zusatz"]: Begrüßung, Überleitungen, Schluss) bleibt als eigener Audioclip an seiner Stelle."""
     seq = template["sequence"]
+    if audio_order:
+        scenes = order_by_audio(scenes, alignment)
     tm, tr = template["timing"], template["tracks"]
     tl = Timeline(seq["fps"])
     assets, maps = assets or {}, maps or {}
@@ -126,7 +151,32 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
             tl.add("GAP", "free_block", t, t + dur, title=fb.get("titel", ""), text=fb.get("text", ""))
             t += dur
 
+    extras_after: dict[tuple[str, int], list[dict]] = {}
+    extras_head: list[dict] = []
+    for z in ((alignment or {}).get("zusatz", []) if audio_order else []):
+        if speaker_filter and z.get("speaker") not in speaker_filter and z.get("speaker") != "alle":
+            continue
+        if z.get("after"):
+            extras_after.setdefault((z["after"][0], z["after"][1]), []).append(z)
+        else:
+            extras_head.append(z)
+    placed_blocks: set[tuple[str, int]] = set()
+
+    def extra_track(z: dict, fallback: str | None = None) -> str:
+        sp = z.get("speaker")
+        return tr["speaker_audio"][sp if sp in tr["speaker_audio"] else (fallback if fallback in tr["speaker_audio"] else next(iter(tr["speaker_audio"])))]
+
+    def extra_clip(z: dict, start: float, dur: float, scene: str, fallback: str | None = None) -> None:
+        tl.add(extra_track(z, fallback), "comment", start, start + dur, scene=scene, speaker=z.get("speaker"), extra=True,
+               rec=z.get("rec"), src_in=z["in"], src_out=z["out"], text=z["text"][:80])
+
     place_free(None)
+    for z in extras_head:                                   # Gesprochenes vor dem ersten Skriptblock (Begrüßung)
+        dur = max(z["out"] - z["in"], 0.1)
+        tl.mark(t, f"Aufnahme: {z['text'][:40]}", "free")
+        tl.add("GAP", "free_block", t, t + dur, title="Aufnahme (ohne Skript)", text=z["text"])
+        extra_clip(z, t, dur, "")
+        t += dur
     still_k = 0
 
     def place_still(sc, n, still_name, blocks, last_of_scene, amazon_clip):
@@ -135,6 +185,13 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         sc_align = align_scenes.get(sc.id, [])
         offset = tm["comment_lead_in"]
         timings = []   # (block_idx, block, start_offset, dur, word_starts, alignment)
+        ext_timings = []   # (Zwischenstück, start_offset, dur, Sprecher des Blocks davor)
+        if audio_order:   # Blöcke in der Reihenfolge der Aufnahme; nicht Abgeglichene bleiben hinter ihrem Vorgänger
+            last_pos, keyed = (0, 0.0), []
+            for bi, block in blocks:
+                last_pos = _audio_pos(alignment, sc.id, bi) or last_pos
+                keyed.append((last_pos, bi, block))
+            blocks = [(bi, block) for _, bi, block in sorted(keyed, key=lambda k: (k[0], k[1]))]
         for bi, block in blocks:
             if speaker_filter and block.sprecher not in speaker_filter:
                 continue
@@ -143,13 +200,20 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
                 al = None  # nicht gefunden -> Schätzung
             dur, starts = block_timing(block, al, th)
             timings.append((bi, block, offset, dur, starts, al))
+            placed_blocks.add((sc.id, bi))
             offset += dur + tm["block_gap"]
-        comment_len = (offset - tm["block_gap"] + tm["comment_tail"]) if timings else 0.0
+            for z in extras_after.get((sc.id, bi), []):      # Überleitung/Schluss direkt hinter diesem Block, wie in der Aufnahme
+                zdur = max(z["out"] - z["in"], 0.1)
+                ext_timings.append((z, offset, zdur, block.sprecher))
+                offset += zdur + tm["block_gap"]
+        comment_len = (offset - tm["block_gap"] + tm["comment_tail"]) if (timings or ext_timings) else 0.0
         still_len = max(tm["min_still"], comment_len)
         still_start, still_end = t, t + still_len
         still_clip = tl.add(tr["series_video"], "still", still_start, still_end, scene=sc.id, file=f"Videoelemente/{still_name}" if still_name else "")
         tl.add(tr["anim"], "anim", still_start - tm["pause_lead"], still_start - tm["pause_lead"] + tm["anim_len"], name="Pause", scene=sc.id)
         art_end_all = still_start
+        for z, off, zdur, fallback in ext_timings:
+            extra_clip(z, still_start + off, zdur, sc.id, fallback)
         for bi, block, off, dur, starts, al in timings:
             track = tr["speaker_audio"][block.sprecher]
             b_start = still_start + off
@@ -270,6 +334,10 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
             tl.add(tr["anim"], "anim", t - tm["play_lead"], t - tm["play_lead"] + tm["anim_len"], name="Play", scene=sc.id)
         place_free(sc.id)
 
+    for key, zs in extras_after.items():               # Zwischenstücke, deren Vorgängerblock nicht im Schnitt landet
+        if key not in placed_blocks:
+            tl.warnings.append(f"Aufnahme: {len(zs)} Zwischenstück(e) nach {key[0]} Block {key[1] + 1} nicht eingefügt (Block nicht im Schnitt): „{zs[0]['text'][:50]}“")
+
     media = sorted({c.get("file") for cl in tl.tracks.values() for c in cl if c.get("file")})
     return {
         "version": version,
@@ -278,7 +346,7 @@ def build_package(scenes: list[Scene], *, slug: str, template: dict, th: Thresho
         "episode_sequence": template["episode_sequence_name"].format(slug=slug),
         "episode_fps": episode_fps,
         "media": media,
-        "tracks": tl.tracks,
+        "tracks": {k: sorted(v, key=lambda c: c["start"]) for k, v in tl.tracks.items()} if audio_order else tl.tracks,
         "markers": sorted(tl.markers, key=lambda m: m["time"]),
         "duration": tl.snap(t),
         "warnings": tl.warnings,

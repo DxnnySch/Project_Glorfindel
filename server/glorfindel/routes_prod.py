@@ -285,13 +285,14 @@ class BuildBody(BaseModel):
     still_source: str | None = None
     by_strand: bool = True
     with_stills: bool = True
+    audio_order: bool = False
 
 
 @router.post("/ep/{season}/{episode}/rough-cut")
 def build(body: BuildBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     def work(progress):
         return pipeline.build_rough_cut(ep, state.templates_dir(), body.still_source, body.by_strand,
-                                        body.with_stills, progress=progress)
+                                        body.with_stills, progress=progress, audio_order=body.audio_order)
     return {"job": state.jobs.submit("Rohschnitt erzeugen", work)}
 
 

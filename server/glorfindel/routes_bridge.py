@@ -122,12 +122,13 @@ def premiere_state(ep: Episode = Depends(ep_of)):
 
 class BuildBody(BaseModel):
     by_strand: bool = True
+    audio_order: bool = False
 
 
 @router.post("/ep/{season}/{episode}/premiere/build")
 def premiere_build(body: BuildBody, ep: Episode = Depends(ep_of), state: AppState = Depends(st)):
     return {"job": state.jobs.submit("Rohschnitt in Premiere bauen", lambda progress: premiere_ops.build_in_premiere(
-        ep, state.templates_dir(), progress, body.by_strand))}
+        ep, state.templates_dir(), progress, body.by_strand, audio_order=body.audio_order))}
 
 
 class SwapBody(BaseModel):

@@ -213,7 +213,7 @@ def make_env(ep: Episode, templates_dir: Path, reference: Path, preset: Path, st
 
 
 # ---------- Bauen ----------
-def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand: bool = True, hub=HUB) -> dict:
+def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand: bool = True, hub=HUB, audio_order: bool = False) -> dict:
     pg = as_progress(progress)
     pg.plan([("Verbindung zu Premiere prüfen", 0.5), ("Konforme Referenz", 12), ("Schnittpaket berechnen", 2), ("Standbilder aus der Referenz", 8),
              ("Bauplan erstellen (Credits, Sequenz-Vorgabe)", 2), ("In Premiere bauen", 25), ("Bericht speichern", 0.5)])
@@ -229,9 +229,9 @@ def build_in_premiere(ep: Episode, templates_dir: Path, progress=None, by_strand
     audio = audio_for(media.probe(direct["file"]).get("acodec", "")) if direct else "aac"
     ref = ensure_reference(ep, pg, off, audio, Path(direct["file"]) if direct else None)
     pg.step(2)
-    res = pipeline.build_rough_cut(ep, templates_dir, with_stills=False, by_strand=by_strand, progress=None)
+    res = pipeline.build_rough_cut(ep, templates_dir, with_stills=False, by_strand=by_strand, progress=None, audio_order=audio_order)
     pkg = json.loads(Path(res["json"]).read_text(encoding="utf-8"))
-    scenes = pipeline.scenes_in_video(pipeline.ordered_scenes(ep, by_strand))
+    scenes = pipeline.rough_cut_scenes(ep, by_strand, audio_order)
     pg.step(3)
     stills_dir = ep.p.stills / f"Bridge_v{res['version']}"     # eigener Ordner je Bau: Premiere sperrt Dateien aus früheren Importen
     fps_ep = ep.project().fps
